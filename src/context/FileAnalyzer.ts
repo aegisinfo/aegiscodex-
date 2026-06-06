@@ -1,0 +1,248 @@
+/**
+ * 
+ * 
+ * 
+ */
+
+import * as fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+import type { Message } from '../agent/types.js';
+import type { FileReference, FileContent } from './types.js';
+
+export class FileAnalyzer {
+  /** 最多包含的文件数量 */
+  private static readonly MAX_FILES = 5;
+  /** 单个文件最大行数 */
+  private static readonly MAX_LINES_PER_FILE = 1000;
+  /** 单个文件最大字符数 */
+  private static readonly MAX_CHARS_PER_FILE = 50000;
+
+  /**
+   * 
+   */
+  static analyzeFiles(messages: Message[]): FileReference[] {
+    const fileMap = new Map<string, FileReference>();
+
+    messages.forEach((msg, index) => {
+      if (msg.content) {
+        const content = typeof msg.content === 'string' 
+          ? msg.content 
+          : JSON.stringify(msg.content);
+        const contentFiles = this.extractFilePathsFromContent(content);
+        contentFiles.forEach(filePath => {
+          this.updateFileReference(fileMap, filePath, index, false);
+        });
+      }
+      if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+        for (const call of msg.tool_calls) {
+          const toolFiles = this.extractFilePathsFromToolCall(call);
+          const wasModified = ['Write', 'Edit'].includes(call.function?.name || '');
+          toolFiles.forEach(filePath => {
+            this.updateFileReference(fileMap, filePath, index, wasModified);
+          });
+        }
+      }
+    });
+    return Array.from(fileMap.values())
+      .filter(ref => this.isValidFilePath(ref.path))
+      .sort((a, b) => {
+        if (a.wasModified !== b.wasModified) return a.wasModified ? -1 : 1;
+        if (a.mentions !== b.mentions) return b.mentions - a.mentions;
+        return b.lastMentioned - a.lastMentioned;
+      })
+      .slice(0, this.MAX_FILES);
+  }
+
+  /**
+   * 
+   */
+  private static extractFilePathsFromContent(content: string): string[] {
+    const paths: string[] = [];
+    const patterns = [
+      /(?:^|\s|["'`])(\/?(?:[\w.-]+\/)+[\w.-]+\.[a-zA-Z]{1,10})(?:\s|$|["'`]|:)/gm,
+      /(?:^|\s|["'`])(\.\/(?:[\w.-]+\/)*[\w.-]+\.[a-zA-Z]{1,10})(?:\s|$|["'`]|:)/gm,
+      /```\d+:\d+:([\w./-]+)/gm,
+    ];
+
+    for (const pattern of patterns) {
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const filePath = match[1];
+        if (filePath && !paths.includes(filePath)) {
+          paths.push(filePath);
+        }
+      }
+    }
+
+    return paths;
+  }
+
+  /**
+   * 
+   */
+  private static extractFilePathsFromToolCall(
+    toolCall: { function?: { name?: string; arguments?: string } }
+  ): string[] {
+    const paths: string[] = [];
+
+    const functionName = toolCall.function?.name;
+    let args: Record<string, unknown> = {};
+
+    try {
+      if (typeof toolCall.function?.arguments === 'string') {
+        args = JSON.parse(toolCall.function.arguments);
+      } else if (toolCall.function?.arguments) {
+        args = toolCall.function.arguments as Record<string, unknown>;
+      }
+    } catch {
+      return paths;
+    }
+    const fileTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'NotebookEdit'];
+
+    if (fileTools.includes(functionName || '')) {
+      const pathKeys = ['file_path', 'path', 'notebook_path', 'filePath'];
+      for (const key of pathKeys) {
+        if (args[key] && typeof args[key] === 'string') {
+          paths.push(args[key] as string);
+        }
+      }
+    }
+
+    return paths;
+  }
+
+  /**
+   * 
+   */
+  private static updateFileReference(
+    fileMap: Map<string, FileReference>,
+    filePath: string,
+    messageIndex: number,
+    wasModified: boolean
+  ): void {
+    const existing = fileMap.get(filePath);
+
+    if (existing) {
+      existing.mentions++;
+      existing.lastMentioned = Math.max(existing.lastMentioned, messageIndex);
+      existing.wasModified = existing.wasModified || wasModified;
+    } else {
+      fileMap.set(filePath, {
+        path: filePath,
+        mentions: 1,
+        lastMentioned: messageIndex,
+        wasModified,
+      });
+    }
+  }
+
+  /**
+   * 
+   */
+  private static isValidFilePath(filePath: string): boolean {
+    const excludePatterns = [
+      /^https?:\/\//,  // URL
+      /^node_modules\//,  // node_modules
+      /^\.git\//,  // git 目
+      /\.(png|jpg|jpeg|gif|svg|ico|webp|mp4|mp3|wav|pdf|zip|tar|gz)$/i,  // 二进制文
+    ];
+
+    for (const pattern of excludePatterns) {
+      if (pattern.test(filePath)) {
+        return false;
+      }
+    }
+    try {
+      const absolutePath = path.isAbsolute(filePath) 
+        ? filePath 
+        : path.join(process.cwd(), filePath);
+      return existsSync(absolutePath);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 
+   */
+  static async readFilesContent(filePaths: string[]): Promise<FileContent[]> {
+    const results: FileContent[] = [];
+
+    for (const filePath of filePaths) {
+      try {
+        const absolutePath = path.isAbsolute(filePath) 
+          ? filePath 
+          : path.join(process.cwd(), filePath);
+
+        if (!existsSync(absolutePath)) {
+          continue;
+        }
+
+        const content = await fs.readFile(absolutePath, 'utf-8');
+        const lines = content.split('\n');
+        
+        let truncated = false;
+        let finalContent = content;
+        if (lines.length > this.MAX_LINES_PER_FILE) {
+          finalContent = lines.slice(0, this.MAX_LINES_PER_FILE).join('\n');
+          truncated = true;
+        }
+        if (finalContent.length > this.MAX_CHARS_PER_FILE) {
+          finalContent = finalContent.substring(0, this.MAX_CHARS_PER_FILE);
+          truncated = true;
+        }
+
+        if (truncated) {
+          finalContent += '\n\n[... 内容已截断 ...]';
+        }
+
+        results.push({
+          path: filePath,
+          content: finalContent,
+          lines: lines.length,
+          truncated,
+        });
+      } catch (error) {
+        console.warn(`[FileAnalyzer] 读取文件失败: ${filePath}`, error);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * 
+   */
+  static async getFileSummary(filePath: string): Promise<string | null> {
+    try {
+      const absolutePath = path.isAbsolute(filePath) 
+        ? filePath 
+        : path.join(process.cwd(), filePath);
+
+      if (!existsSync(absolutePath)) {
+        return null;
+      }
+
+      const stats = await fs.stat(absolutePath);
+      const content = await fs.readFile(absolutePath, 'utf-8');
+      const lines = content.split('\n');
+
+      return `文件: ${filePath}
+大小: ${this.formatFileSize(stats.size)}
+行数: ${lines.length}
+最后修改: ${stats.mtime.toISOString()}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 
+   */
+  private static formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+}

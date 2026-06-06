@@ -1,0 +1,125 @@
+/**
+ * 
+ * 
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { themeManager } from '../../themes/index.js';
+import { FocusId, focusManager, useIsFocused } from '../../focus/index.js';
+
+export interface SelectorOption<T = string> {
+  
+  value: T;
+  
+  label: string;
+  
+  description?: string;
+  
+  isCurrent?: boolean;
+}
+
+interface InteractiveSelectorProps<T = string> {
+  
+  title: string;
+  
+  options: SelectorOption<T>[];
+  
+  onSelect: (value: T) => void;
+  
+  onCancel: () => void;
+  
+  initialIndex?: number;
+  
+  focusId?: string;
+}
+
+/**
+ * 
+ */
+export function InteractiveSelector<T = string>({
+  title,
+  options,
+  onSelect,
+  onCancel,
+  initialIndex = 0,
+  focusId = FocusId.SELECTOR,
+}: InteractiveSelectorProps<T>): React.ReactElement {
+  const theme = themeManager.getTheme();
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  useInput(
+    (input, key) => {
+      // Imperative focus check — avoids stale React closure
+      if (focusManager.getCurrentFocus() !== focusId) return;
+
+      if (key.upArrow || input === 'k') {
+        setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
+      } else if (key.downArrow || input === 'j') {
+        setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
+      } else if (key.return) {
+        onSelect(options[selectedIndex].value);
+      } else if (key.escape || input === 'q') {
+        onCancel();
+      }
+    },
+  );
+  useEffect(() => {
+    if (selectedIndex >= options.length) {
+      setSelectedIndex(0);
+    }
+  }, [options.length, selectedIndex]);
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.colors.primary}
+      paddingX={2}
+      paddingY={1}
+    >
+      {}
+      <Box marginBottom={1}>
+        <Text bold color={theme.colors.primary}>
+          {title}
+        </Text>
+      </Box>
+
+      {}
+      <Box flexDirection="column">
+        {options.map((option, index) => {
+          const isSelected = index === selectedIndex;
+          const indicator = isSelected ? '▸ ' : '  ';
+          const currentMarker = option.isCurrent ? ' ✓' : '';
+          
+          return (
+            <Box key={String(option.value)} flexDirection="row">
+              <Text
+                color={isSelected ? theme.colors.primary : theme.colors.text.primary}
+                bold={isSelected}
+              >
+                {indicator}
+                {option.label}
+                {currentMarker}
+              </Text>
+              {option.description && (
+                <Text color={theme.colors.text.muted} dimColor>
+                  {' - '}
+                  {option.description}
+                </Text>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
+
+      {}
+      <Box marginTop={1} borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={theme.colors.border.light}>
+        <Text color={theme.colors.text.muted} dimColor>
+          ↑/↓   Enter   Esc 
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+export default InteractiveSelector;
