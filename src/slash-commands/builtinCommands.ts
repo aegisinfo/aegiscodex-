@@ -996,7 +996,7 @@ const memoryCommand: SlashCommand = {
       }
 
       // Verify token against the Stripe webhook server
-      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegis-stripe-webhook.up.railway.app/verify';
+      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/memory/activate';
       try {
         const res = await fetch(verifyUrl, {
           method: 'POST',
@@ -1005,7 +1005,7 @@ const memoryCommand: SlashCommand = {
         });
         const result = await res.json();
 
-        if (!result.valid) {
+        if (!result.enabled && !result.valid) {
           return { success: false, type: 'error', error: `Token verification failed: ${result.error || 'invalid token'}` };
         }
 
