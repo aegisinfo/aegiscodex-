@@ -813,24 +813,30 @@ All agents run concurrently, then results are synthesized.`,
     const task = args?.trim();
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    const currentModel = getCurrentModel();
+    // Robust model resolution — fallback chain: store → configManager → env
+    let currentModel = getCurrentModel();
+    if (!currentModel) {
+      const { configManager } = await import('../config/ConfigManager.js');
+      const cm = await configManager.initialize().catch(() => {});
+      currentModel = configManager.getDefaultModel() as any;
+    }
     const config = getConfig();
     const defaultCfg = (config?.default || {}) as Record<string, string | undefined>;
 
-    // Resolve model/url/key matching ConfigManager.applyEnvKeys() logic
-    const model = currentModel?.model || currentModel?.id || defaultCfg.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
-    const baseURL = currentModel?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
-    let apiKey = currentModel?.apiKey || defaultCfg.apiKey || '';
+    const model = (currentModel as any)?.model || (currentModel as any)?.id || defaultCfg.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
+    const baseURL = (currentModel as any)?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
+    let apiKey = (currentModel as any)?.apiKey || defaultCfg.apiKey || '';
     if (!apiKey) {
       const bu = baseURL.toLowerCase();
-      if (bu.includes('anthropic'))       apiKey = process.env.ANTHROPIC_API_KEY || '';
-      else if (bu.includes('deepseek'))   apiKey = process.env.DEEPSEEK_API_KEY || '';
-      else if (bu.includes('groq'))       apiKey = process.env.GROQ_API_KEY || '';
-      else                                apiKey = process.env.OPENAI_API_KEY || '';
+      if (bu.includes('anthropic') || !bu)  apiKey = process.env.ANTHROPIC_API_KEY || '';
+      else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
+      else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
+      else                                  apiKey = process.env.OPENAI_API_KEY || '';
     }
+    if (!apiKey) apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.GROQ_API_KEY || '';
 
     if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Set OPENAI_API_KEY (or ANTHROPIC/DEEPSEEK/GROQ_API_KEY) or configure a model.' };
+      return { success: false, type: 'error', error: 'No API key configured. Add ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, or GROQ_API_KEY to ~/.aegiscode/.env' };
     }
 
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
@@ -901,24 +907,30 @@ Agents deliberate in parallel, then results are aggregated.`,
     const question = args?.trim();
     if (!question) return { success: false, type: 'error', error: 'Usage: /research <question>' };
 
-    const currentModel = getCurrentModel();
-    const config = getConfig();
-    const defaultCfg = (config?.default || {}) as Record<string, string | undefined>;
+    // Robust model resolution — fallback chain: store → configManager → env
+    let currentModel2 = getCurrentModel();
+    if (!currentModel2) {
+      const { configManager } = await import('../config/ConfigManager.js');
+      await configManager.initialize().catch(() => {});
+      currentModel2 = configManager.getDefaultModel() as any;
+    }
+    const config2 = getConfig();
+    const defaultCfg2 = (config2?.default || {}) as Record<string, string | undefined>;
 
-    // Resolve model/url/key matching ConfigManager.applyEnvKeys() logic
-    const model = currentModel?.model || currentModel?.id || defaultCfg.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
-    const baseURL = currentModel?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
-    let apiKey = currentModel?.apiKey || defaultCfg.apiKey || '';
+    const model = (currentModel2 as any)?.model || (currentModel2 as any)?.id || defaultCfg2.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
+    const baseURL = (currentModel2 as any)?.baseURL || defaultCfg2.baseURL || process.env.OPENAI_BASE_URL || '';
+    let apiKey = (currentModel2 as any)?.apiKey || defaultCfg2.apiKey || '';
     if (!apiKey) {
       const bu = baseURL.toLowerCase();
-      if (bu.includes('anthropic'))       apiKey = process.env.ANTHROPIC_API_KEY || '';
-      else if (bu.includes('deepseek'))   apiKey = process.env.DEEPSEEK_API_KEY || '';
-      else if (bu.includes('groq'))       apiKey = process.env.GROQ_API_KEY || '';
-      else                                apiKey = process.env.OPENAI_API_KEY || '';
+      if (bu.includes('anthropic') || !bu)  apiKey = process.env.ANTHROPIC_API_KEY || '';
+      else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
+      else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
+      else                                  apiKey = process.env.OPENAI_API_KEY || '';
     }
+    if (!apiKey) apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.GROQ_API_KEY || '';
 
     if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Set OPENAI_API_KEY (or ANTHROPIC/DEEPSEEK/GROQ_API_KEY) or configure a model.' };
+      return { success: false, type: 'error', error: 'No API key configured. Add ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, or GROQ_API_KEY to ~/.aegiscode/.env' };
     }
 
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
@@ -947,7 +959,31 @@ Agents deliberate in parallel, then results are aggregated.`,
         1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
 
       const result = await council.deliberate(question);
-      return { success: true, type: 'info', content: result.summary };
+
+      // Build research-focused output (not vote-centric)
+      const lines: string[] = [];
+      lines.push('## ⬡ AEGIS Research Council');
+      lines.push(`**Question:** ${question}`);
+      lines.push('');
+      for (const v of result.voteResults) {
+        lines.push(`### ${v.role}`);
+        lines.push(v.reasoning);
+        lines.push('');
+      }
+      lines.push('---');
+      lines.push('### Synthesis');
+      lines.push('');
+      // Extract synthesis from summary (after the vote table)
+      const summaryLines = result.summary.split('\n');
+      const verdictIdx = summaryLines.findIndex(l => l.includes('APPROVED') || l.includes('REJECTED'));
+      const synthesis = verdictIdx > -1
+        ? summaryLines.slice(verdictIdx + 1).join('\n').trim()
+        : result.summary;
+      lines.push(synthesis || `${result.voteResults.length} perspectives gathered.`);
+      lines.push('');
+      lines.push(`*${result.voteResults.length} agents · ${result.rounds} round(s)*`);
+
+      return { success: true, type: 'info', content: lines.join('\n') };
     } catch (error) {
       return {
         success: false,
@@ -1289,6 +1325,7 @@ const yoloCommand: SlashCommand = {
 
 export const builtinCommands: SlashCommand[] = [
   helpCommand,
+  memoryCommand,
   clearCommand,
   compactCommand,
   versionCommand,
@@ -1299,7 +1336,6 @@ export const builtinCommands: SlashCommand[] = [
   hooksCommand,
   thinkingCommand,
   copyCommand,
-  memoryCommand,
   councilCommand,
   billingCommand,
   yoloCommand,

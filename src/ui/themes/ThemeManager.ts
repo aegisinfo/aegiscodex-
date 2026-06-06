@@ -10,6 +10,12 @@ import type { Theme, ThemePreset, RoleStyle, ColorMode } from './types.js';
 import { defaultTheme } from './defaultTheme.js';
 import { darkTheme } from './darkTheme.js';
 import { lightTheme } from './lightTheme.js';
+import {
+  draculaTheme,
+  nordTheme,
+  tokyoNightTheme,
+  catppuccinTheme,
+} from './popularThemes.js';
 import { configManager } from '../../config/ConfigManager.js';
 
 /**
@@ -141,6 +147,30 @@ const presetThemes: ThemePreset[] = [
         },
       },
     },
+  },
+  {
+    id: 'dracula',
+    name: 'Dracula',
+    description: 'Dark purple/pink theme inspired by Dracula',
+    theme: draculaTheme,
+  },
+  {
+    id: 'nord',
+    name: 'Nord',
+    description: 'Arctic, bluish theme with cold colors',
+    theme: nordTheme,
+  },
+  {
+    id: 'tokyo-night',
+    name: 'Tokyo Night',
+    description: 'Deep dark blue with vibrant accents',
+    theme: tokyoNightTheme,
+  },
+  {
+    id: 'catppuccin',
+    name: 'Catppuccin',
+    description: 'Warm pastel theme from Catppuccin Mocha',
+    theme: catppuccinTheme,
   },
 ];
 

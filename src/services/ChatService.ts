@@ -19,6 +19,8 @@ export interface ChatServiceConfig {
   timeout?: number;
 }
 
+const AGENT_TIMEOUT = 60000; // 60s per sub-agent
+
 export class OpenAIChatService implements IChatService {
   private client: OpenAI;
   private model: string;
@@ -45,12 +47,12 @@ export class OpenAIChatService implements IChatService {
     streamCallbacks?: StreamCallbacks
   ): Promise<ChatResponse> {
     try {
-      // Strippa kinesiska tecken som kan orsaka JSON-parse-fel i vissa LLMs
-      const stripChinese = (s: string) => s.replace(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/g, '');
+      // Strip zero-width characters and control characters that cause JSON parse errors
+      const cleanContent = (s: string) => s.replace(/[\u200b-\u200f\u2028-\u202f\ufeff]/g, '');
       const openaiMessages = messages.map(msg => {
         const converted = this.convertMessage(msg);
         if (typeof converted.content === 'string') {
-          converted.content = stripChinese(converted.content);
+          converted.content = cleanContent(converted.content);
         }
         return converted;
       });

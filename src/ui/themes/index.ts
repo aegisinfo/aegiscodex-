@@ -8,3 +8,9 @@ export { darkTheme } from './darkTheme.js';
 export { lightTheme } from './lightTheme.js';
 export { ThemeManager, themeManager } from './ThemeManager.js';
 export { aegisTheme } from './aegisTheme.js';
+export {
+  draculaTheme,
+  nordTheme,
+  tokyoNightTheme,
+  catppuccinTheme,
+} from './popularThemes.js';

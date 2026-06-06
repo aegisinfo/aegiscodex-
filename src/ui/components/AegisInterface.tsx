@@ -9,7 +9,7 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
 }
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 
 // ========== Throttled Stream Updater ==========
@@ -140,7 +140,7 @@ import { ChatStatusBar } from './layout/ChatStatusBar.js';
 import { MessageList } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
-import { ExitMessage } from './common/ExitMessage.js';
+import { ExitMessage, ChatSearch } from './common/index.js';
 import { useConfirmation } from '../hooks/useConfirmation.js';
 
 // Hooks
@@ -257,6 +257,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [initError, setInitError] = useState<string | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [searchResults, setSearchResults] = useState<number[]>([]);
+  const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -303,6 +306,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       }
       return false;
     },
+  });
+
+  // Ctrl+F search toggle
+  useInput((_input, key) => {
+    if (key.ctrl && _input === 'f') {
+      setIsSearchVisible(prev => !prev);
+    }
   });
 
   // ==================== Agent & Context Initialization ====================
@@ -748,6 +758,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
             <Text bold color={theme.colors.primary}> aegis</Text>
             <Text color={theme.colors.text.secondary}>code </Text>
+            <Text color={theme.colors.primary}>{'\u25C6'}</Text>
           </Box>
         </Box>
 
@@ -772,16 +783,32 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           <Text bold color={theme.colors.primary}> aegis</Text>
           <Text color={theme.colors.text.secondary}>code </Text>
           <Text color={theme.colors.text.muted}>{'\u2500'} </Text>
-          <Text color={theme.colors.text.muted} dimColor>v{process.env.npm_package_version || '0.1.0'}</Text>
+          <Text color={theme.colors.primary}>{'\u25C6'}</Text>
+          <Text color={theme.colors.text.muted} dimColor> v{process.env.npm_package_version || '0.1.0'}</Text>
           {debug && <Text color={theme.colors.warning}> [debug]</Text>}
         </Box>
-        <Text color={theme.colors.text.muted} dimColor>{'\u2502'}  AEGIS AI Agent</Text>
+        <Box>
+          <Text color={theme.colors.text.muted} dimColor>{'\u2502'}  </Text>
+          <Text color={theme.colors.secondary}>AEGIS</Text>
+          <Text color={theme.colors.text.muted} dimColor> AI Agent {'\u00B7'} </Text>
+          <Text color={theme.colors.text.muted} dimColor>multi-model</Text>
+        </Box>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
         <MessageList terminalWidth={terminalWidth - 2} />
         <QueuedCommands />
       </Box>
+
+      {isSearchVisible && (
+        <ChatSearch
+          onDismiss={() => setIsSearchVisible(false)}
+          onResults={(indices, currentIdx) => {
+            setSearchResults(indices);
+            setSearchCurrentIndex(currentIdx);
+          }}
+        />
+      )}
 
       {confirmationState.isVisible && confirmationState.details && (
         <ConfirmationPrompt
