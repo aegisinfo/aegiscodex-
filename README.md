@@ -179,7 +179,27 @@ Get your API key at [aegiscloud.org](https://aegiscloud.org) → Account Setting
 | `groq` | Groq | llama-3.3-70b-versatile | `GROQ_API_KEY` |
 | `ollama` | Local | qwen2.5-coder:1.5b (configurable) | None |
 
-Add custom models via `~/.aegiscode/config.json`.
+### Add your own models
+
+Any OpenAI-compatible API works. Add to `~/.aegiscode/config.json`:
+
+```json
+{
+  "models": [
+    {
+      "id": "my-model",
+      "name": "My Custom Model",
+      "model": "model-name",
+      "baseURL": "https://api.myprovider.com/v1",
+      "apiKey": "my-api-key"
+    }
+  ]
+}
+```
+
+Works with Mistral, Together.ai, Cohere, Perplexity, OpenRouter, LM Studio and any self-hosted model via Ollama.
+
+Switch with: `/model my-model`
 
 ---
 
