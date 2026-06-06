@@ -7,8 +7,8 @@
 
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
-dotenvConfig({ path: resolve(process.cwd(), '.env') });
-// dotenvConfig({ path: resolve(process.env.HOME || '~', '.aegiscode', '.env') }); // removed — use single .env
+const _envPath = resolve(process.env.HOME || require('os').homedir(), '.aegiscode', '.env');
+dotenvConfig({ path: _envPath });
 import React from 'react';
 import { render } from 'ink';
 import yargs from 'yargs';
