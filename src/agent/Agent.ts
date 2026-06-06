@@ -188,7 +188,9 @@ export class Agent {
                      /[\u00c0-\u017e\u00e0-\u00ff]/.test(message) ? ' (respond in the same language)' :
                      ' (respond in English)';
     messages.push({ role: 'user', content: message + langHint });
-    sharedMemory.add(message, 'aegis-cli', context.sessionId || 'default', [], 'user', true).catch(() => {});
+    if (sharedMemory.isEnabled()) {
+      sharedMemory.add(message, 'aegis-cli', context.sessionId || 'default', [], 'user', true).catch(() => {});
+    }
     const configuredMaxTurns =
       this.runtimeOptions.maxTurns ??
       options?.maxTurns ??
@@ -281,12 +283,10 @@ export class Agent {
           continue;
         }
 
-        // Save to shared memory
-        if (turnResult.content && turnResult.content.length > 50) {
+        if (sharedMemory.isEnabled() && turnResult.content && turnResult.content.length > 50) {
           sharedMemory.add(turnResult.content, 'aegis-cli', context.sessionId || 'default', [], 'assistant', true).catch(() => {});
           if (context.sessionId) {
             syncSessionToDrive(context.sessionId).catch(() => {});
-            // Auto-summarize session if it has 5+ entries
             sharedMemory.summarizeAndStoreSession(
               context.sessionId,
               this.config.apiKey,
