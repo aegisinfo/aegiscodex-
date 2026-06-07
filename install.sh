@@ -57,7 +57,7 @@ fi
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/aegis" << WRAPPER
 #!/bin/bash
-exec "$NODE_BIN" "$INSTALL_DIR/aegiscode.js" "\$@"
+exec "$NODE_BIN" --no-deprecation "$INSTALL_DIR/aegiscode.js" "\$@"
 WRAPPER
 chmod +x "$HOME/.local/bin/aegis"
 
