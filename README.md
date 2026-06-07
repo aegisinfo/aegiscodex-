@@ -24,19 +24,17 @@ aegiscode is a terminal AI agent that works with any model provider simultaneous
 ## Install
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/aegisinfo/aegiscode/main/install.sh | bash
+```
+
+Downloads the latest release, sets up `~/.aegiscode/.env` for your API keys, and adds `aegis` to your PATH. No build step required.
+
+### Install from source
+
+```bash
 git clone https://github.com/aegisinfo/aegiscode
 cd aegiscode
 bash install.sh
-```
-
-The install script builds the project, creates `~/.aegiscode/.env` for your API keys, and adds `aegis` to your PATH.
-
-### Manual install
-
-```bash
-npm install
-npm run build
-# then add to PATH manually or run: node dist/main.js
 ```
 
 ---
