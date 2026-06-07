@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,8 +26,11 @@ jobs:
           cp dist/main.js release/aegiscode.js
           cp install.sh release/install.sh
           cp README.md release/README.md
+          cp package.json release/package.json
+          cp package-lock.json release/package-lock.json
           cp .env.example release/.env.example 2>/dev/null || true
-          cd release && zip -r ../aegiscode-release.zip .
+          cd release && npm ci --omit=dev
+          cd .. && zip -r aegiscode-release.zip release/
       - uses: actions/upload-artifact@v4
         with:
           name: aegiscode-release
