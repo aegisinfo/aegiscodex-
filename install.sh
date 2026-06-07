@@ -71,11 +71,24 @@ CONFIGEOF
   echo "  Created default config: ~/.aegiscode/config.json"
 fi
 
-# Create wrapper — always cd to project dir so .env loads correctly
+# Create .env template in ~/.aegiscode if it doesn't exist
+if [ ! -f "$HOME/.aegiscode/.env" ]; then
+  cat > "$HOME/.aegiscode/.env" << ENVEOF
+# aegiscode — API keys
+# Add keys for the providers you want to use
+
+ANTHROPIC_API_KEY=
+DEEPSEEK_API_KEY=
+GROQ_API_KEY=
+AEGISCLOUD_API_KEY=
+ENVEOF
+  echo "  Created ~/.aegiscode/.env — add your API keys there"
+fi
+
+# Create wrapper — reads .env from ~/.aegiscode/.env
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/aegis" << WRAPPER
 #!/bin/bash
-cd "$DIR"
 exec "$NODE_BIN" "$DIR/dist/main.js" "\$@"
 WRAPPER
 chmod +x "$HOME/.local/bin/aegis"
@@ -90,14 +103,15 @@ echo ""
 echo "✓ aegiscode installed"
 echo ""
 echo "  Run:          aegis"
-echo "  Switch model: /model claude | /model deepseek | /model groq"
-echo "  Council:      /council \"your question\""
-echo "  Memory:       /memory"
+echo "  Switch model: /model claude | /model deepseek | /model groq | /model ollama"
+echo "  Multi-agent:  /multi <task>"
+echo "  Council:      /council <question>"
+echo "  Research:     /research <topic>"
+echo "  Memory:       /memory activate <token>"
 echo ""
-echo "  Add API keys to: $DIR/.env"
+echo "  Add API keys to: ~/.aegiscode/.env"
 echo "    ANTHROPIC_API_KEY=sk-ant-..."
 echo "    DEEPSEEK_API_KEY=sk-..."
 echo "    GROQ_API_KEY=gsk_..."
-echo "    AEGISCLOUD_API_KEY=aegis_..."
 echo ""
-echo "  More info: https://aegiscloud.org"
+echo "  More info: https://aegiscloud.org/aegiscode"
