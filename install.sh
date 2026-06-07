@@ -74,3 +74,4 @@ echo "  Memory:  /memory activate <token>"
 echo "  Keys:    ~/.aegiscode/.env"
 echo ""
 echo "  More info: https://aegiscloud.org/aegiscode"
+
