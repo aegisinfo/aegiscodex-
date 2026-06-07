@@ -90,10 +90,9 @@ class SubAgentRunner {
         },
       };
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
       return {
         agentName: this.config.name,
-        content: `[Agent error: ${errMsg}]`,
+        content: '',
         metadata: {
           durationMs: Date.now() - startTime,
         },

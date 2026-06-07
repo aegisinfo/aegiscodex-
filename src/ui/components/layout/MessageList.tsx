@@ -1,31 +1,34 @@
 /**
- * MessageList - Optimized diff-based rendering
+ * MessageList - Virtualized message rendering with separators (A)
  *
- * Uses shallow identity checking and a message-length-based heuristic
- * to skip intermediate re-renders during streaming.
+ * Uses useWindowedList to only render visible messages + overscan,
+ * drastically reducing render cost for long sessions.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Box } from 'ink';
+import { Box, Text } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState, subscribeToMessages } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
+import { themeManager } from '../../themes/index.js';
+import { useWindowedList } from '../../hooks/useWindowedList.js';
+import { useTerminalHeight } from '../../hooks/useTerminalWidth.js';
+import { MessageSeparator } from './MessageSeparator.js';
+import { WelcomeMessage } from './WelcomeMessage.js';
 
 interface MessageListProps {
   terminalWidth: number;
 }
 
 /**
- * MessageList - only re-renders when messages array identity changes
- * (via subscribeToMessages deep equality check).
+ * MessageList - Virtualized with RAF throttled subscription (A)
  */
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
-  // Fetch messages with RAF throttling to prevent per-delta re-renders
   const [messages, setMessages] = useState(() => getState().session.messages);
   const rafIdRef = useRef<number | null>(null);
   const lastLenRef = useRef(messages.length);
 
-  // showAllThinking stored in ref + force update state to avoid hook inside MessageRenderer
+  // showAllThinking sync
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
   useEffect(() => {
     const unsub = vanillaStore.subscribe((state) => {
@@ -35,6 +38,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     return unsub;
   }, []);
 
+  // RAF-throttled subscription
   useEffect(() => {
     const unsubscribe = subscribeToMessages((newMessages) => {
       const len = newMessages.length;
@@ -43,7 +47,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         setMessages(newMessages);
         return;
       }
-      // Streaming delta - throttle via RAF
       if (rafIdRef.current === null) {
         rafIdRef.current = requestAnimationFrame(() => {
           setMessages(getState().session.messages);
@@ -61,19 +64,44 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     };
   }, []);
 
+  // Virtualization: use actual terminal height
+  const terminalHeight = useTerminalHeight();
+  const { visibleItems, totalItems, scrollToBottom, isAtBottom } = useWindowedList(
+    messages,
+    terminalHeight,
+  );
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length, scrollToBottom]);
+
+  if (messages.length === 0) {
+    return <WelcomeMessage terminalWidth={terminalWidth} />;
+  }
+
   return (
     <Box flexDirection="column">
-      {messages.map((msg, index) => (
-        <MessageRenderer
-          key={msg.id || index}
-          content={msg.content}
-          role={msg.role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-          thinking={msg.thinking}
-          isStreaming={msg.isStreaming}
-          showAllThinking={showAllThinking}
-        />
+      {totalItems > visibleItems.length && (
+        <Box marginY={0} justifyContent="center">
+          <Text color={themeManager.getTheme().colors.text.muted} dimColor>
+            {'\u22EE'} {messages.length - visibleItems.length} more {'\u22EE'}
+          </Text>
+        </Box>
+      )}
+      {visibleItems.map(({ item: msg, index }) => (
+        <Box key={msg.id || index} flexDirection="column">
+          <MessageRenderer
+            content={msg.content}
+            role={msg.role}
+            terminalWidth={terminalWidth}
+            showPrefix={true}
+            thinking={msg.thinking}
+            isStreaming={msg.isStreaming}
+            showAllThinking={showAllThinking}
+          />
+          <MessageSeparator isLast={index === messages.length - 1} />
+        </Box>
       ))}
     </Box>
   );

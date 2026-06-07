@@ -4,7 +4,7 @@
 
 // Polyfill requestAnimationFrame for Bun/Node
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 16);
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 100);
   (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
 }
 
@@ -20,20 +20,24 @@ import Spinner from 'ink-spinner';
 function createThrottledStreamUpdater(
   updateContent: (delta: string) => void,
   updateThinking: (delta: string) => void,
-  intervalMs: number = 16 // ~60fps
+  intervalMs: number = 100 // throttle re-renders to ~10fps during streaming
 ) {
   let contentBuffer = '';
   let thinkingBuffer = '';
   let rafId: number | null = null;
+  let isDirty = false;
 
   const flush = () => {
-    if (contentBuffer) {
-      updateContent(contentBuffer);
-      contentBuffer = '';
-    }
-    if (thinkingBuffer) {
-      updateThinking(thinkingBuffer);
-      thinkingBuffer = '';
+    if (isDirty) {
+      if (contentBuffer) {
+        updateContent(contentBuffer);
+        contentBuffer = '';
+      }
+      if (thinkingBuffer) {
+        updateThinking(thinkingBuffer);
+        thinkingBuffer = '';
+      }
+      isDirty = false;
     }
     rafId = null;
   };
@@ -41,12 +45,14 @@ function createThrottledStreamUpdater(
   return {
     appendContent: (delta: string) => {
       contentBuffer += delta;
+      isDirty = true;
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
       }
     },
     appendThinking: (delta: string) => {
       thinkingBuffer += delta;
+      isDirty = true;
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
       }
@@ -578,7 +584,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const streamUpdater = createThrottledStreamUpdater(
       (delta) => sessionActions().appendToStreamingMessage(streamingMessageId, delta),
       (delta) => sessionActions().appendThinkingToStreamingMessage(streamingMessageId, delta),
-      16 // 60fps via RAF
+      100 // throttle to ~10fps to prevent screen flicker
     );
     streamUpdaterRef.current = streamUpdater;
 
