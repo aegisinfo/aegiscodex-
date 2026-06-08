@@ -23,8 +23,8 @@ A terminal-based AI coding assistant with multi-model support, semantic memory, 
 ## Quick Install
 
 ```bash
-git clone <repo-url>
-cd aegis-code
+git clone https://github.com/aegisinfo/aegiscode.git
+cd aegiscode
 npm install
 npm run build
 ```
