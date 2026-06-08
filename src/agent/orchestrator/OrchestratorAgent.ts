@@ -11,6 +11,7 @@
 import type { AgentConfig, Message, ToolCall } from '../types.js';
 import { createChatService } from '../../services/ChatService.js';
 import { sharedMemory } from '../../memory/SharedMemory.js';
+import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
 
 // ========== Types ==========
@@ -59,27 +60,63 @@ export interface OrchestrationResult {
 class SubAgentRunner {
   private chatService: ReturnType<typeof createChatService>;
   private config: SubAgentConfig;
+  // Track active session for memory bus context sharing
+  private currentSessionId: string = 'default';
 
   constructor(config: SubAgentConfig) {
     this.config = config;
     this.chatService = createChatService(config.config);
   }
 
-  async run(task: string, context?: TaskDelegation['context']): Promise<AgentResponse> {
+  async run(
+    task: string,
+    context?: TaskDelegation['context'],
+    sessionId?: string,
+  ): Promise<AgentResponse> {
     const startTime = Date.now();
+    const sid = sessionId || 'default';
+    this.currentSessionId = sid;
+
+    // ── Inject shared memory context from other agents ──
+    const agentContext = await agentMemoryBus.getContextForAgent(
+      this.config.name,
+      sid,
+      8,    // last 8 messages
+      600,  // within last 10 minutes
+    );
+
     const messages: Message[] = [
       { role: 'system', content: this.config.systemPrompt },
       ...(context?.messages || []),
-      {
-        role: 'user',
-        content: context?.previousResults
-          ? `Previous results:\n${context.previousResults}\n\n---\n\n${task}`
-          : task,
-      },
     ];
+
+    // Add shared memory context if available
+    if (agentContext) {
+      messages.push({ role: 'system', content: agentContext });
+    }
+
+    messages.push({
+      role: 'user',
+      content: context?.previousResults
+        ? `Previous results:\n${context.previousResults}\n\n---\n\n${task}`
+        : task,
+    });
 
     try {
       const result = await this.chatService.chat(messages, undefined);
+
+      // ── Publish result to shared memory bus ──
+      const channel = this.inferChannel(task, result.content);
+      agentMemoryBus.publish({
+        channel,
+        sourceAgent: this.config.name,
+        sessionId: sid,
+        content: result.content.slice(0, 500),
+        importance: result.content.length > 100 ? 0.7 : 0.4,
+        tags: [this.config.role],
+        metadata: { tokensUsed: result.usage?.totalTokens, taskLength: task.length },
+      }).catch(() => {});
+
       return {
         agentName: this.config.name,
         content: result.content,
@@ -92,6 +129,17 @@ class SubAgentRunner {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       agentDebug.error(`[${this.config.name}] LLM call failed: ${errMsg}`);
+
+      // Publish error to shared memory bus
+      agentMemoryBus.publish({
+        channel: 'error',
+        sourceAgent: this.config.name,
+        sessionId: sid,
+        content: `LLM call failed: ${errMsg}`,
+        importance: 0.9,
+        tags: ['error', 'llm-failure'],
+      }).catch(() => {});
+
       return {
         agentName: this.config.name,
         content: `[Error: ${errMsg}]`,
@@ -100,6 +148,25 @@ class SubAgentRunner {
         },
       };
     }
+  }
+
+  /**
+   * Infer the channel type from task description and result content
+   */
+  private inferChannel(task: string, content: string): import('../../memory/AgentMemoryBus.js').AgentChannel {
+    const lowerTask = task.toLowerCase();
+    const lowerContent = content.toLowerCase();
+
+    if (lowerContent.startsWith('[error:')) return 'error';
+    if (lowerTask.includes('review') || lowerTask.includes('audit')) return 'decision';
+    if (lowerTask.includes('suggest') || lowerTask.includes('recommend')) return 'suggestion';
+    if (lowerContent.includes('conclusion') || lowerContent.includes('decided') || lowerContent.includes('recommend'))
+      return 'decision';
+    if (lowerContent.includes('fact') || lowerContent.includes('found') || lowerContent.includes('discovered'))
+      return 'fact';
+    if (lowerContent.includes('question') || content.endsWith('?')) return 'question';
+
+    return 'intermediate';
   }
 }
 
@@ -155,26 +222,34 @@ export class OrchestratorAgent {
   async delegate(
     agentName: string,
     task: string,
-    context?: TaskDelegation['context']
+    context?: TaskDelegation['context'],
+    sessionId?: string,
   ): Promise<AgentResponse> {
     const runner = this.agents.get(agentName);
     if (!runner) {
       throw new Error(`Orchestrator: Agent "${agentName}" not found. Registered: [${this.getRegisteredAgents().join(', ')}]`);
     }
-    return runner.run(task, context);
+    return runner.run(task, context, sessionId);
+  }
+
+  /**
+   * Set the active session ID for all delegations
+   */
+  setSessionId(sessionId: string): void {
+    this.name = this.name; // Keep name, but session routing handled via delegates
   }
 
   /**
    * Run multiple tasks in parallel across different agents
    * Each delegation in the array runs concurrently
    */
-  async delegateParallel(delegations: TaskDelegation[], concurrency: number = 2): Promise<AgentResponse[]> {
+  async delegateParallel(delegations: TaskDelegation[], concurrency: number = 2, sessionId?: string): Promise<AgentResponse[]> {
     const results: AgentResponse[] = [];
     // Run in batches to avoid overwhelming API rate limits
     for (let i = 0; i < delegations.length; i += concurrency) {
       const batch = delegations.slice(i, i + concurrency);
       const batchResults = await Promise.allSettled(
-        batch.map(d => this.delegate(d.agentName, d.task, d.context))
+        batch.map(d => this.delegate(d.agentName, d.task, d.context, sessionId))
       );
       for (let j = 0; j < batchResults.length; j++) {
         const r = batchResults[j];
@@ -222,13 +297,16 @@ export class OrchestratorAgent {
    * @param complexTask - The high-level task description
    * @param subTasks - Map of agentName -> specific sub-task
    * @param synthesiserName - Agent to synthesize results (defaults to first registered)
+   * @param sessionId - Session ID for shared memory context
    */
   async orchestrate(
     complexTask: string,
     subTasks: Record<string, string>,
-    synthesiserName?: string
+    synthesiserName?: string,
+    sessionId?: string,
   ): Promise<OrchestrationResult> {
     const startTime = Date.now();
+    const sid = sessionId || `orchestrate-${Date.now()}`;
     const delegations: TaskDelegation[] = Object.entries(subTasks).map(
       ([agentName, task]) => ({
         agentName,
@@ -236,8 +314,8 @@ export class OrchestratorAgent {
       })
     );
 
-    // Phase 1: Run all sub-agents in parallel
-    const responses = await this.delegateParallel(delegations);
+    // Phase 1: Run all sub-agents in parallel (with shared memory context)
+    const responses = await this.delegateParallel(delegations, undefined, sid);
 
     // Phase 2: Synthesize results
     const synthesiser = synthesiserName || this.getRegisteredAgents()[0];
@@ -248,7 +326,12 @@ export class OrchestratorAgent {
     let summary = '';
     if (synthesiser && responses.length > 1) {
       try {
-        const synthesis = await this.delegate(synthesiser, `Synthesize the following analysis from multiple agents into a concise summary:\n\n${synthesisPrompt}`);
+        const synthesis = await this.delegate(
+          synthesiser,
+          `Synthesize the following analysis from multiple agents into a concise summary:\n\n${synthesisPrompt}`,
+          undefined,
+          sid,
+        );
         summary = synthesis.content;
       } catch {
         summary = `[Multi-agent orchestration complete — ${responses.length} agents responded]`;
@@ -256,6 +339,20 @@ export class OrchestratorAgent {
     } else {
       summary = responses[0]?.content || '';
     }
+
+    // Publish orchestration summary to shared memory
+    agentMemoryBus.publish({
+      channel: 'decision',
+      sourceAgent: 'orchestrator',
+      sessionId: sid,
+      content: `[Orchestration Summary] ${summary.slice(0, 500)}`,
+      importance: 0.85,
+      tags: ['orchestration', 'summary'],
+      metadata: {
+        agentsUsed: responses.length,
+        totalDurationMs: Date.now() - startTime,
+      },
+    }).catch(() => {});
 
     const totalTokens = responses.reduce(
       (sum, r) => sum + (r.metadata?.tokensUsed || 0),

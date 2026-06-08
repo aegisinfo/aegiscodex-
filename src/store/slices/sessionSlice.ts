@@ -95,17 +95,27 @@ export const createSessionSlice: StateCreator<
     },
 
     /**
-     * 
+     * Mutate streaming message content in-place to avoid creating new arrays
+     * on every delta. The RAF-based MessageList uses ref comparison, so we
+     * must mutate the message object directly. The store is still notified
+     * via set() to trigger the subscription, but the message reference stays
+     * the same — allowing the RAF loop to skip redundant updates.
      */
     appendToStreamingMessage: (id: string, contentDelta: string) => {
       const state = get();
       const messages = state.session.messages;
       const idx = messages.findIndex(m => m.id === id);
       if (idx !== -1) {
-        const updated = [...messages];
-        updated[idx] = { ...updated[idx], content: updated[idx].content + contentDelta };
+        const msg = messages[idx];
+        // Mutate in-place for RAF ref tracking
+        msg.content += contentDelta;
+        // Notify store subscribers (the subscription fires but RAF detects
+        // the same ref and skips re-render if content didn't change enough)
         set((state) => ({
-          session: { ...state.session, messages: updated },
+          session: {
+            ...state.session,
+            messages: state.session.messages,
+          },
         }));
       }
     },
@@ -114,16 +124,19 @@ export const createSessionSlice: StateCreator<
      * 
      */
     appendThinkingToStreamingMessage: (id: string, thinkingDelta: string) => {
-      set((state) => ({
-        session: {
-          ...state.session,
-          messages: state.session.messages.map(msg =>
-            msg.id === id
-              ? { ...msg, thinking: (msg.thinking || '') + thinkingDelta }
-              : msg
-          ),
-        },
-      }));
+      const state = get();
+      const messages = state.session.messages;
+      const idx = messages.findIndex(m => m.id === id);
+      if (idx !== -1 && thinkingDelta) {
+        const msg = messages[idx];
+        msg.thinking = (msg.thinking || '') + thinkingDelta;
+        set((state) => ({
+          session: {
+            ...state.session,
+            messages: state.session.messages,
+          },
+        }));
+      }
     },
 
     /**

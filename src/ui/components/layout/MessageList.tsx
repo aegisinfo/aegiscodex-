@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
-import { getState, subscribeToMessages } from '../../../store/index.js';
+import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 
 interface MessageListProps {
@@ -41,22 +41,28 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   }, []);
 
   // Lightweight subscription: only detect START/END of streaming and message count changes.
-  // Actual streaming content is polled via RAF (below).
+  // Uses a direct equality check with messagesRef to avoid firing on every delta
+  // (zustand creates new arrays on appendToStreamingMessage, but the RAF poll handles
+  // those — we only need to know when streaming state transitions happen).
   useEffect(() => {
-    const unsub = subscribeToMessages((newMessages) => {
-      const len = newMessages.length;
+    let prevHasStreaming = false;
+
+    const unsub = vanillaStore.subscribe((state) => {
+      const msgs = state.session.messages;
+      const len = msgs.length;
 
       // New message was added (user/assistant) — update immediately
       if (len !== lastLenRef.current) {
         lastLenRef.current = len;
-        messagesRef.current = newMessages;
-        setMessages(newMessages);
+        messagesRef.current = msgs;
+        setMessages(msgs);
         return;
       }
 
       // Check if streaming just started or stopped
-      const hasStreaming = newMessages.some(m => m.isStreaming);
-      if (hasStreaming !== isStreamingRef.current) {
+      const hasStreaming = msgs.some(m => m.isStreaming);
+      if (hasStreaming !== prevHasStreaming) {
+        prevHasStreaming = hasStreaming;
         isStreamingRef.current = hasStreaming;
         if (hasStreaming) {
           startRafLoop();
@@ -79,31 +85,39 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   const startRafLoop = useCallback(() => {
     if (rafIdRef.current !== null) return;
 
+    // Track the last known streaming message content length to detect real changes.
+    // Since we now mutate in-place (no new object refs), we compare content length.
+    const lastStreamingLen = { content: 0, thinking: 0 };
+
     const poll = () => {
       if (!isStreamingRef.current) {
         rafIdRef.current = null;
         return;
       }
 
-      const current = getState().session.messages;
-      const prev = messagesRef.current;
+      const msgs = messagesRef.current; // always the latest set
+      const streamingIdx = msgs.findIndex(m => m.isStreaming);
 
-      // Only update if something actually changed (by ref)
-      let changed = false;
-      if (current.length !== prev.length) {
-        changed = true;
-      } else {
-        for (let i = 0; i < current.length; i++) {
-          if (current[i] !== prev[i]) {
-            changed = true;
-            break;
-          }
-        }
+      if (streamingIdx === -1) {
+        // Streaming ended — grab latest from store
+        const fresh = getState().session.messages;
+        messagesRef.current = fresh;
+        setMessages(fresh);
+        rafIdRef.current = requestAnimationFrame(poll);
+        return;
       }
 
-      if (changed) {
-        messagesRef.current = current;
-        setMessages(current);
+      const streaming = msgs[streamingIdx];
+      const cLen = streaming.content.length;
+      const tLen = (streaming.thinking || '').length;
+
+      if (cLen !== lastStreamingLen.content || tLen !== lastStreamingLen.thinking) {
+        lastStreamingLen.content = cLen;
+        lastStreamingLen.thinking = tLen;
+        // Trigger React re-render by spreading the same array
+        // (React's shallow comparison sees the same data, but MessageRenderer
+        // will compare content props directly — which is correct)
+        setMessages([...msgs]);
       }
 
       rafIdRef.current = requestAnimationFrame(poll);
