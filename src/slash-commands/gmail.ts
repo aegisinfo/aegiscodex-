@@ -36,28 +36,43 @@ export async function runGmail(args: string) {
 
   // Status
   if (!cmd || cmd === 'status') {
+    console.log(`\n${C.teal}${line}${C.reset}`);
+    console.log(`${C.teal}${C.bold}  Gmail Integration${C.reset}`);
+    console.log(`${C.teal}${line}${C.reset}\n`);
 
     if (cfg.gmail?.connected) {
-
+      console.log(`  ${C.green}✓ Connected${C.reset}  ${C.muted}${cfg.gmail.email}${C.reset}`);
+      console.log(`  ${C.muted}Conversations saved to Gmail label: AEGIS${C.reset}\n`);
+      console.log(`  /connect gmail disconnect  — remove Gmail access`);
     } else {
-
+      console.log(`  ${C.muted}Not connected${C.reset}\n`);
+      console.log(`  ${C.teal}What you get:${C.reset}`);
+      console.log(`  ${C.muted}• Conversations saved to Gmail as searchable threads${C.reset}`);
+      console.log(`  ${C.muted}• Access your AEGIS history from any device${C.reset}`);
+      console.log(`  ${C.muted}• Gmail search: label:AEGIS${C.reset}\n`);
+      console.log(`  /connect gmail connect  — link your Gmail`);
     }
+    console.log(`\n${C.muted}${line}${C.reset}\n`);
     return;
   }
 
   // Connect
   if (cmd === 'connect') {
     const authUrl = 'https://aegiscloud.org/auth/google?scope=gmail&redirect=cli';
-
+    console.log(`\n  ${C.teal}Opening Gmail authorization...${C.reset}`);
+    console.log(`  ${C.muted}${authUrl}${C.reset}\n`);
     exec(`xdg-open "${authUrl}"`, () => {});
 
     // Start local callback server
+    console.log(`  ${C.muted}Waiting for authorization...${C.reset}`);
     const token = await waitForCallback();
     if (token) {
       cfg.gmail = { connected: true, token, email: token.email || 'connected' };
       saveConfig(cfg);
-
+      console.log(`\n  ${C.green}✓ Gmail connected!${C.reset}`);
+      console.log(`  ${C.muted}Conversations will be saved to Gmail label: AEGIS${C.reset}\n`);
     } else {
+      console.log(`\n  ${C.red}Authorization failed or timed out${C.reset}\n`);
     }
     return;
   }
@@ -66,6 +81,7 @@ export async function runGmail(args: string) {
   if (cmd === 'disconnect') {
     delete cfg.gmail;
     saveConfig(cfg);
+    console.log(`\n  ${C.muted}Gmail disconnected${C.reset}\n`);
     return;
   }
 }

@@ -1,4 +1,5 @@
 /**
+ * Grep 工具 - 内容搜索
  */
 
 import fs from 'fs/promises';
@@ -28,10 +29,11 @@ const DEFAULT_IGNORE = [
 const MAX_RESULTS = 100;
 
 /**
+ * Grep 工具 Schema
  */
 const GrepSchema = z.object({
   pattern: z.string()
-    .min(1, '')
+    .min(1, '搜索模式不能为空')
     .describe('The regular expression pattern to search for'),
   
   path: z.string()
@@ -80,11 +82,13 @@ async function searchInFile(
 
     return matches;
   } catch {
+    // 忽略无法读取的文
     return [];
   }
 }
 
 /**
+ * Grep 工具
  */
 export const grepTool = createTool({
   name: 'Grep',
@@ -119,14 +123,33 @@ Supports full regex syntax and can filter files by glob pattern.`,
     ],
   },
 
-  category: '',
+  category: '搜索',
   tags: ['search', 'grep', 'regex'],
 
   async execute(params, context) {
     const { pattern, path: searchPath, include, case_sensitive } = params;
+    
+    // 默认搜索目
     const cwd = searchPath || context?.cwd || process.cwd();
 
     try {
+      // 创建正则表达
+      // 验证正则表达式是否包含未闭合的字符类或分组
+      const unclosedBracket = (pattern.match(/\[/g) || []).length !== (pattern.match(/\]/g) || []).length;
+      const unclosedParen = (pattern.match(/\(/g) || []).length !== (pattern.match(/\)/g) || []).length;
+      
+      if (unclosedBracket || unclosedParen) {
+        return {
+          success: false,
+          llmContent: `Invalid regex pattern: ${pattern} — unclosed bracket or parenthesis`,
+          displayContent: `❌ 无效的正则表达式: ${pattern} — 未闭合的括号`,
+          error: {
+            type: ToolErrorType.VALIDATION_ERROR,
+            message: 'Invalid regex pattern — unclosed bracket or parenthesis',
+          },
+        };
+      }
+
       let regex: RegExp;
       try {
         regex = new RegExp(pattern, case_sensitive ? 'g' : 'gi');
@@ -134,13 +157,15 @@ Supports full regex syntax and can filter files by glob pattern.`,
         return {
           success: false,
           llmContent: `Invalid regex pattern: ${pattern}`,
-          displayContent: `❌ : ${pattern}`,
+          displayContent: `❌ 无效的正则表达式: ${pattern}`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'Invalid regex pattern',
           },
         };
       }
+
+      // 获取要搜索的文件列
       const filePattern = include 
         ? (include.startsWith('**/') ? include : `**/${include}`)
         : '**/*';
@@ -151,6 +176,8 @@ Supports full regex syntax and can filter files by glob pattern.`,
         nodir: true,
         absolute: true,
       });
+
+      // 过滤二进制文件（简单判
       const textExtensions = [
         '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
         '.json', '.md', '.txt', '.yaml', '.yml',
@@ -164,6 +191,8 @@ Supports full regex syntax and can filter files by glob pattern.`,
       const textFiles = files.filter(f => 
         textExtensions.some(ext => f.endsWith(ext))
       );
+
+      // 搜索所有文
       const allMatches: SearchMatch[] = [];
       
       for (const file of textFiles) {
@@ -182,7 +211,7 @@ Supports full regex syntax and can filter files by glob pattern.`,
         return {
           success: true,
           llmContent: 'No matches found.',
-          displayContent: `🔍 : ${pattern}`,
+          displayContent: `🔍 未找到匹配内容: ${pattern}`,
           metadata: {
             pattern,
             cwd,
@@ -191,6 +220,8 @@ Supports full regex syntax and can filter files by glob pattern.`,
           },
         };
       }
+
+      // 格式化输
       const formattedMatches = allMatches
         .map(m => {
           const relPath = path.relative(cwd, m.file);
@@ -199,9 +230,9 @@ Supports full regex syntax and can filter files by glob pattern.`,
         .join('\n');
 
       const truncated = allMatches.length >= MAX_RESULTS;
-      let summary = `✅  ${allMatches.length} `;
+      let summary = `✅ 找到 ${allMatches.length} 个匹配`;
       if (truncated) {
-        summary += ` (，)`;
+        summary += ` (已截断，可能有更多)`;
       }
 
       return {
@@ -217,11 +248,11 @@ Supports full regex syntax and can filter files by glob pattern.`,
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       return {
         success: false,
         llmContent: `Grep search failed: ${errorMessage}`,
-        displayContent: `❌ : ${errorMessage}`,
+        displayContent: `❌ 搜索失败: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

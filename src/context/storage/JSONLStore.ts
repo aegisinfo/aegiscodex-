@@ -1,4 +1,5 @@
 /**
+ * JSONL 文件存储
  * 
  * 
  */
@@ -34,7 +35,10 @@ export class JSONLStore {
    * 
    */
   async append(entry: JSONLEntry): Promise<void> {
+    // 确保父目录存
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+
+    // 序列化并追
     const line = JSON.stringify(entry) + '\n';
     await fs.appendFile(this.filePath, line, 'utf-8');
   }
@@ -67,6 +71,7 @@ export class JSONLStore {
       try {
         entries.push(JSON.parse(line) as JSONLEntry);
       } catch (parseError) {
+        console.warn(`[JSONLStore] 解析 JSON 行失败: ${line.substring(0, 100)}...`);
       }
     }
     return entries;
@@ -96,6 +101,7 @@ export class JSONLStore {
           const entry = JSON.parse(trimmed) as JSONLEntry;
           await callback(entry);
         } catch (error) {
+          console.warn(`[JSONLStore] 解析失败: ${trimmed.substring(0, 50)}...`);
         }
       };
 
@@ -145,6 +151,8 @@ export class JSONLStore {
    */
   async readAfterCompaction(): Promise<JSONLEntry[]> {
     const all = await this.readAll();
+    
+    // 找到最后一个压缩边
     let boundaryIndex = -1;
     for (let i = all.length - 1; i >= 0; i--) {
       if (all[i].subtype === 'compact_boundary') {
@@ -152,9 +160,13 @@ export class JSONLStore {
         break;
       }
     }
+
+    // 如果没有压缩边界，返回所有记
     if (boundaryIndex === -1) {
       return all;
     }
+
+    // 返回压缩边界之后的记录（包括压缩总
     return all.slice(boundaryIndex);
   }
 

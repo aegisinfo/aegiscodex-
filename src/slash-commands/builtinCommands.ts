@@ -7,6 +7,7 @@ import { sessionActions, getState, getConfig, getCurrentModel } from '../store/i
 import { createDefaultOrchestrator, CouncilAgent } from '../agent/orchestrator/index.js';
 
 /**
+ * /help - 显示所有可用命令
  */
 export const helpCommand: SlashCommand = {
   name: 'help',
@@ -16,9 +17,12 @@ export const helpCommand: SlashCommand = {
   usage: '/help [command]',
 
   async handler(args: string, _context: SlashCommandContext): Promise<SlashCommandResult> {
+    // 延迟导入避免循环依
     const { getRegisteredCommands, getCommand } = await import('./index.js');
     
     const trimmedArgs = args.trim();
+    
+    // 查看特定命令的帮
     if (trimmedArgs) {
       const cmd = getCommand(trimmedArgs);
       if (cmd) {
@@ -49,7 +53,11 @@ export const helpCommand: SlashCommand = {
         error: `unknown command: /${trimmedArgs}`,
       };
     }
+    
+    // 显示所有命
     const commands = getRegisteredCommands();
+    
+    // 按分类分
     const grouped: Record<string, SlashCommand[]> = {};
     for (const cmd of commands) {
       const category = cmd.category || 'general';
@@ -58,6 +66,8 @@ export const helpCommand: SlashCommand = {
       }
       grouped[category].push(cmd);
     }
+    
+    // 分类名称映
     const categoryNames: Record<string, string> = {
       general: 'general',
       session: 'session',
@@ -90,6 +100,7 @@ export const helpCommand: SlashCommand = {
 };
 
 /**
+ * /clear - 清除对话历史
  */
 export const clearCommand: SlashCommand = {
   name: 'clear',
@@ -110,6 +121,7 @@ export const clearCommand: SlashCommand = {
 };
 
 /**
+ * /compact - 手动压缩上下文
  */
 export const compactCommand: SlashCommand = {
   name: 'compact',
@@ -130,6 +142,7 @@ export const compactCommand: SlashCommand = {
     }
 
     try {
+      // 标记开始压
       sessionActions().setCompacting(true);
       
       const contextMessages = contextManager.getMessages();
@@ -143,10 +156,16 @@ export const compactCommand: SlashCommand = {
           message: 'history too short, skipping compaction',
         };
       }
+
+      // 动态导入避免循环依
       const { CompactionService } = await import('../context/CompactionService.js');
+      
+      // 获取 maxContextTokens 配
       const state = getState();
       const runtimeConfig = state.config.config;
       const maxContextTokens = runtimeConfig?.maxContextTokens || 200000;
+      
+      // 转换消息格
       const messages = contextMessages.map((m: { role: string; content: string }) => ({
         role: m.role as 'user' | 'assistant' | 'system' | 'tool',
         content: m.content,
@@ -161,6 +180,7 @@ export const compactCommand: SlashCommand = {
       });
 
       if (result.success) {
+        // 将 Message[] 转换为 ContextMessage[] 格
         const { nanoid } = await import('nanoid');
         const compactedContextMessages = result.compactedMessages.map(m => ({
           id: nanoid(),
@@ -168,7 +188,11 @@ export const compactCommand: SlashCommand = {
           content: m.content,
           timestamp: Date.now(),
         }));
+        
+        // 更新 ContextManager 中的消
         contextManager.replaceMessages(compactedContextMessages);
+        
+        // 更新 token 统
         contextManager.updateTokenCount(result.postTokens);
         
         const savedTokens = result.preTokens - result.postTokens;
@@ -208,6 +232,7 @@ conversation continues normally.`,
 };
 
 /**
+ * /version - 显示版本信息
  */
 export const versionCommand: SlashCommand = {
   name: 'version',
@@ -217,6 +242,7 @@ export const versionCommand: SlashCommand = {
   usage: '/version',
 
   async handler(): Promise<SlashCommandResult> {
+    // 从 package.json 获取版
     let version = 'unknown';
     try {
       const fs = await import('fs');
@@ -225,6 +251,7 @@ export const versionCommand: SlashCommand = {
       const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
       version = packageJson.version || 'unknown';
     } catch {
+      // 忽略错
     }
 
     const content = `## AEGIS v${version}
@@ -241,6 +268,7 @@ runtime: ${process.version} · ${process.platform} ${process.arch}
 };
 
 /**
+ * /model - 显示或切换模型
  */
 export const modelCommand: SlashCommand = {
   name: 'model',
@@ -259,7 +287,10 @@ export const modelCommand: SlashCommand = {
     const defaultModel = config?.default;
     
     const trimmedArgs = args.trim();
+    
+    // 如果指定了模型名称，直接切
     if (trimmedArgs) {
+      // 按 id 或 model 名称查
       const targetModel = models.find(
         m => m.id === trimmedArgs || m.model === trimmedArgs || m.name === trimmedArgs
       );
@@ -293,6 +324,8 @@ export const modelCommand: SlashCommand = {
           message: `model -> ${(targetModel as any).label || targetModel.name || targetModel.model || targetModel.id}`,
         };
       }
+      
+      // 未找到，显示可用模
       let errorContent = `unknown model: \`${trimmedArgs}\`\n\n`;
       if (models.length > 0) {
         errorContent += `available:\n`;
@@ -309,7 +342,10 @@ export const modelCommand: SlashCommand = {
         content: errorContent,
       };
     }
+    
+    // 无参数时，返回选择器配置或显示当前信
     if (models.length === 0) {
+      // 没有配置多模型，显示默认模型信
       const modelInfo = defaultModel?.model || currentModelId || 'unknown';
       return {
         success: true,
@@ -337,6 +373,7 @@ export const modelCommand: SlashCommand = {
 };
 
 /**
+ * /theme - 切换主题
  */
 export const themeCommand: SlashCommand = {
   name: 'theme',
@@ -353,6 +390,8 @@ export const themeCommand: SlashCommand = {
     const trimmedArgs = args.trim().toLowerCase();
     const themePresets = themeManager.getThemePresets();
     const currentThemeName = themeManager.getCurrentThemeName();
+    
+    // 如果指定了主题名称，直接切
     if (trimmedArgs) {
       const targetTheme = themePresets.find(t => t.id === trimmedArgs || t.name.toLowerCase() === trimmedArgs);
       
@@ -371,6 +410,8 @@ export const themeCommand: SlashCommand = {
         error: `unknown theme: ${trimmedArgs}\navailable: ${themePresets.map(t => t.id).join(', ')}`,
       };
     }
+    
+    // 无参数时，返回选择器配
     return {
       success: true,
       type: 'selector',
@@ -389,6 +430,7 @@ export const themeCommand: SlashCommand = {
 };
 
 /**
+ * /status - 显示会话状态
  */
 export const statusCommand: SlashCommand = {
   name: 'status',
@@ -421,6 +463,7 @@ export const statusCommand: SlashCommand = {
 };
 
 /**
+ * /skills - Skills 管理
  */
 export const skillsCommand: SlashCommand = {
   name: 'skills',
@@ -444,6 +487,8 @@ export const skillsCommand: SlashCommand = {
     }
     
     const trimmedArgs = args.trim().toLowerCase();
+    
+    // 刷
     if (trimmedArgs === 'refresh' || trimmedArgs === 'reload') {
       const result = await registry.refresh();
       
@@ -460,6 +505,8 @@ export const skillsCommand: SlashCommand = {
       
       return { success: true, type: 'success', content };
     }
+    
+    // 查看特定 Skill 详
     if (trimmedArgs && trimmedArgs !== 'list') {
       const skill = registry.getSkill(trimmedArgs);
       
@@ -479,6 +526,8 @@ export const skillsCommand: SlashCommand = {
         
         return { success: false, type: 'error', content: errorContent };
       }
+      
+      // 显示 Skill 详
       let content = `## ${skill.name}\n\n`;
       content += `${skill.description}\n\n`;
       content += `| key | value |\n`;
@@ -500,6 +549,8 @@ export const skillsCommand: SlashCommand = {
       
       return { success: true, type: 'info', content };
     }
+    
+    // 列出所
     const allSkills = registry.getAllSkills();
     
     if (allSkills.length === 0) {
@@ -509,6 +560,8 @@ export const skillsCommand: SlashCommand = {
         content: `## skills\n\nno skills found.\n\nadd SKILL.md files to:\n- ~/.claude/skills/ (user)\n- ~/.aegis/skills/ (user)\n- .claude/skills/ (project)\n- .aegis/skills/ (project)`,
       };
     }
+    
+    // 按来源分
     const grouped: Record<string, typeof allSkills> = {
       builtin: [],
       user: [],
@@ -520,6 +573,8 @@ export const skillsCommand: SlashCommand = {
     }
     
     let content = `## skills (${allSkills.length})\n\n`;
+    
+    // 内
     if (grouped.builtin.length > 0) {
       content += `### builtin\n\n`;
       for (const skill of grouped.builtin) {
@@ -527,6 +582,8 @@ export const skillsCommand: SlashCommand = {
       }
       content += '\n';
     }
+    
+    // 用
     if (grouped.user.length > 0) {
       content += `### user\n\n`;
       for (const skill of grouped.user) {
@@ -535,6 +592,8 @@ export const skillsCommand: SlashCommand = {
       }
       content += '\n';
     }
+    
+    // 项
     if (grouped.project.length > 0) {
       content += `### project\n\n`;
       for (const skill of grouped.project) {
@@ -551,6 +610,7 @@ export const skillsCommand: SlashCommand = {
 };
 
 /**
+ * /hooks - Hooks 管理
  */
 export const hooksCommand: SlashCommand = {
   name: 'hooks',
@@ -565,6 +625,8 @@ export const hooksCommand: SlashCommand = {
     const manager = getHookManager();
     
     const trimmedArgs = args.trim().toLowerCase();
+    
+    // 显示状
     if (trimmedArgs === 'status' || trimmedArgs === '') {
       const enabled = manager.isEnabled();
       const counts = manager.getHookCounts();
@@ -589,6 +651,8 @@ export const hooksCommand: SlashCommand = {
       
       return { success: true, type: 'info', content };
     }
+    
+    // 列出所有配
     if (trimmedArgs === 'list') {
       const config = manager.getConfig();
       const events = Object.values(HookEvent);
@@ -645,6 +709,7 @@ export const hooksCommand: SlashCommand = {
 };
 
 /**
+ * /copy - 复制代码块到剪贴板
  */
 export const copyCommand: SlashCommand = {
   name: 'copy',
@@ -770,6 +835,7 @@ export const copyCommand: SlashCommand = {
 };
 
 /**
+ * /thinking - 切换思考块展开/折叠
  */
 export const thinkingCommand: SlashCommand = {
   name: 'thinking',
@@ -795,6 +861,7 @@ export const thinkingCommand: SlashCommand = {
  * 
  */
 
+
 const multiCommand: SlashCommand = {
   name: 'multi',
   description: 'Orchestrate multiple AI agents on a complex task — /multi <task>',
@@ -817,26 +884,27 @@ All agents run concurrently, then results are synthesized.`,
     let currentModel = getCurrentModel();
     if (!currentModel) {
       const { configManager } = await import('../config/ConfigManager.js');
-      const cm = await configManager.initialize().catch(() => {});
+      await configManager.initialize().catch(() => {});
       currentModel = configManager.getDefaultModel() as any;
     }
     const config = getConfig();
     const defaultCfg = (config?.default || {}) as Record<string, string | undefined>;
 
-    const model = (currentModel as any)?.model || (currentModel as any)?.id || defaultCfg.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
+    const model = (currentModel as any)?.model || (currentModel as any)?.id || defaultCfg.model || process.env.OPENAI_MODEL || '';
     const baseURL = (currentModel as any)?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
     let apiKey = (currentModel as any)?.apiKey || defaultCfg.apiKey || '';
     if (!apiKey) {
       const bu = baseURL.toLowerCase();
-      if (bu.includes('anthropic') || !bu)  apiKey = process.env.ANTHROPIC_API_KEY || '';
+      if (bu.includes('anthropic'))         apiKey = process.env.ANTHROPIC_API_KEY || '';
       else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
       else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
-      else                                  apiKey = process.env.OPENAI_API_KEY || '';
+      else if (bu.includes('openai'))       apiKey = process.env.OPENAI_API_KEY || '';
+      else                                  apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
     }
-    if (!apiKey) apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.GROQ_API_KEY || '';
+    if (!apiKey) apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
 
     if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Add ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, or GROQ_API_KEY to ~/.aegiscode/.env' };
+      return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
     }
 
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
@@ -917,20 +985,21 @@ Agents deliberate in parallel, then results are aggregated.`,
     const config2 = getConfig();
     const defaultCfg2 = (config2?.default || {}) as Record<string, string | undefined>;
 
-    const model = (currentModel2 as any)?.model || (currentModel2 as any)?.id || defaultCfg2.model || process.env.OPENAI_MODEL || 'claude-sonnet-4-6';
+    const model = (currentModel2 as any)?.model || (currentModel2 as any)?.id || defaultCfg2.model || process.env.OPENAI_MODEL || '';
     const baseURL = (currentModel2 as any)?.baseURL || defaultCfg2.baseURL || process.env.OPENAI_BASE_URL || '';
     let apiKey = (currentModel2 as any)?.apiKey || defaultCfg2.apiKey || '';
     if (!apiKey) {
       const bu = baseURL.toLowerCase();
-      if (bu.includes('anthropic') || !bu)  apiKey = process.env.ANTHROPIC_API_KEY || '';
+      if (bu.includes('anthropic'))         apiKey = process.env.ANTHROPIC_API_KEY || '';
       else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
       else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
-      else                                  apiKey = process.env.OPENAI_API_KEY || '';
+      else if (bu.includes('openai'))       apiKey = process.env.OPENAI_API_KEY || '';
+      else                                  apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
     }
-    if (!apiKey) apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.GROQ_API_KEY || '';
+    if (!apiKey) apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
 
     if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Add ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, or GROQ_API_KEY to ~/.aegiscode/.env' };
+      return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
     }
 
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
@@ -1032,7 +1101,7 @@ const memoryCommand: SlashCommand = {
       }
 
       // Verify token against the Stripe webhook server
-      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/memory/activate';
+      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegis-stripe-webhook.up.railway.app/verify';
       try {
         const res = await fetch(verifyUrl, {
           method: 'POST',
@@ -1041,7 +1110,7 @@ const memoryCommand: SlashCommand = {
         });
         const result = await res.json();
 
-        if (!result.enabled && !result.valid) {
+        if (!result.valid) {
           return { success: false, type: 'error', error: `Token verification failed: ${result.error || 'invalid token'}` };
         }
 
@@ -1203,6 +1272,7 @@ const councilCommand: SlashCommand = {
   },
 };
 
+
 const cloudCommand: SlashCommand = {
   name: 'cloud',
   description: 'Manage AEGIS Cloud sync (aegiscloud.org)',
@@ -1277,6 +1347,7 @@ const cloudCommand: SlashCommand = {
   },
 };
 
+
 const yoloCommand: SlashCommand = {
   name: 'yolo',
   description: 'Toggle YOLO mode — auto-approve all tool executions',
@@ -1325,7 +1396,6 @@ const yoloCommand: SlashCommand = {
 
 export const builtinCommands: SlashCommand[] = [
   helpCommand,
-  memoryCommand,
   clearCommand,
   compactCommand,
   versionCommand,
@@ -1336,6 +1406,7 @@ export const builtinCommands: SlashCommand[] = [
   hooksCommand,
   thinkingCommand,
   copyCommand,
+  memoryCommand,
   councilCommand,
   billingCommand,
   yoloCommand,

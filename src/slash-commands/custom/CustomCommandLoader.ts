@@ -1,6 +1,10 @@
 /**
+ * CustomCommandLoader - 自定义命令加载器
  * 
  * 
+ * - 解析 YAML Frontmatter
+ * - 提取命令内容
+ * - 支持多目录扫描
  */
 
 import * as fs from 'fs';
@@ -35,7 +39,10 @@ export class CustomCommandLoader {
     const commands: CustomCommand[] = [];
     const warnings: string[] = [];
     const scannedDirs: string[] = [];
+
+    // 定义扫描目录（按优先级排序，后面的覆盖前面
     const directories: CommandDirectory[] = [
+      // 用户级命令（最低优先
       {
         path: path.join(os.homedir(), '.aegis', 'commands'),
         source: 'user',
@@ -48,6 +55,7 @@ export class CustomCommandLoader {
         sourceDir: 'claude',
         priority: 2,
       },
+      // 项目级命令（最高优先
       {
         path: path.join(workspaceRoot, '.aegis', 'commands'),
         source: 'project',
@@ -61,6 +69,8 @@ export class CustomCommandLoader {
         priority: 4,
       },
     ];
+
+    // 扫描每个目
     for (const dir of directories) {
       if (!fs.existsSync(dir.path)) {
         continue;
@@ -73,7 +83,7 @@ export class CustomCommandLoader {
         commands.push(...discovered.commands);
         warnings.push(...discovered.warnings);
       } catch (error) {
-        warnings.push(`Directory scan failed ${dir.path}: ${error instanceof Error ? error.message : String(error)}`);
+        warnings.push(`扫描目录失败 ${dir.path}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
@@ -98,18 +108,20 @@ export class CustomCommandLoader {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
+        // 递归扫描子目录（创建命名空
         const subNamespace = namespace ? `${namespace}/${entry.name}` : entry.name;
         const subResult = await this.scanDirectory(fullPath, source, sourceDir, subNamespace);
         commands.push(...subResult.commands);
         warnings.push(...subResult.warnings);
       } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        // 加载 Markdown 命令文
         try {
           const command = await this.loadCommandFile(fullPath, source, sourceDir, namespace);
           if (command) {
             commands.push(command);
           }
         } catch (error) {
-          warnings.push(` ${fullPath}: ${error instanceof Error ? error.message : String(error)}`);
+          warnings.push(`加载命令失败 ${fullPath}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
@@ -128,8 +140,12 @@ export class CustomCommandLoader {
   ): Promise<CustomCommand | null> {
     const content = fs.readFileSync(filePath, 'utf-8');
     const { config, body } = this.parseFrontmatter(content);
+
+    // 从文件名提取命令
     const fileName = path.basename(filePath, '.md');
     const name = fileName.toLowerCase();
+
+    // 跳过空内
     if (!body.trim()) {
       return null;
     }
@@ -176,17 +192,23 @@ export class CustomCommandLoader {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;
+
+      // 数组
       if (trimmed.startsWith('- ')) {
         if (inArray && currentKey) {
           arrayBuffer.push(trimmed.slice(2).trim());
         }
         continue;
       }
+
+      // 保存之前的数
       if (inArray && currentKey && arrayBuffer.length > 0) {
         (config as any)[this.toCamelCase(currentKey)] = arrayBuffer;
         arrayBuffer = [];
         inArray = false;
       }
+
+      // 键值
       const colonIndex = trimmed.indexOf(':');
       if (colonIndex !== -1) {
         const key = trimmed.slice(0, colonIndex).trim();
@@ -195,9 +217,11 @@ export class CustomCommandLoader {
         currentKey = key;
 
         if (value === '') {
+          // 可能是数组开
           inArray = true;
           arrayBuffer = [];
         } else {
+          // 普通
           const camelKey = this.toCamelCase(key);
           if (value === 'true') {
             (config as any)[camelKey] = true;
@@ -209,6 +233,8 @@ export class CustomCommandLoader {
         }
       }
     }
+
+    // 处理最后的数
     if (inArray && currentKey && arrayBuffer.length > 0) {
       (config as any)[this.toCamelCase(currentKey)] = arrayBuffer;
     }

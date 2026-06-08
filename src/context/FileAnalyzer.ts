@@ -25,6 +25,7 @@ export class FileAnalyzer {
     const fileMap = new Map<string, FileReference>();
 
     messages.forEach((msg, index) => {
+      // 从消息内容中提取文件路
       if (msg.content) {
         const content = typeof msg.content === 'string' 
           ? msg.content 
@@ -34,6 +35,8 @@ export class FileAnalyzer {
           this.updateFileReference(fileMap, filePath, index, false);
         });
       }
+
+      // 从工具调用中提取文件路
       if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
         for (const call of msg.tool_calls) {
           const toolFiles = this.extractFilePathsFromToolCall(call);
@@ -44,6 +47,8 @@ export class FileAnalyzer {
         }
       }
     });
+
+    // 按重要性排序：1. 是否被修改 2. 提及次数 3. 最近
     return Array.from(fileMap.values())
       .filter(ref => this.isValidFilePath(ref.path))
       .sort((a, b) => {
@@ -59,9 +64,14 @@ export class FileAnalyzer {
    */
   private static extractFilePathsFromContent(content: string): string[] {
     const paths: string[] = [];
+
+    // 匹配常见的文件路径模
     const patterns = [
+      // 绝对路
       /(?:^|\s|["'`])(\/?(?:[\w.-]+\/)+[\w.-]+\.[a-zA-Z]{1,10})(?:\s|$|["'`]|:)/gm,
+      // 相对路
       /(?:^|\s|["'`])(\.\/(?:[\w.-]+\/)*[\w.-]+\.[a-zA-Z]{1,10})(?:\s|$|["'`]|:)/gm,
+      // 代码块中的文件路
       /```\d+:\d+:([\w./-]+)/gm,
     ];
 
@@ -98,6 +108,8 @@ export class FileAnalyzer {
     } catch {
       return paths;
     }
+
+    // 文件操作工
     const fileTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'NotebookEdit'];
 
     if (fileTools.includes(functionName || '')) {
@@ -141,6 +153,7 @@ export class FileAnalyzer {
    * 
    */
   private static isValidFilePath(filePath: string): boolean {
+    // 排除常见的非文件路
     const excludePatterns = [
       /^https?:\/\//,  // URL
       /^node_modules\//,  // node_modules
@@ -153,6 +166,8 @@ export class FileAnalyzer {
         return false;
       }
     }
+
+    // 检查文件是否存
     try {
       const absolutePath = path.isAbsolute(filePath) 
         ? filePath 
@@ -184,10 +199,14 @@ export class FileAnalyzer {
         
         let truncated = false;
         let finalContent = content;
+
+        // 检查行数限
         if (lines.length > this.MAX_LINES_PER_FILE) {
           finalContent = lines.slice(0, this.MAX_LINES_PER_FILE).join('\n');
           truncated = true;
         }
+
+        // 检查字符数限
         if (finalContent.length > this.MAX_CHARS_PER_FILE) {
           finalContent = finalContent.substring(0, this.MAX_CHARS_PER_FILE);
           truncated = true;

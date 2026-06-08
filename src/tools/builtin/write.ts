@@ -1,4 +1,5 @@
 /**
+ * Write 工具
  * 
  * 
  */
@@ -9,13 +10,17 @@ import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
 
+// ========== Schema 定
+
 const WriteSchema = z.object({
   file_path: z.string()
-    .min(1, '')
+    .min(1, '文件路径不能为空')
     .describe('The absolute path to the file to write'),
   contents: z.string()
     .describe('The contents to write to the file'),
 });
+
+// ========== Write 工
 
 export const writeTool = createTool({
   name: 'Write',
@@ -48,12 +53,16 @@ export const writeTool = createTool({
     ],
   },
 
-  category: '',
+  category: '文件操作',
   tags: ['file', 'io', 'write', 'create'],
+
+  // 提取签名内容（用于权限规
   extractSignatureContent: (params: unknown) => {
     const p = params as { file_path: string };
     return p.file_path;
   },
+
+  // 抽象权限规
   abstractPermissionRule: (params: unknown) => {
     const p = params as { file_path: string };
     const dir = path.dirname(p.file_path);
@@ -64,13 +73,14 @@ export const writeTool = createTool({
     const { file_path, contents } = params;
 
     try {
+      // 1. 检查目标是否是目
       try {
         const stat = await fs.stat(file_path);
         if (stat.isDirectory()) {
           return {
             success: false,
             llmContent: `Error: ${file_path} is a directory, cannot write to it`,
-            displayContent: `❌ : ${file_path} `,
+            displayContent: `❌ 错误: ${file_path} 是目录`,
             error: {
               type: ToolErrorType.VALIDATION_ERROR,
               message: 'Path is a directory',
@@ -78,17 +88,27 @@ export const writeTool = createTool({
           };
         }
       } catch {
+        // 文件不存在，这是允许
       }
+
+      // 2. 确保父目录存
       const dir = path.dirname(file_path);
       await fs.mkdir(dir, { recursive: true });
+
+      // 3. TODO: 创建快照（如果文件存
+      // 目前跳过，后续实
+
+      // 4. 写入文
       await fs.writeFile(file_path, contents, 'utf8');
+
+      // 5. 计算写入信
       const lines = contents.split('\n').length;
       const bytes = Buffer.byteLength(contents, 'utf8');
 
       return {
         success: true,
         llmContent: `Successfully wrote to ${file_path} (${lines} lines, ${bytes} bytes)`,
-        displayContent: `✅ : ${file_path} (${lines} )`,
+        displayContent: `✅ 文件已写入: ${file_path} (${lines} 行)`,
         metadata: {
           file_path,
           lines,
@@ -96,11 +116,11 @@ export const writeTool = createTool({
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       return {
         success: false,
         llmContent: `Error writing file: ${errorMessage}`,
-        displayContent: `❌ : ${errorMessage}`,
+        displayContent: `❌ 写入文件失败: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

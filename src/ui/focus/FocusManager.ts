@@ -129,5 +129,9 @@ class FocusManagerImpl {
     };
   }
 }
+
+// 导出单
 export const focusManager = new FocusManagerImpl();
+
+// 导出操作快捷方
 export const focusActions = focusManager.getActions();

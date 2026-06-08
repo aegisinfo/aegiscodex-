@@ -1,4 +1,5 @@
 /**
+ * Hook Service - Hooks 系统的简洁 API 层
  * 
  * 
  * 
@@ -31,6 +32,8 @@ export function isHooksAvailable(): boolean {
   return manager.isInitialized() && manager.isEnabled();
 }
 
+// ==================== 生命周
+
 /**
  * 
  */
@@ -42,6 +45,7 @@ export async function onSessionStart(sessionId: string, projectDir?: string): Pr
       createContext(sessionId, projectDir)
     );
   } catch (error) {
+    console.warn('[HookService] SessionStart hook error:', error);
   }
 }
 
@@ -56,11 +60,13 @@ export async function onSessionEnd(sessionId: string, projectDir?: string): Prom
       createContext(sessionId, projectDir)
     );
   } catch (error) {
+    console.warn('[HookService] SessionEnd hook error:', error);
   }
 }
 
 /**
  * 
+ * @returns 注入的上下文（如果有）
  */
 export async function onUserPromptSubmit(
   promptContent: string,
@@ -76,11 +82,16 @@ export async function onUserPromptSubmit(
     );
     return result.injectedContext;
   } catch (error) {
+    console.warn('[HookService] UserPromptSubmit hook error:', error);
     return undefined;
   }
 }
 
+// ==================== 控制
+
 /**
+ * Agent 停止
+ * @returns true 表示应该继续执行
  */
 export async function onStop(
   stopReason: string | undefined,
@@ -96,12 +107,14 @@ export async function onStop(
     );
     return result.shouldContinue;
   } catch (error) {
+    console.warn('[HookService] Stop hook error:', error);
     return false;
   }
 }
 
 /**
  * 
+ * @returns true 表示应该阻止压缩
  */
 export async function onCompaction(
   preTokens: number,
@@ -119,11 +132,15 @@ export async function onCompaction(
     );
     return result.shouldPrevent;
   } catch (error) {
+    console.warn('[HookService] Compaction hook error:', error);
     return false;
   }
 }
 
+// ==================== 工具执
+
 /**
+ * PreToolUse Hook 结果
  */
 export interface PreToolHookResult {
   decision: 'allow' | 'deny' | 'ask';
@@ -133,6 +150,7 @@ export interface PreToolHookResult {
 }
 
 /**
+ * PostToolUse Hook 结果
  */
 export interface PostToolHookResult {
   additionalContext?: string;
@@ -162,6 +180,7 @@ export async function onPreToolUse(
       createContext(sessionId, projectDir, permissionMode)
     );
   } catch (error) {
+    console.warn('[HookService] PreToolUse hook error:', error);
     return { decision: 'allow' };
   }
 }
@@ -191,6 +210,7 @@ export async function onPostToolUse(
       createContext(sessionId, projectDir, permissionMode)
     );
   } catch (error) {
+    console.warn('[HookService] PostToolUse hook error:', error);
     return {};
   }
 }
@@ -218,6 +238,7 @@ export async function onPostToolUseFailure(
       createContext(sessionId, projectDir, permissionMode)
     );
   } catch (error) {
+    console.warn('[HookService] PostToolUseFailure hook error:', error);
   }
 }
 
@@ -242,6 +263,7 @@ export async function onPermissionRequest(
     );
     return result.decision;
   } catch (error) {
+    console.warn('[HookService] PermissionRequest hook error:', error);
     return 'ask';
   }
 }

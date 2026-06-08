@@ -27,6 +27,7 @@ export class ContextManager {
   private currentSessionId: string | null = null;
 
   constructor(options: Partial<ContextManagerOptions> = {}) {
+    // 默认配
     this.options = {
       storage: {
         maxMemorySize: 1000,
@@ -38,11 +39,13 @@ export class ContextManager {
       defaultFilter: {
         maxTokens: 32000,
         maxMessages: 50,
-        timeWindow: 24 * 60 * 60 * 1000,
+        timeWindow: 24 * 60 * 60 * 1000, // 24小
         ...options.defaultFilter,
       },
       compressionThreshold: options.compressionThreshold || 100000, // 100k tokens
     };
+
+    // 初始化存储
     this.memory = new MemoryStore(this.options.storage.maxMemorySize);
     this.persistent = new PersistentStore(process.cwd(), 100);
     this.cache = new CacheStore(this.options.storage.cacheSize, 5 * 60 * 1000);
@@ -56,8 +59,11 @@ export class ContextManager {
     preferences: Record<string, unknown> = {},
     configuration: Record<string, unknown> = {}
   ): Promise<string> {
+    // 使用 nanoid 生成会话 ID，或使用提供
     const sessionId = (configuration.sessionId as string) || nanoid();
     const now = Date.now();
+
+    // 创建初始上下
     const contextData: ContextData = {
       layers: {
         system: await this.createSystemContext(),
@@ -86,6 +92,8 @@ export class ContextManager {
         lastUpdated: now,
       },
     };
+
+    // 存储到内
     this.memory.setContext(contextData);
 
     this.currentSessionId = sessionId;
@@ -110,6 +118,8 @@ export class ContextManager {
    */
   private async createWorkspaceContext(): Promise<WorkspaceContext> {
     const projectPath = process.cwd();
+
+    // 尝试读
     let packageJson: WorkspaceContext['packageJson'];
     try {
       const { readFile } = await import('node:fs/promises');
@@ -122,6 +132,7 @@ export class ContextManager {
         dependencies: pkg.dependencies,
       };
     } catch {
+      // 忽略错
     }
 
     return {
@@ -141,7 +152,7 @@ export class ContextManager {
     metadata?: Record<string, unknown>
   ): Promise<void> {
     if (!this.currentSessionId) {
-      throw new Error('');
+      throw new Error('没有活动会话');
     }
 
     const message: ContextMessage = {
@@ -151,11 +162,17 @@ export class ContextManager {
       timestamp: Date.now(),
       metadata,
     };
+
+    // 添加到内
     this.memory.addMessage(message);
+
+    // 检查是否需要压
     const contextData = this.memory.getContext();
     if (contextData && this.shouldCompress(contextData)) {
       await this.compressCurrentContext();
     }
+
+    // 异步保存到持久化存储（不阻塞主流
     this.saveMessageAsync(message);
   }
 
@@ -171,6 +188,8 @@ export class ContextManager {
    */
   private saveMessageAsync(message: ContextMessage): void {
     if (!this.currentSessionId) return;
+
+    // 使用 setImmediate 避免阻
     setImmediate(async () => {
       try {
         await this.persistent.saveMessage(
@@ -181,7 +200,7 @@ export class ContextManager {
           message.metadata as any
         );
       } catch (error) {
-        console.error('[ContextManager] :', error);
+        console.error('[ContextManager] 保存消息失败:', error);
       }
     });
   }
@@ -213,6 +232,7 @@ export class ContextManager {
     });
 
     if (result.success) {
+      // 更新内存中的消
       const newMessages: ContextMessage[] = result.compactedMessages.map(m => ({
         id: nanoid(),
         role: m.role as ContextMessage['role'],
@@ -222,6 +242,8 @@ export class ContextManager {
 
       this.memory.setMessages(newMessages);
       this.memory.updateTokenCount(result.postTokens);
+
+      // 保存压缩记
       if (this.currentSessionId) {
         await this.persistent.saveCompaction(
           this.currentSessionId,
@@ -292,9 +314,11 @@ export class ContextManager {
    */
   async loadSession(sessionId: string): Promise<boolean> {
     try {
+      // 先尝试从内存加
       let contextData = this.memory.getContext();
 
       if (!contextData || contextData.layers.session.sessionId !== sessionId) {
+        // 从持久化存储加
         const [session, conversation] = await Promise.all([
           this.persistent.loadSession(sessionId),
           this.persistent.loadConversation(sessionId),
@@ -303,6 +327,8 @@ export class ContextManager {
         if (!session || !conversation) {
           return false;
         }
+
+        // 重建完整的上下文数
         contextData = {
           layers: {
             system: await this.createSystemContext(),
@@ -324,7 +350,7 @@ export class ContextManager {
       this.currentSessionId = sessionId;
       return true;
     } catch (error) {
-      console.error('[ContextManager] :', error);
+      console.error('[ContextManager] 加载会话失败:', error);
       return false;
     }
   }

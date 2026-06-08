@@ -1,4 +1,5 @@
 /**
+ * ChatService - LLM 通信服务
  */
 
 import OpenAI from 'openai';
@@ -19,8 +20,6 @@ export interface ChatServiceConfig {
   timeout?: number;
 }
 
-const AGENT_TIMEOUT = 60000; // 60s per sub-agent
-
 export class OpenAIChatService implements IChatService {
   private client: OpenAI;
   private model: string;
@@ -38,6 +37,9 @@ export class OpenAIChatService implements IChatService {
       } : undefined,
     });
     this.model = config.model || 'claude-sonnet-4-20250514';
+    if (isAnthropic || (config.baseURL && config.baseURL.includes('anthropic'))) {
+      console.error(`[AEGIS] WARNING: Using Anthropic endpoint! baseURL=${config.baseURL} model=${this.model}`);
+    }
   }
 
   async chat(
@@ -56,6 +58,7 @@ export class OpenAIChatService implements IChatService {
         }
         return converted;
       });
+
 
       const requestParams: OpenAI.ChatCompletionCreateParams = {
         model: this.model,

@@ -19,16 +19,16 @@ export interface ToolRegisteredEvent {
  * 
  */
 export class ToolRegistry extends EventEmitter {
-  
+  /** 内置工具 */
   private tools = new Map<string, Tool>();
   
-  
+  /** MCP 工具 */
   private mcpTools = new Map<string, Tool>();
   
-  
+  /** 分类索引 */
   private categories = new Map<string, Set<string>>();
   
-  
+  /** 标签索引 */
   private tagIndex = new Map<string, Set<string>>();
 
   /**
@@ -36,7 +36,7 @@ export class ToolRegistry extends EventEmitter {
    */
   register(tool: Tool): void {
     if (this.tools.has(tool.name) || this.mcpTools.has(tool.name)) {
-      throw new Error(` '${tool.name}' `);
+      throw new Error(`工具 '${tool.name}' 已注册`);
     }
     
     this.tools.set(tool.name, tool);
@@ -49,7 +49,7 @@ export class ToolRegistry extends EventEmitter {
    */
   registerMcpTool(tool: Tool): void {
     if (this.tools.has(tool.name) || this.mcpTools.has(tool.name)) {
-      throw new Error(` '${tool.name}' `);
+      throw new Error(`工具 '${tool.name}' 已注册`);
     }
     
     this.mcpTools.set(tool.name, tool);
@@ -198,6 +198,7 @@ export class ToolRegistry extends EventEmitter {
    */
   getFunctionDeclarationsByMode(mode?: string): FunctionDeclaration[] {
     if (mode === 'plan') {
+      // Plan 模式只返回只读工
       return this.getReadOnlyTools().map(t => t.getFunctionDeclaration());
     }
     return this.getFunctionDeclarations();
@@ -250,12 +251,15 @@ export class ToolRegistry extends EventEmitter {
    * 
    */
   private updateIndexes(tool: Tool): void {
+    // 更新分类索
     if (tool.category) {
       if (!this.categories.has(tool.category)) {
         this.categories.set(tool.category, new Set());
       }
       this.categories.get(tool.category)!.add(tool.name);
     }
+
+    // 更新标签索
     for (const tag of tool.tags) {
       if (!this.tagIndex.has(tag)) {
         this.tagIndex.set(tag, new Set());
@@ -268,6 +272,7 @@ export class ToolRegistry extends EventEmitter {
    * 
    */
   private removeFromIndexes(tool: Tool): void {
+    // 从分类索引中移
     if (tool.category) {
       const categorySet = this.categories.get(tool.category);
       if (categorySet) {
@@ -277,6 +282,8 @@ export class ToolRegistry extends EventEmitter {
         }
       }
     }
+
+    // 从标签索引中移
     for (const tag of tool.tags) {
       const tagSet = this.tagIndex.get(tag);
       if (tagSet) {

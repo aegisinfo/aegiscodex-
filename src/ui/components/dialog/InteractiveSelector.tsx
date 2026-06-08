@@ -1,4 +1,5 @@
 /**
+ * InteractiveSelector - 交互式选择器组件
  * 
  * 
  */
@@ -9,28 +10,28 @@ import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager, useIsFocused } from '../../focus/index.js';
 
 export interface SelectorOption<T = string> {
-  
+  /** 选项值 */
   value: T;
-  
+  /** 显示标签 */
   label: string;
-  
+  /** 描述信息 */
   description?: string;
-  
+  /** 是否为当前选中项 */
   isCurrent?: boolean;
 }
 
 interface InteractiveSelectorProps<T = string> {
-  
+  /** 标题 */
   title: string;
-  
+  /** 选项列表 */
   options: SelectorOption<T>[];
-  
+  /** 选择回调 */
   onSelect: (value: T) => void;
-  
+  /** 取消回调 */
   onCancel: () => void;
-  
+  /** 初始选中索引 */
   initialIndex?: number;
-  
+  /** 焦点 ID */
   focusId?: string;
 }
 
@@ -47,6 +48,8 @@ export function InteractiveSelector<T = string>({
 }: InteractiveSelectorProps<T>): React.ReactElement {
   const theme = themeManager.getTheme();
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+
+  // 处理键盘输
   useInput(
     (input, key) => {
       // Imperative focus check — avoids stale React closure
@@ -63,6 +66,8 @@ export function InteractiveSelector<T = string>({
       }
     },
   );
+
+  // 当 options 变化时重置索
   useEffect(() => {
     if (selectedIndex >= options.length) {
       setSelectedIndex(0);
@@ -77,14 +82,14 @@ export function InteractiveSelector<T = string>({
       paddingX={2}
       paddingY={1}
     >
-      {}
+      {/* 标题 */}
       <Box marginBottom={1}>
         <Text bold color={theme.colors.primary}>
           {title}
         </Text>
       </Box>
 
-      {}
+      {/* 选项列表 */}
       <Box flexDirection="column">
         {options.map((option, index) => {
           const isSelected = index === selectedIndex;
@@ -112,10 +117,10 @@ export function InteractiveSelector<T = string>({
         })}
       </Box>
 
-      {}
+      {/* 操作提示 */}
       <Box marginTop={1} borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={theme.colors.border.light}>
         <Text color={theme.colors.text.muted} dimColor>
-          ↑/↓   Enter   Esc 
+          ↑/↓ 选择  Enter 确认  Esc 取消
         </Text>
       </Box>
     </Box>

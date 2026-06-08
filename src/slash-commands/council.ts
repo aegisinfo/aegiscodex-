@@ -22,41 +22,12 @@ interface Agent {
   call: (question: string) => Promise<{ vote: string; analysis: string }>;
 }
 
-async function callAnthropic(question: string, persona: string): Promise<{ vote: string; analysis: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('No ANTHROPIC_API_KEY');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      system: `You are ${persona} in the AEGIS Council. You MUST always vote. You MUST start your response with exactly "VOTE: JA" or "VOTE: NEJ". Never abstain. Then write "ANALYSIS:" followed by 1-2 sentences.`,
-      messages: [{
-        role: 'user',
-        content: `Council question: "${question}"\n\nYou must respond in this exact format:\nVOTE: JA\nANALYSIS: your reasoning here\n\nOR\n\nVOTE: NEJ\nANALYSIS: your reasoning here`,
-      }],
-    }),
-  });
-  const data = await res.json() as any;
-  const text = data.content?.[0]?.text || '';
-  const vote = text.includes('VOTE: JA') ? 'JA' : text.includes('VOTE: NEJ') ? 'NEJ' : 'AVSTÅR';
-  const analysis = text.split('ANALYSIS:')[1]?.trim().slice(0, 200) || text.slice(0, 200);
-  return { vote, analysis };
-}
-
-async function callDeepSeek(question: string, persona: string): Promise<{ vote: string; analysis: string }> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) throw new Error('No DEEPSEEK_API_KEY');
-  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+async function callOpenAICompatible(baseUrl: string, apiKey: string, model: string, question: string, persona: string): Promise<{ vote: string; analysis: string }> {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model,
       max_tokens: 300,
       messages: [{
         role: 'user',
@@ -71,34 +42,29 @@ async function callDeepSeek(question: string, persona: string): Promise<{ vote: 
   return { vote, analysis };
 }
 
-async function callGroq(question: string, persona: string): Promise<{ vote: string; analysis: string }> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error('No GROQ_API_KEY');
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: `You are ${persona} in the AEGIS Council. The question is:\n\n"${question}"\n\nRespond with:\nVOTE: JA or NEJ\nANALYSIS: 1-2 sentences explaining your reasoning.`,
-      }],
-    }),
-  });
-  const data = await res.json() as any;
-  const text = data.choices?.[0]?.message?.content || '';
-  const vote = text.includes('VOTE: JA') ? 'JA' : text.includes('VOTE: NEJ') ? 'NEJ' : 'AVSTÅR';
-  const analysis = text.split('ANALYSIS:')[1]?.trim().slice(0, 200) || text.slice(0, 200);
-  return { vote, analysis };
+function pickProvider(): { baseUrl: string; apiKey: string; model: string } {
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_BASE_URL)
+    return { baseUrl: process.env.OPENAI_BASE_URL, apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL || 'gpt-4o' };
+  if (process.env.DEEPSEEK_API_KEY)
+    return { baseUrl: 'https://api.deepseek.com/v1', apiKey: process.env.DEEPSEEK_API_KEY, model: 'deepseek-chat' };
+  if (process.env.GROQ_API_KEY)
+    return { baseUrl: 'https://api.groq.com/openai/v1', apiKey: process.env.GROQ_API_KEY, model: 'llama-3.3-70b-versatile' };
+  if (process.env.OPENAI_API_KEY)
+    return { baseUrl: 'https://api.openai.com/v1', apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o' };
+  throw new Error('No API key configured. Set OPENAI_API_KEY, DEEPSEEK_API_KEY, or GROQ_API_KEY in ~/.aegiscode/.env');
 }
+
+let _provider: ReturnType<typeof pickProvider> | null = null;
+function callPrimary(q: string, p: string)   { if (!_provider) _provider = pickProvider(); return callOpenAICompatible(_provider.baseUrl, _provider.apiKey, _provider.model, q, p); }
+function callDeepSeek(q: string, p: string)  { return callOpenAICompatible('https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY || '', 'deepseek-chat', q, p); }
+function callGroq(q: string, p: string)      { return callOpenAICompatible('https://api.groq.com/openai/v1', process.env.GROQ_API_KEY || '', 'llama-3.3-70b-versatile', q, p); }
 
 const AGENTS: Agent[] = [
   {
-    name: 'Claude',
+    name: 'Strategist',
     role: 'Strategic Analyst',
     color: C.teal,
-    call: (q) => callAnthropic(q, 'a strategic analyst focused on long-term impact and human values'),
+    call: (q) => callPrimary(q, 'a strategic analyst focused on long-term impact and human values'),
   },
   {
     name: 'DeepSeek',

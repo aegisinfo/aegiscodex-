@@ -1,4 +1,5 @@
 /**
+ * Store 选择器
  * 
  * 
  */
@@ -9,11 +10,16 @@ import { vanillaStore } from './vanilla.js';
 import type { ClawdStore, SessionMessage, TodoItem, FocusId } from './types.js';
 import type { ModelConfig, PermissionMode } from '../config/types.js';
 
+// ========== 基
+
 /**
+ * React Hook - 订阅 Clawd Store
  */
 export function useClawdStore<T>(selector: (state: ClawdStore) => T): T {
   return useStore(vanillaStore, selector);
 }
+
+// ========== Session 选择
 
 export const useSessionId = () =>
   useClawdStore((state) => state.session.sessionId);
@@ -36,6 +42,8 @@ export const useCurrentCommand = () =>
 export const useTokenUsage = () =>
   useClawdStore((state) => state.session.tokenUsage);
 
+// ========== Config 选择
+
 export const useConfig = () =>
   useClawdStore((state) => state.config.config);
 
@@ -46,6 +54,8 @@ export const usePermissionMode = () =>
   useClawdStore(
     (state) => (state.config.config?.defaultPermissionMode || 'default') as PermissionMode
   );
+
+// 常量空引用，避免重渲
 const EMPTY_MODELS: ModelConfig[] = [];
 
 export const useAllModels = () =>
@@ -60,15 +70,23 @@ export const useCurrentModel = () =>
   useClawdStore((state) => {
     const config = state.config.config;
     if (!config) return undefined;
+
+    // 优先使
     if (config.currentModelId && config.models) {
       const model = config.models.find((m) => m.id === config.currentModelId);
       if (model) return model;
     }
+
+    // 回退
     if (config.models && config.models.length > 0) {
       return config.models[0];
     }
+
+    // 回退
     return config.default;
   });
+
+// ========== App 选择
 
 export const useInitializationStatus = () =>
   useClawdStore((state) => state.app.initializationStatus);
@@ -88,17 +106,23 @@ export const useAwaitingSecondCtrlC = () =>
 export const useShowAllThinking = () =>
   useClawdStore((state) => state.app.showAllThinking);
 
+// ========== Focus 选择
+
 export const useCurrentFocus = () =>
   useClawdStore((state) => state.focus.currentFocus);
 
 export const usePreviousFocus = () =>
   useClawdStore((state) => state.focus.previousFocus);
 
+// ========== Command 选择
+
 export const useIsProcessing = () =>
   useClawdStore((state) => state.command.isProcessing);
 
 export const usePendingCommands = () =>
   useClawdStore((state) => state.command.pendingCommands);
+
+// ========== 派生选择
 
 /**
  * 
@@ -147,6 +171,8 @@ export const useTodoStats = () =>
     })
   );
 
+// ========== 细粒度消息选择
+
 /**
  * 
  */
@@ -181,6 +207,8 @@ export const useStreamingMessageId = () =>
     const streaming = state.session.messages.find(m => m.isStreaming);
     return streaming?.id ?? null;
   });
+
+// ========== 组合选择器（使
 
 /**
  * 

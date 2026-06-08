@@ -1,4 +1,5 @@
 /**
+ * Bash 工具
  * 
  * 
  */
@@ -11,9 +12,11 @@ import { ToolKind, ToolErrorType } from '../types.js';
 
 const execAsync = promisify(exec);
 
+// ========== Schema 定
+
 const BashSchema = z.object({
   command: z.string()
-    .min(1, '')
+    .min(1, '命令不能为空')
     .describe('The shell command to execute'),
   description: z.string()
     .optional()
@@ -30,11 +33,15 @@ const BashSchema = z.object({
     .describe('Whether to run the command in the background'),
 });
 
+// ========== Bash 工
+
 export const bashTool = createTool({
   name: 'Bash',
   displayName: 'Shell Command',
   kind: ToolKind.Execute,
   schema: BashSchema,
+  
+  // Bash 不是并发安全的（可能修改共享状
   isConcurrencySafe: false,
   
   description: {
@@ -81,6 +88,8 @@ export const bashTool = createTool({
 
   category: 'Shell',
   tags: ['shell', 'bash', 'command', 'execute'],
+
+  // 提取签名内容（用于权限规
   extractSignatureContent: (params: unknown) => {
     const p = params as { command: string };
     return p.command;
@@ -88,11 +97,13 @@ export const bashTool = createTool({
 
   async execute(params, context) {
     const { command, description, timeout, working_directory, run_in_background } = params;
+
+    // 危险命令检
     const dangerousPatterns = [
-      /rm\s+-rf\s+\/(?!\w)/,
-      />\s*\/dev\/sd[a-z]/,
-      /mkfs\./,
-      /dd\s+if=.*of=\/dev/,
+      /rm\s+-rf\s+\/(?!\w)/,  // rm -rf / (但允许 rm -rf /path/to/dir)
+      />\s*\/dev\/sd[a-z]/,   // 写入磁盘设
+      /mkfs\./,               // 格式化文件系
+      /dd\s+if=.*of=\/dev/,   // dd 写入设
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -100,7 +111,7 @@ export const bashTool = createTool({
         return {
           success: false,
           llmContent: `Error: Potentially dangerous command detected: ${command}`,
-          displayContent: `❌ ，`,
+          displayContent: `❌ 检测到危险命令，已阻止执行`,
           error: {
             type: ToolErrorType.PERMISSION_ERROR,
             message: 'Dangerous command blocked',
@@ -110,17 +121,20 @@ export const bashTool = createTool({
     }
 
     try {
+      // TODO: 后台执行需
       if (run_in_background) {
         return {
           success: false,
           llmContent: 'Background execution is not yet implemented. Please run the command synchronously or use a shorter timeout.',
-          displayContent: `⚠️ `,
+          displayContent: `⚠️ 后台执行暂未实现`,
           error: {
             type: ToolErrorType.EXECUTION_ERROR,
             message: 'Background execution not implemented',
           },
         };
       }
+
+      // 执行命
       const options = {
         timeout,
         cwd: working_directory || context?.cwd || process.cwd(),
@@ -129,6 +143,8 @@ export const bashTool = createTool({
       };
 
       const { stdout, stderr } = await execAsync(command, options);
+
+      // 组合输
       const output = [
         stdout ? stdout.trim() : '',
         stderr ? `[stderr]\n${stderr.trim()}` : '',
@@ -139,7 +155,7 @@ export const bashTool = createTool({
         llmContent: output || '(no output)',
         displayContent: description 
           ? `✅ ${description}` 
-          : `✅ : ${command.length > 50 ? command.substring(0, 50) + '...' : command}`,
+          : `✅ 命令执行成功: ${command.length > 50 ? command.substring(0, 50) + '...' : command}`,
         metadata: {
           command,
           exit_code: 0,
@@ -147,6 +163,7 @@ export const bashTool = createTool({
         },
       };
     } catch (error: unknown) {
+      // 处理执行错
       const execError = error as {
         code?: number | string;
         killed?: boolean;
@@ -155,19 +172,23 @@ export const bashTool = createTool({
         stderr?: string;
         message?: string;
       };
+
+      // 超时处
       if (execError.killed && execError.signal === 'SIGTERM') {
         return {
           success: false,
           llmContent: `Command timed out after ${timeout}ms: ${command}`,
-          displayContent: `❌  (${timeout}ms)`,
+          displayContent: `❌ 命令超时 (${timeout}ms)`,
           error: {
             type: ToolErrorType.TIMEOUT_ERROR,
             message: 'Command timed out',
           },
         };
       }
+
+      // 命令执行失
       const exitCode = typeof execError.code === 'number' ? execError.code : 1;
-      const stderr = execError.stderr || execError.message || '';
+      const stderr = execError.stderr || execError.message || '未知错误';
       const stdout = execError.stdout || '';
 
       const output = [
@@ -178,7 +199,7 @@ export const bashTool = createTool({
       return {
         success: false,
         llmContent: `Command failed with exit code ${exitCode}:\n${output}`,
-        displayContent: `❌  (exit ${exitCode})`,
+        displayContent: `❌ 命令执行失败 (exit ${exitCode})`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: stderr,

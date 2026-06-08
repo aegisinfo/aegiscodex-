@@ -1,4 +1,5 @@
 /**
+ * SkillLoader - SKILL.md 文件解析器
  * 
  * 
  */
@@ -27,8 +28,12 @@ export function isValidDescription(description: string): boolean {
 /**
  * 
  * 
+ * @param content - 文件内容
+ * @returns 解析后的 frontmatter 和 body
+ * @throws 如果格式无效或缺少必填字段
  */
 export function parseSkillFile(content: string): ParsedSkillFile {
+  // 匹
   const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
   const match = content.match(frontmatterRegex);
 
@@ -37,12 +42,16 @@ export function parseSkillFile(content: string): ParsedSkillFile {
   }
 
   const [, frontmatterStr, body] = match;
+
+  // 解
   let frontmatter: SkillFrontmatter;
   try {
     frontmatter = yaml.parse(frontmatterStr);
   } catch (error) {
     throw new Error(`Invalid YAML in frontmatter: ${(error as Error).message}`);
   }
+
+  // 验证必填字
   if (!frontmatter.name || typeof frontmatter.name !== 'string') {
     throw new Error('SKILL.md must have a "name" field');
   }
@@ -53,6 +62,8 @@ export function parseSkillFile(content: string): ParsedSkillFile {
       'lowercase letters, numbers, and hyphens only'
     );
   }
+
+  // 验证必填字
   if (!frontmatter.description || typeof frontmatter.description !== 'string') {
     throw new Error('SKILL.md must have a "description" field');
   }
@@ -60,6 +71,8 @@ export function parseSkillFile(content: string): ParsedSkillFile {
   if (!isValidDescription(frontmatter.description)) {
     throw new Error('Skill description must be 1024 characters or less');
   }
+
+  // 验证可选字段类
   if (frontmatter['allowed-tools'] !== undefined) {
     if (!Array.isArray(frontmatter['allowed-tools'])) {
       throw new Error('"allowed-tools" must be an array');

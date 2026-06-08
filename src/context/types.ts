@@ -5,6 +5,7 @@
 import type { Message } from '../agent/types.js';
 
 // ============================================================================
+// 基础消息类
 // ============================================================================
 
 /**
@@ -32,6 +33,7 @@ export interface ToolCallRecord {
 }
 
 // ============================================================================
+// 上下文分
 // ============================================================================
 
 /**
@@ -113,45 +115,48 @@ export interface ContextData {
 }
 
 // ============================================================================
+// JSONL 存储格
 // ============================================================================
 
 /**
+ * JSONL 条目类型
  */
 export type JSONLEntryType = 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'system';
 
 /**
+ * JSONL 条目
  */
 export interface JSONLEntry {
-  
+  /** 消息唯一 ID (nanoid) */
   uuid: string;
-  
+  /** 父消息 ID (用于对话线程追踪) */
   parentUuid: string | null;
-  
+  /** 会话 ID */
   sessionId: string;
-  
+  /** ISO 8601 时间戳 */
   timestamp: string;
-  
+  /** 消息类型 */
   type: JSONLEntryType;
-  
+  /** 子类型 */
   subtype?: 'compact_boundary';
-  
+  /** 工作目录 */
   cwd: string;
-  
+  /** Git 分支 */
   gitBranch?: string;
-  
+  /** 版本号 */
   version: string;
-  
+  /** 消息内容 */
   message: {
     role: 'user' | 'assistant' | 'system';
     content: string | unknown;
     model?: string;
     usage?: { input_tokens: number; output_tokens: number };
   };
-  
+  /** 工具调用信息 */
   tool?: { id: string; name: string; input: unknown };
-  
+  /** 工具结果 */
   toolResult?: { id: string; output: unknown; error?: string };
-  
+  /** 压缩标记 */
   isCompactSummary?: boolean;
   compactMetadata?: CompactMetadata;
 }
@@ -167,6 +172,7 @@ export interface CompactMetadata {
 }
 
 // ============================================================================
+// 存储选
 // ============================================================================
 
 /**
@@ -189,6 +195,7 @@ export interface FilterOptions {
 }
 
 /**
+ * ContextManager 配置
  */
 export interface ContextManagerOptions {
   storage: StorageOptions;
@@ -197,6 +204,7 @@ export interface ContextManagerOptions {
 }
 
 // ============================================================================
+// 压缩服
 // ============================================================================
 
 /**
@@ -207,9 +215,9 @@ export interface CompactionOptions {
   modelName: string;
   maxContextTokens: number;
   actualPreTokens?: number;
-  chatService?: unknown;
-  sessionId?: string;
-  projectDir?: string;
+  chatService?: unknown; // ChatService 类
+  sessionId?: string;    // 用于 Hook 上下
+  projectDir?: string;   // 用于 Hook 上下
 }
 
 /**
@@ -246,6 +254,7 @@ export interface FileContent {
 }
 
 // ============================================================================
+// 内存信
 // ============================================================================
 
 /**

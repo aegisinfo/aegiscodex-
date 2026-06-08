@@ -1,4 +1,5 @@
 /**
+ * MessageArea - 消息列表区域
  * 
  * 
  */
@@ -10,6 +11,7 @@ import { useTerminalWidth } from '../../hooks/index.js';
 import { themeManager } from '../../themes/index.js';
 
 /**
+ * UI 消息类型
  */
 export interface UIMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -22,11 +24,11 @@ export interface UIMessage {
 }
 
 interface MessageAreaProps {
-  
+  /** 消息列表 */
   messages: UIMessage[];
-  
+  /** 最大显示消息数 */
   maxMessages?: number;
-  
+  /** 是否显示时间戳 */
   showTimestamp?: boolean;
 }
 
@@ -51,6 +53,8 @@ export const MessageArea: React.FC<MessageAreaProps> = ({
 }) => {
   const terminalWidth = useTerminalWidth();
   const theme = themeManager.getTheme();
+
+  // 限制显示的消息数
   const displayMessages = messages.slice(-maxMessages);
 
   if (displayMessages.length === 0) {
@@ -67,7 +71,7 @@ export const MessageArea: React.FC<MessageAreaProps> = ({
     <Box flexDirection="column" paddingX={1}>
       {displayMessages.map((message, index) => (
         <Box key={index} flexDirection="column" marginBottom={1}>
-          {}
+          {/* 时间戳 */}
           {showTimestamp && message.timestamp && (
             <Box marginBottom={0}>
               <Text color={theme.colors.text.muted} dimColor>
@@ -76,7 +80,7 @@ export const MessageArea: React.FC<MessageAreaProps> = ({
             </Box>
           )}
           
-          {}
+          {/* 消息内容 */}
           <MessageRenderer
             content={message.content}
             role={message.role}

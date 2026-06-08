@@ -4,19 +4,23 @@
 
 import type { Tool, ToolResult, ToolInvocation } from '../types.js';
 
+// ========== 权限模
+
 /**
  * 
  */
 export enum PermissionMode {
-  
+  /** 默认模式：写操作需确认 */
   DEFAULT = 'default',
-  
+  /** 自动批准编辑 */
   AUTO_EDIT = 'autoEdit',
-  
+  /** 自动批准所有 */
   YOLO = 'yolo',
-  
+  /** 只读调研模式 */
   PLAN = 'plan',
 }
+
+// ========== 权限检
 
 /**
  * 
@@ -55,6 +59,8 @@ export interface ToolInvocationDescriptor {
   tool?: Tool;
 }
 
+// ========== 确认机
+
 /**
  * 
  */
@@ -82,6 +88,8 @@ export interface ConfirmationHandler {
   requestConfirmation(details: ConfirmationDetails): Promise<ConfirmationResponse>;
 }
 
+// ========== 执行上下
+
 /**
  * 
  */
@@ -103,6 +111,8 @@ export interface ToolProgress {
   message: string;
   percent?: number;
 }
+
+// ========== 工具执
 
 /**
  * 
@@ -169,6 +179,8 @@ export class ToolExecution {
   }
 }
 
+// ========== 管道阶
+
 /**
  * 
  */
@@ -177,6 +189,8 @@ export interface PipelineStage {
   process(execution: ToolExecution): Promise<void>;
 }
 
+// ========== 管道配
+
 /**
  * 
  */
@@ -184,6 +198,8 @@ export interface ExecutionPipelineConfig {
   permissions?: PermissionConfig;
   defaultMode?: PermissionMode;
 }
+
+// ========== 执行历
 
 /**
  * 
@@ -198,7 +214,10 @@ export interface ExecutionHistoryEntry {
   stages: string[];
 }
 
+// ========== Hook 相
+
 /**
+ * Pre-Tool Hook 结果
  */
 export interface PreToolHookResult {
   decision: 'allow' | 'ask' | 'deny';
@@ -208,6 +227,7 @@ export interface PreToolHookResult {
 }
 
 /**
+ * Post-Tool Hook 参数
  */
 export interface PostToolHookParams {
   toolName: string;
@@ -215,6 +235,8 @@ export interface PostToolHookParams {
   result?: ToolResult;
   context: PipelineExecutionContext;
 }
+
+// ========== 管道事
 
 /**
  * 

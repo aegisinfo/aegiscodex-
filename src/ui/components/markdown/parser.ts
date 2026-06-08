@@ -1,10 +1,12 @@
 /**
+ * Markdown 解析器
  * 
  * 
  */
 
 import type { ParsedBlock, TableData, InlineSegment } from './types.js';
 
+/** 已知的编程语言标识列表（用于区分 language 和 file path） */
 const KNOWN_LANGUAGES = new Set([
   'javascript', 'js', 'typescript', 'ts', 'tsx', 'jsx',
   'python', 'py', 'ruby', 'rb', 'go', 'rust', 'rs',
@@ -74,6 +76,7 @@ function parseCodeBlockSpec(spec: string | null): { language?: string; filePath?
 }
 
 /**
+ * Markdown 模式匹配
  */
 const MARKDOWN_PATTERNS = {
   codeBlock: /^(\s*)```([^\s]*?)?\s*$/,
@@ -108,7 +111,7 @@ export function parseMarkdown(content: string): ParsedBlock[] {
   let inCodeBlock = false;
   let codeBlockContent: string[] = [];
   let codeBlockSpec: ReturnType<typeof parseCodeBlockSpec> = {};
-  let codeBlockIndent = 0;
+  let codeBlockIndent = 0; // 代码块开始行的缩进
 
   let inTable = false;
   let tableHeaders: string[] = [];
@@ -117,9 +120,12 @@ export function parseMarkdown(content: string): ParsedBlock[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // ===== 代码块处
     if (inCodeBlock) {
       const match = line.match(MARKDOWN_PATTERNS.codeBlock);
       if (match && match[2] === undefined) {
+        // 代码块结
         blocks.push({
           type: 'code',
           content: codeBlockContent.join('\n'),
@@ -131,6 +137,7 @@ export function parseMarkdown(content: string): ParsedBlock[] {
         codeBlockSpec = {};
         codeBlockIndent = 0;
       } else {
+        // 去除代码块开始行的缩进量（处理缩进代码
         const stripped = codeBlockIndent > 0 && line.startsWith(' '.repeat(codeBlockIndent))
           ? line.slice(codeBlockIndent)
           : line;
@@ -138,8 +145,11 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       }
       continue;
     }
+
+    // 检查代码块开
     const codeMatch = line.match(MARKDOWN_PATTERNS.codeBlock);
     if (codeMatch) {
+      // 先完成表
       if (inTable) {
         blocks.push(createTableBlock(tableHeaders, tableRows, tableAlignments));
         inTable = false;
@@ -149,39 +159,53 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       }
       
       inCodeBlock = true;
-      codeBlockIndent = codeMatch[1]?.length || 0;
+      codeBlockIndent = codeMatch[1]?.length || 0; // 记录缩进
       codeBlockSpec = parseCodeBlockSpec(codeMatch[2] || null);
       continue;
     }
+
+    // ===== 表格处
     if (MARKDOWN_PATTERNS.table.test(line)) {
       const cells = parseTableRow(line);
       
       if (!inTable) {
+        // 可能是表
         tableHeaders = cells;
         inTable = true;
         continue;
       }
+      
+      // 检查是否是分隔
       if (MARKDOWN_PATTERNS.tableSeparator.test(line)) {
         tableAlignments = parseTableAlignments(line);
         continue;
       }
+      
+      // 数据
       tableRows.push(cells);
       continue;
     } else if (inTable) {
+      // 表格结
       blocks.push(createTableBlock(tableHeaders, tableRows, tableAlignments));
       inTable = false;
       tableHeaders = [];
       tableRows = [];
       tableAlignments = [];
     }
+
+    // ===== 空
     if (MARKDOWN_PATTERNS.empty.test(line)) {
       blocks.push({ type: 'empty', content: '' });
       continue;
     }
+
+    // ===== 水平
     if (MARKDOWN_PATTERNS.hr.test(line)) {
       blocks.push({ type: 'hr', content: '' });
       continue;
     }
+
+    // ===== 标
     const headingMatch = line.match(MARKDOWN_PATTERNS.heading);
     if (headingMatch) {
       blocks.push({
@@ -191,6 +215,8 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       });
       continue;
     }
+
+    // ===== 无序列
     const ulMatch = line.match(MARKDOWN_PATTERNS.ulItem);
     if (ulMatch) {
       blocks.push({
@@ -202,6 +228,8 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       });
       continue;
     }
+
+    // ===== 有序列
     const olMatch = line.match(MARKDOWN_PATTERNS.olItem);
     if (olMatch) {
       blocks.push({
@@ -213,6 +241,8 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       });
       continue;
     }
+
+    // ===== 引
     const blockquoteMatch = line.match(MARKDOWN_PATTERNS.blockquote);
     if (blockquoteMatch) {
       blocks.push({
@@ -221,8 +251,12 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       });
       continue;
     }
+
+    // ===== 普通文
     blocks.push({ type: 'text', content: line });
   }
+
+  // 处理未结束的代码
   if (inCodeBlock && codeBlockContent.length > 0) {
     blocks.push({
       type: 'code',
@@ -231,6 +265,8 @@ export function parseMarkdown(content: string): ParsedBlock[] {
       filePath: codeBlockSpec.filePath,
     });
   }
+
+  // 处理未结束的表
   if (inTable && tableHeaders.length > 0) {
     blocks.push(createTableBlock(tableHeaders, tableRows, tableAlignments));
   }
@@ -243,7 +279,7 @@ export function parseMarkdown(content: string): ParsedBlock[] {
  */
 function parseTableRow(line: string): string[] {
   return line
-    .slice(1, -1)
+    .slice(1, -1) // 去掉首尾
     .split('|')
     .map(cell => cell.trim());
 }
@@ -293,10 +329,16 @@ export function parseInlineFormats(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
   let remaining = text;
   let lastIndex = 0;
+
+  // 简化的内联解析（实际使用时可以更复
+  // 按顺序处理：链接 > 粗体 > 斜体 > 代码 > 删除
+
+  // 处理链
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
   let match;
   
   while ((match = linkRegex.exec(remaining)) !== null) {
+    // 添加链接前的文
     if (match.index > lastIndex) {
       segments.push({
         type: 'text',
@@ -312,12 +354,16 @@ export function parseInlineFormats(text: string): InlineSegment[] {
     
     lastIndex = match.index + match[0].length;
   }
+
+  // 添加剩余文
   if (lastIndex < remaining.length) {
     segments.push({
       type: 'text',
       content: remaining.slice(lastIndex),
     });
   }
+
+  // 如果没有找到任何特殊格式，返回原文
   if (segments.length === 0) {
     return [{ type: 'text', content: text }];
   }
@@ -330,9 +376,9 @@ export function parseInlineFormats(text: string): InlineSegment[] {
  */
 export function stripMarkdown(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\*(.+?)\*/g, '$1')
-    .replace(/~~(.+?)~~/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // 粗
+    .replace(/\*(.+?)\*/g, '$1')      // 斜
+    .replace(/~~(.+?)~~/g, '$1')      // 删除
+    .replace(/`([^`]+)`/g, '$1')      // 代
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // 链
 }

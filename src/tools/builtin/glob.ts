@@ -1,4 +1,5 @@
 /**
+ * Glob 工具 - 文件搜索
  */
 
 import { glob } from 'glob';
@@ -20,10 +21,11 @@ const DEFAULT_IGNORE = [
 ];
 
 /**
+ * Glob 工具 Schema
  */
 const GlobSchema = z.object({
   pattern: z.string()
-    .min(1, '')
+    .min(1, '模式不能为空')
     .describe('The glob pattern to match files against'),
   
   path: z.string()
@@ -32,6 +34,7 @@ const GlobSchema = z.object({
 });
 
 /**
+ * Glob 工具
  */
 export const globTool = createTool({
   name: 'Glob',
@@ -65,17 +68,22 @@ Use this tool when you need to find files by name patterns.`,
     ],
   },
 
-  category: '',
+  category: '搜索',
   tags: ['search', 'file', 'glob'],
 
   async execute(params, context) {
     let { pattern, path: searchPath } = params;
+    
+    // 默认搜索目
     const cwd = searchPath || context?.cwd || process.cwd();
+
+    // 自动添
     if (!pattern.startsWith('**/') && !pattern.startsWith('/')) {
       pattern = `**/${pattern}`;
     }
 
     try {
+      // 执行 glob 搜
       const files = await glob(pattern, {
         cwd,
         ignore: DEFAULT_IGNORE,
@@ -87,7 +95,7 @@ Use this tool when you need to find files by name patterns.`,
         return {
           success: true,
           llmContent: 'No files found matching the pattern.',
-          displayContent: `🔍 : ${pattern}`,
+          displayContent: `🔍 未找到匹配的文件: ${pattern}`,
           metadata: {
             pattern,
             cwd,
@@ -95,6 +103,8 @@ Use this tool when you need to find files by name patterns.`,
           },
         };
       }
+
+      // 格式化输
       const formattedFiles = files
         .map(f => path.relative(cwd, f))
         .join('\n');
@@ -102,20 +112,20 @@ Use this tool when you need to find files by name patterns.`,
       return {
         success: true,
         llmContent: formattedFiles,
-        displayContent: `✅  ${files.length} `,
+        displayContent: `✅ 找到 ${files.length} 个文件`,
         metadata: {
           pattern,
           cwd,
           count: files.length,
-          files: files.slice(0, 100),
+          files: files.slice(0, 100), // 只存储前 100 
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       return {
         success: false,
         llmContent: `Glob search failed: ${errorMessage}`,
-        displayContent: `❌ : ${errorMessage}`,
+        displayContent: `❌ 搜索失败: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

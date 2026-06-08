@@ -1,4 +1,5 @@
 /**
+ * MCP 服务器健康监控
  * 
  */
 
@@ -39,8 +40,8 @@ export class HealthMonitor extends EventEmitter {
     this.scheduleNextCheck();
 
     this.debug.log(
-      ``,
-      `(: ${this.config.intervalMs}ms, : ${this.config.timeoutMs}ms)`
+      `健康监控已启动`,
+      `(间隔: ${this.config.intervalMs}ms, 超时: ${this.config.timeoutMs}ms)`
     );
   }
 
@@ -53,7 +54,7 @@ export class HealthMonitor extends EventEmitter {
       clearTimeout(this.checkTimer);
       this.checkTimer = null;
     }
-    this.debug.log(``);
+    this.debug.log(`健康监控已停止`);
   }
 
   /**
@@ -94,6 +95,8 @@ export class HealthMonitor extends EventEmitter {
     if (!this.isRunning) {
       return;
     }
+
+    // 只在连接状态下进行检
     if (this.client.connectionStatus !== McpConnectionStatus.CONNECTED) {
       this.lastCheckResult = 'unknown';
       return;
@@ -102,27 +105,33 @@ export class HealthMonitor extends EventEmitter {
     this.lastCheckTime = new Date();
 
     try {
+      // 使用超时包装检
       const checkPromise = this.doHealthCheck();
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('')), this.config.timeoutMs);
+        setTimeout(() => reject(new Error('健康检查超时')), this.config.timeoutMs);
       });
 
       await Promise.race([checkPromise, timeoutPromise]);
+
+      // 检查成
       this.consecutiveFailures = 0;
       this.lastCheckResult = 'healthy';
       this.emit('healthy');
     } catch (error) {
+      // 检查失
       this.consecutiveFailures++;
       this.lastCheckResult = 'unhealthy';
 
       this.debug.warn(
-        ``,
+        `健康检查失败`,
         `(${this.consecutiveFailures}/${this.config.maxFailures}):`,
         (error as Error).message
       );
+
+      // 超过最大失败次数，触发不健康事
       if (this.consecutiveFailures >= this.config.maxFailures) {
         this.debug.error(
-          `， ${this.consecutiveFailures} `
+          `服务器不健康，连续失败 ${this.consecutiveFailures} 次`
         );
         this.emit('unhealthy', this.consecutiveFailures, error);
       }
@@ -134,6 +143,8 @@ export class HealthMonitor extends EventEmitter {
    * 
    */
   private async doHealthCheck(): Promise<void> {
+    // 简单的健康检查：尝试重新加载工具列
+    // 如果能成功获取，说明连接是健康
     await this.client.reloadTools();
   }
 }

@@ -1,4 +1,5 @@
 /**
+ * Config Slice - 配置状态管理
  */
 
 import type { StateCreator } from 'zustand';
@@ -29,6 +30,7 @@ export const createConfigSlice: StateCreator<
     updateConfig: (partial: Partial<RuntimeConfig>) => {
       set((state) => {
         if (!state.config.config) {
+          console.warn('[ConfigSlice] Config not initialized, cannot update');
           return state;
         }
 

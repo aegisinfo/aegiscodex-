@@ -1,4 +1,5 @@
 /**
+ * Focus Slice - 焦点状态管理
  */
 
 import type { StateCreator } from 'zustand';

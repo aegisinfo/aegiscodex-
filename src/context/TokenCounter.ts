@@ -120,7 +120,8 @@ export class TokenCounter {
           const encoding = encodingForModel('gpt-4o');
           this.encodingCache.set(normalizedName, encoding);
         } catch {
-          //
+          // 
+          console.warn(` ${modelName}  encoding`);
           const fallbackEncoding = {
             encode: (text: string) => new Array(Math.ceil(text.length / 4)),
             decode: () => '',

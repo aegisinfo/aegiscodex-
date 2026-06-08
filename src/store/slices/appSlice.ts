@@ -1,4 +1,5 @@
 /**
+ * App Slice - 应用状态管理
  */
 
 import type { StateCreator } from 'zustand';

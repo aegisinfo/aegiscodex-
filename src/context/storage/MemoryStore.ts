@@ -43,12 +43,14 @@ export class MemoryStore {
    */
   addMessage(message: ContextMessage): void {
     if (!this.contextData) {
-      throw new Error('');
+      throw new Error('上下文数据未初始化');
     }
 
     this.contextData.layers.conversation.messages.push(message);
     this.contextData.layers.conversation.lastActivity = Date.now();
     this.contextData.metadata.lastUpdated = Date.now();
+
+    // 检查是否超过大小限
     this.enforceMemoryLimit();
     this.recordAccess('messages');
   }
@@ -69,7 +71,7 @@ export class MemoryStore {
    */
   setMessages(messages: ContextMessage[]): void {
     if (!this.contextData) {
-      throw new Error('');
+      throw new Error('上下文数据未初始化');
     }
     this.contextData.layers.conversation.messages = messages;
     this.contextData.metadata.lastUpdated = Date.now();
@@ -80,11 +82,13 @@ export class MemoryStore {
    */
   addToolCall(toolCall: ToolCallRecord): void {
     if (!this.contextData) {
-      throw new Error('');
+      throw new Error('上下文数据未初始化');
     }
 
     this.contextData.layers.tool.recentCalls.push(toolCall);
     this.contextData.metadata.lastUpdated = Date.now();
+
+    // 限制工具调用记录数
     const maxToolCalls = 100;
     if (this.contextData.layers.tool.recentCalls.length > maxToolCalls) {
       this.contextData.layers.tool.recentCalls = 
@@ -148,7 +152,8 @@ export class MemoryStore {
 
     const messages = this.contextData.layers.conversation.messages;
     if (messages.length > this.maxSize) {
-      const keepCount = Math.floor(this.maxSize * 0.8);
+      // 保留最近的消息，删除较旧
+      const keepCount = Math.floor(this.maxSize * 0.8); // 保
       this.contextData.layers.conversation.messages = messages.slice(-keepCount);
     }
   }

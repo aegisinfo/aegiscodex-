@@ -1,15 +1,26 @@
 /**
+ * AEGIS CLI - 主入口
  *
  * 
+ * 1. 早期解析 --debug 参数（确保日志可用）
+ * 2. 启动版本检查（不等待，与后续流程并行）
+ * 3. 创建 yargs CLI 实例
+ * 4. 注册全局选项和命令
+ * 5. 执行中间件链（validatePermissions → loadConfiguration → validateOutput）
+ * 6. 执行默认命令 → 启动 React UI（传递 versionCheckPromise）
  *
  * 
+ * 1. 默认配置
+ * 2. 用户配置 (~/.aegiscode/config.json)
+ * 3. 项目配置 (./.aegiscode/config.json)
+ * 4. 环境变量 (OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL)
+ * 5. CLI 参数 (--api-key, --base-url, --model)
  */
 
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
-const _envPath = resolve(process.cwd(), '.env');
-dotenvConfig({ path: _envPath });
-console.log(`◇ injected env from ${_envPath}`);
+dotenvConfig({ path: resolve(process.cwd(), '.env') });
+// dotenvConfig({ path: resolve(process.env.HOME || '~', '.aegiscode', '.env') }); // removed — use single .env
 import React from 'react';
 import { render } from 'ink';
 import yargs from 'yargs';
@@ -25,6 +36,8 @@ import { setGlobalDebug } from './utils/debug.js';
 import type { CliArguments } from './cli/types.js';
 import type { VersionCheckResult } from './services/VersionChecker.js';
 import * as path from 'node:path';
+
+// ========== 全局状
 let isDebugMode = false;
 let versionCheckPromise: Promise<VersionCheckResult | null> | undefined;
 
@@ -32,6 +45,9 @@ let versionCheckPromise: Promise<VersionCheckResult | null> | undefined;
  * 
  *
  * 
+ * - Logger 在各模块中被创建
+ * - 如果等 yargs 解析完再设置 debug，部分初始化日志会丢失
+ * - 早期解析确保所有日志都能正确输出
  */
 function parseDebugEarly(): void {
   const rawArgs = hideBin(process.argv)
@@ -49,7 +65,10 @@ function parseDebugEarly(): void {
  * 
  */
 async function main(): Promise<void> {
+  // 1. 早期解
   parseDebugEarly();
+
+  // 2. 启动版本检查（不等待，与后续流程并行执
   versionCheckPromise = checkVersionOnStartup();
 
   // Handle --model flag: aegis --model deepseek "question"
@@ -89,20 +108,32 @@ async function main(): Promise<void> {
   if (isDebugMode) {
     console.log('[DEBUG] Version check started (running in parallel)');
   }
+
+  // 3. 创建 yargs CLI 实
   const cli = yargs(hideBin(process.argv))
     .scriptName(cliConfig.scriptName)
     .usage(cliConfig.usage)
     .version(cliConfig.version)
+
+    // 3. 注册全局选
     .options(globalOptions)
+
+    // 4. 注册中间
     .middleware(middlewareChain)
+
+    // 5. 示
     .example('$0', 'Start interactive mode')
     .example('$0 "帮我分析这个项目"', 'Start with an initial message')
     .example('$0 --model gpt-4', 'Use a specific model')
     .example('$0 --debug', 'Enable debug mode')
     .example('$0 --init', 'Create default config file')
+
+    // 6. 帮助和版
     .help()
     .alias('h', 'help')
     .alias('v', 'version')
+
+    // 7. 错误处
     .fail((msg, err, yargsInstance) => {
       if (err) {
         console.error('💥 An error occurred:')
@@ -122,7 +153,11 @@ async function main(): Promise<void> {
         process.exit(1)
       }
     })
+
+    // 8. 严格模式（禁止未知选
     .strict()
+
+    // 9. 默认命
     .command(
       '$0 [message..]',
       'Start interactive mode',
@@ -135,6 +170,8 @@ async function main(): Promise<void> {
       },
       async (argv) => {
         const args = argv as CliArguments
+
+        // 处理 --init 命
         if (args.init) {
           const configPath = await configManager.createDefaultConfig()
           console.log(`✅ Created default config at: ${configPath}`)
@@ -143,25 +180,37 @@ async function main(): Promise<void> {
           console.log(`  vim ${configPath}`)
           process.exit(0)
         }
+
+        // 获取最终配
         const modelConfig = configManager.getDefaultModel()
+
+        // 检
         if (!modelConfig.apiKey) {
+          console.error('Error: API key is required')
           console.error('')
-          console.error('  ⬡ Welcome to aegiscode')
+          console.error('Configuration options (in priority order):')
           console.error('')
-          console.error('  No API key found. Add at least one key to .env:')
+          console.error('  1. Config file (~/.aegiscode/config.json):')
+          console.error('     aegis-cli --init  # Create default config')
           console.error('')
-          console.error('    ANTHROPIC_API_KEY=sk-ant-...')
-          console.error('    DEEPSEEK_API_KEY=sk-...')
-          console.error('    GROQ_API_KEY=gsk_...')
+          console.error('  2. Environment variable:')
+          console.error('     export OPENAI_API_KEY=sk-...')
           console.error('')
-          console.error('  Get keys from your provider and add them to:')
-          console.error('  ' + require('path').join(process.cwd(), '.env'))
+          console.error('  3. CLI argument:')
+          console.error('     aegis-cli --api-key sk-...')
           console.error('')
-          console.error('  More info: https://aegiscloud.org/aegiscode')
-          console.error('')
+
+          // 显示已加载的配置文
+          const loadedPaths = configManager.getLoadedConfigPaths()
+          if (loadedPaths.length > 0) {
+            console.error('Loaded config files:')
+            loadedPaths.forEach((p) => console.error(`  - ${p}`))
+          }
 
           process.exit(1)
         }
+
+        // 获取初始消息（支持多个单
         const messageArray = argv.message as string[] | undefined
         const initialMessage =
           messageArray && messageArray.length > 0
@@ -171,11 +220,15 @@ async function main(): Promise<void> {
         if (isDebugMode && initialMessage) {
           console.log('[DEBUG] Initial message:', initialMessage)
         }
+
+        // 处理 --continue 和 --resume 参
         let resumeSessionId: string | undefined;
         
         if (args.continue) {
+          // 获取最近的会话文
           const latestSession = await getLatestSessionFile(process.cwd());
           if (latestSession) {
+            // 从文件路径提取 sessionId（去掉 .jsonl 扩展
             resumeSessionId = path.basename(latestSession, '.jsonl');
             if (isDebugMode) {
               console.log('[DEBUG] Continuing session:', resumeSessionId);
@@ -189,7 +242,11 @@ async function main(): Promise<void> {
             console.log('[DEBUG] Resuming session:', resumeSessionId);
           }
         }
+
+        // 初始化主题（从用户配置加载，或自动检测终端颜色模
         themeManager.initializeFromConfig();
+        
+        // CLI 参数覆盖（如果指定
         if (args.theme && themeManager.hasTheme(args.theme)) {
           themeManager.setTheme(args.theme);
           if (isDebugMode) {
@@ -253,6 +310,8 @@ async function main(): Promise<void> {
     })
   await cli.parse()
 }
+
+// 运行主函
 main().catch((error) => {
   console.error('Fatal error:', error.message)
   if (isDebugMode && error.stack) {

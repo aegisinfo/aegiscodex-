@@ -1,4 +1,5 @@
 /**
+ * Edit 工具
  * 
  * 
  */
@@ -9,9 +10,11 @@ import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
 
+// ========== Schema 定
+
 const EditSchema = z.object({
   file_path: z.string()
-    .min(1, '')
+    .min(1, '文件路径不能为空')
     .describe('The absolute path to the file to modify'),
   old_string: z.string()
     .describe('The text to replace (must be unique in the file unless replace_all is true)'),
@@ -21,6 +24,8 @@ const EditSchema = z.object({
     .default(false)
     .describe('If true, replace all occurrences of old_string'),
 });
+
+// ========== Edit 工
 
 export const editTool = createTool({
   name: 'Edit',
@@ -64,12 +69,16 @@ export const editTool = createTool({
     ],
   },
 
-  category: '',
+  category: '文件操作',
   tags: ['file', 'io', 'write', 'edit'],
+
+  // 提取签名内容（用于权限规
   extractSignatureContent: (params: unknown) => {
     const p = params as { file_path: string };
     return p.file_path;
   },
+
+  // 抽象权限规
   abstractPermissionRule: (params: unknown) => {
     const p = params as { file_path: string };
     const dir = path.dirname(p.file_path);
@@ -80,13 +89,14 @@ export const editTool = createTool({
     const { file_path, old_string, new_string, replace_all } = params;
 
     try {
+      // 1. 检查文件是否存
       try {
         const stat = await fs.stat(file_path);
         if (stat.isDirectory()) {
           return {
             success: false,
             llmContent: `Error: ${file_path} is a directory, not a file`,
-            displayContent: `❌ : ${file_path} `,
+            displayContent: `❌ 错误: ${file_path} 是目录而非文件`,
             error: {
               type: ToolErrorType.VALIDATION_ERROR,
               message: 'Path is a directory',
@@ -97,61 +107,78 @@ export const editTool = createTool({
         return {
           success: false,
           llmContent: `Error: File not found: ${file_path}`,
-          displayContent: `❌ : ${file_path}`,
+          displayContent: `❌ 文件不存在: ${file_path}`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'File not found',
           },
         };
       }
+
+      // 2. 读取文件内
       const content = await fs.readFile(file_path, 'utf8');
+
+      // 3. old_string 和 new_string 相同检
       if (old_string === new_string) {
         return {
           success: false,
           llmContent: 'Error: old_string and new_string are identical',
-          displayContent: '❌ old_string  new_string ',
+          displayContent: '❌ old_string 和 new_string 相同',
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'old_string and new_string are identical',
           },
         };
       }
+
+      // 4. 检查 old_string 是否存
       const matchCount = content.split(old_string).length - 1;
       
       if (matchCount === 0) {
         return {
           success: false,
           llmContent: `Error: old_string not found in file. Make sure you have read the file first and the content is up to date.`,
-          displayContent: `❌ `,
+          displayContent: `❌ 未找到要替换的内容`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'old_string not found in file',
           },
         };
       }
+
+      // 5. 多重匹配检查（非 replace_all 模
       if (matchCount > 1 && !replace_all) {
         return {
           success: false,
           llmContent: `Error: Multiple matches (${matchCount}) found for old_string. Either:
 1. Provide more context in old_string to make it unique
 2. Set replace_all=true to replace all occurrences`,
-          displayContent: `❌  ${matchCount} ， replace_all`,
+          displayContent: `❌ 找到 ${matchCount} 个匹配，请提供更多上下文或使用 replace_all`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: `Multiple matches (${matchCount}) found`,
           },
         };
       }
+
+      // 6. TODO: 创建快
+      // 目前跳过，后续实
+
+      // 7. 执行替
       const newContent = replace_all
         ? content.replaceAll(old_string, new_string)
         : content.replace(old_string, new_string);
+
+      // 8. 写入文
       await fs.writeFile(file_path, newContent, 'utf8');
+
+      // 9. 计算替换数
       const replacements = replace_all ? matchCount : 1;
 
       return {
         success: true,
         llmContent: `Successfully edited ${file_path} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
-        displayContent: `✅ : ${file_path} (${replacements} )`,
+        displayContent: `✅ 文件已编辑: ${file_path} (${replacements} 处替换)`,
         metadata: {
           file_path,
           replacements,
@@ -161,11 +188,11 @@ export const editTool = createTool({
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       return {
         success: false,
         llmContent: `Error editing file: ${errorMessage}`,
-        displayContent: `❌ : ${errorMessage}`,
+        displayContent: `❌ 编辑文件失败: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

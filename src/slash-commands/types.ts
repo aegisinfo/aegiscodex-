@@ -1,4 +1,5 @@
 /**
+ * Slash 命令类型定义
  */
 
 /**
@@ -25,6 +26,7 @@ export interface SelectorOption<T = string> {
 }
 
 /**
+ * Slash 命令上下文
  */
 export interface SlashCommandContext {
   /** 当前工作目录 */
@@ -51,6 +53,7 @@ export interface SlashCommandContext {
 }
 
 /**
+ * Slash 命令结果
  */
 export interface SlashCommandResult {
   /** 是否成功 */
@@ -79,6 +82,7 @@ export interface SlashCommandResult {
 }
 
 /**
+ * Slash 命令定义
  */
 export interface SlashCommand {
   /** 命令名称（不含 /） */
@@ -115,6 +119,8 @@ export interface CommandSuggestion {
  * 
  */
 export type SlashCommandRegistry = Record<string, SlashCommand>;
+
+// ==================== 自定义命令类
 
 /**
  * 

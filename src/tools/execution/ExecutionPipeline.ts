@@ -1,4 +1,5 @@
 /**
+ * ExecutionPipeline - 执行管道
  * 
  */
 
@@ -50,6 +51,8 @@ export class ExecutionPipeline {
   ) {
 
     const defaultMode = config.defaultMode || PermissionMode.DEFAULT;
+
+    // 初始化七个执行阶
     this.stages = [
       new DiscoveryStage(this.registry),
       new PermissionStage(config.permissions, this.sessionApprovals, defaultMode),
@@ -71,17 +74,34 @@ export class ExecutionPipeline {
   ): Promise<ToolResult> {
     const startTime = Date.now();
     const executedStages: string[] = [];
+
+    // 创建执行实
     const execution = new ToolExecution(toolName, params, context);
 
+    // 发出执行开始事
+
     try {
+      // 依次执行各阶
       for (const stage of this.stages) {
         if (execution.isAborted()) {
           break;
         }
+
+        // 发出阶段开始事
+
+        // 执行阶
         await stage.process(execution);
+
+        // 记录已执行的阶
         executedStages.push(stage.name);
+
+        // 发出阶段完成事
       }
+
+      // 获取或创建结
       const result = execution.getResult() || this.createErrorResult(execution);
+
+      // 记录执行历
       this.recordExecution({
         toolName,
         params,
@@ -92,9 +112,14 @@ export class ExecutionPipeline {
         stages: executedStages,
       });
 
+      // 发出执行完成事
+
       return result;
     } catch (error) {
+      // 发出执行错误事
       const err = error instanceof Error ? error : new Error(String(error));
+
+      // 返回错误结
       return {
         success: false,
         llmContent: `Pipeline execution error: ${err.message}`,
@@ -128,6 +153,8 @@ export class ExecutionPipeline {
    */
   private recordExecution(entry: ExecutionHistoryEntry): void {
     this.executionHistory.push(entry);
+
+    // 限制历史大
     if (this.executionHistory.length > this.maxHistorySize) {
       this.executionHistory.shift();
     }

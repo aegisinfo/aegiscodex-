@@ -1,4 +1,5 @@
 /**
+ * ErrorBoundary - React 错误边界组件
  * 
  * 
  * 
@@ -24,19 +25,24 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    // 更新 state 以便下次渲染显示备
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    // 可以在这里记录错误到日志服
     console.error('[ErrorBoundary] Caught error:', error);
     console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
   }
 
   render(): React.ReactNode {
     if (this.state.hasError) {
+      // 如果提供了自定义 fallback，使用
       if (this.props.fallback) {
         return this.props.fallback;
       }
+
+      // 默认错
       return (
         <Box flexDirection="column" padding={1}>
           <Text color="red" bold>

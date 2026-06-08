@@ -3,17 +3,21 @@
  * 
  */
 
+// ========== 敏感级
+
 /**
  * 
  */
 export enum SensitivityLevel {
-  
+  /** 低敏感：配置文件 */
   LOW = 'low',
-  
+  /** 中敏感：数据库、日志 */
   MEDIUM = 'medium',
-  
+  /** 高敏感：密钥、凭证 */
   HIGH = 'high',
 }
+
+// ========== 检测结
 
 /**
  * 
@@ -32,6 +36,8 @@ export interface SensitivityResultWithPath {
   result: SensitivityResult;
 }
 
+// ========== 敏感规
+
 /**
  * 
  */
@@ -41,6 +47,8 @@ interface SensitiveRule {
   reason: string;
 }
 
+// ========== 检测
+
 /**
  * 
  */
@@ -49,34 +57,56 @@ export class SensitiveFileDetector {
    * 
    */
   private static readonly SENSITIVE_PATTERNS: SensitiveRule[] = [
-    { pattern: /\.env$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /\.env\.(local|development|production|test)$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /credentials?\.json$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /secrets?\.json$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /\.credentials$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /\.pem$/, level: SensitivityLevel.HIGH, reason: '/' },
-    { pattern: /\.key$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /\.p12$/, level: SensitivityLevel.HIGH, reason: 'PKCS12 ' },
-    { pattern: /\.pfx$/, level: SensitivityLevel.HIGH, reason: 'PFX ' },
-    { pattern: /id_rsa/, level: SensitivityLevel.HIGH, reason: 'SSH RSA ' },
-    { pattern: /id_ed25519/, level: SensitivityLevel.HIGH, reason: 'SSH Ed25519 ' },
-    { pattern: /id_ecdsa/, level: SensitivityLevel.HIGH, reason: 'SSH ECDSA ' },
-    { pattern: /id_dsa/, level: SensitivityLevel.HIGH, reason: 'SSH DSA ' },
+    // ========== 高敏
+    // 环境变
+    { pattern: /\.env$/, level: SensitivityLevel.HIGH, reason: '环境变量文件可能包含密钥' },
+    { pattern: /\.env\.(local|development|production|test)$/, level: SensitivityLevel.HIGH, reason: '环境变量文件可能包含密钥' },
+
+    // 凭证文
+    { pattern: /credentials?\.json$/, level: SensitivityLevel.HIGH, reason: '凭证文件' },
+    { pattern: /secrets?\.json$/, level: SensitivityLevel.HIGH, reason: '密钥文件' },
+    { pattern: /\.credentials$/, level: SensitivityLevel.HIGH, reason: '凭证文件' },
+
+    // 密钥文
+    { pattern: /\.pem$/, level: SensitivityLevel.HIGH, reason: '私钥/证书文件' },
+    { pattern: /\.key$/, level: SensitivityLevel.HIGH, reason: '密钥文件' },
+    { pattern: /\.p12$/, level: SensitivityLevel.HIGH, reason: 'PKCS12 证书文件' },
+    { pattern: /\.pfx$/, level: SensitivityLevel.HIGH, reason: 'PFX 证书文件' },
+
+    // SSH 密
+    { pattern: /id_rsa/, level: SensitivityLevel.HIGH, reason: 'SSH RSA 私钥' },
+    { pattern: /id_ed25519/, level: SensitivityLevel.HIGH, reason: 'SSH Ed25519 私钥' },
+    { pattern: /id_ecdsa/, level: SensitivityLevel.HIGH, reason: 'SSH ECDSA 私钥' },
+    { pattern: /id_dsa/, level: SensitivityLevel.HIGH, reason: 'SSH DSA 私钥' },
 
     // AWS
-    { pattern: /\.aws\/credentials$/, level: SensitivityLevel.HIGH, reason: 'AWS ' },
-    { pattern: /\.htpasswd$/, level: SensitivityLevel.HIGH, reason: 'HTTP ' },
-    { pattern: /\.netrc$/, level: SensitivityLevel.HIGH, reason: '' },
-    { pattern: /\.sqlite3?$/, level: SensitivityLevel.MEDIUM, reason: 'SQLite ' },
-    { pattern: /\.db$/, level: SensitivityLevel.MEDIUM, reason: '' },
-    { pattern: /\.log$/, level: SensitivityLevel.MEDIUM, reason: '' },
-    { pattern: /\.bash_history$/, level: SensitivityLevel.MEDIUM, reason: 'Bash ' },
-    { pattern: /\.zsh_history$/, level: SensitivityLevel.MEDIUM, reason: 'Zsh ' },
-    { pattern: /\.npmrc$/, level: SensitivityLevel.MEDIUM, reason: 'npm  token' },
-    { pattern: /\.pypirc$/, level: SensitivityLevel.MEDIUM, reason: 'PyPI  token' },
-    { pattern: /config\.json$/, level: SensitivityLevel.LOW, reason: '' },
-    { pattern: /settings\.json$/, level: SensitivityLevel.LOW, reason: '' },
-    { pattern: /\.gitconfig$/, level: SensitivityLevel.LOW, reason: 'Git ' },
+    { pattern: /\.aws\/credentials$/, level: SensitivityLevel.HIGH, reason: 'AWS 凭证文件' },
+
+    // 其
+    { pattern: /\.htpasswd$/, level: SensitivityLevel.HIGH, reason: 'HTTP 密码文件' },
+    { pattern: /\.netrc$/, level: SensitivityLevel.HIGH, reason: '网络凭证文件' },
+
+    // ========== 中敏
+    // 数据
+    { pattern: /\.sqlite3?$/, level: SensitivityLevel.MEDIUM, reason: 'SQLite 数据库文件' },
+    { pattern: /\.db$/, level: SensitivityLevel.MEDIUM, reason: '数据库文件' },
+
+    // 日
+    { pattern: /\.log$/, level: SensitivityLevel.MEDIUM, reason: '日志文件可能包含敏感信息' },
+
+    // 历史记
+    { pattern: /\.bash_history$/, level: SensitivityLevel.MEDIUM, reason: 'Bash 历史记录' },
+    { pattern: /\.zsh_history$/, level: SensitivityLevel.MEDIUM, reason: 'Zsh 历史记录' },
+
+    // 其他配
+    { pattern: /\.npmrc$/, level: SensitivityLevel.MEDIUM, reason: 'npm 配置可能包含 token' },
+    { pattern: /\.pypirc$/, level: SensitivityLevel.MEDIUM, reason: 'PyPI 配置可能包含 token' },
+
+    // ========== 低敏
+    // 配置文
+    { pattern: /config\.json$/, level: SensitivityLevel.LOW, reason: '配置文件' },
+    { pattern: /settings\.json$/, level: SensitivityLevel.LOW, reason: '设置文件' },
+    { pattern: /\.gitconfig$/, level: SensitivityLevel.LOW, reason: 'Git 配置文件' },
   ];
 
   /**
@@ -156,11 +186,11 @@ export class SensitiveFileDetector {
   static getLevelDescription(level: SensitivityLevel): string {
     switch (level) {
       case SensitivityLevel.LOW:
-        return '';
+        return '低敏感';
       case SensitivityLevel.MEDIUM:
-        return '';
+        return '中敏感';
       case SensitivityLevel.HIGH:
-        return '';
+        return '高敏感';
     }
   }
 
@@ -170,11 +200,11 @@ export class SensitiveFileDetector {
   static getLevelAction(level: SensitivityLevel): string {
     switch (level) {
       case SensitivityLevel.LOW:
-        return '';
+        return '正常流程处理';
       case SensitivityLevel.MEDIUM:
-        return '';
+        return '需要用户确认';
       case SensitivityLevel.HIGH:
-        return '';
+        return '默认拒绝访问';
     }
   }
 }

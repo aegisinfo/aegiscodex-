@@ -1,8 +1,20 @@
 /**
+ * ConfigManager - 配置管理器（双文件配置架构）
  * 
  * 
+ * - config.json: 基础配置（API、模型、UI、MCP）
+ * - settings.json: 行为配置（权限、Hooks、环境变量）
+ * - settings.local.json: 本地行为配置（不提交到 Git）
  * 
  * 
+ * 1. 默认配置
+ * 2. 用户 config.json (~/.aegiscode/config.json)
+ * 3. 用户 settings.json (~/.aegiscode/settings.json)
+ * 4. 项目 config.json (./.aegiscode/config.json)
+ * 5. 项目 settings.json (./.aegiscode/settings.json)
+ * 6. 本地 settings.local.json (./.aegiscode/settings.local.json)
+ * 7. 环境变量
+ * 8. CLI 参数
  */
 
 import * as fs from 'node:fs';
@@ -38,18 +50,32 @@ export class ConfigManager {
 
   /**
    * 
+   * @returns 加载后的配置
    */
   async initialize(projectPath?: string): Promise<Config> {
+    // 1. 从默认配置开
     this.config = { ...DEFAULT_CONFIG };
 
     const userConfigDir = this.getUserConfigDir();
     const projectDir = projectPath || process.cwd();
     const projectConfigDir = path.join(projectDir, '.aegiscode');
+
+    // 2. 加载用
     await this.loadConfigFile(path.join(userConfigDir, 'config.json'));
+
+    // 3. 加载用
     await this.loadConfigFile(path.join(userConfigDir, 'settings.json'));
+
+    // 4. 加载项
     await this.loadConfigFile(path.join(projectConfigDir, 'config.json'));
+
+    // 5. 加载项
     await this.loadConfigFile(path.join(projectConfigDir, 'settings.json'));
+
+    // 6. 加载本地 settings.local.json（不提交
     await this.loadConfigFile(path.join(projectConfigDir, 'settings.local.json'));
+
+    // 7. 应用环境变
     this.applyEnvironmentVariables();
 
     return this.config;
@@ -93,14 +119,18 @@ export class ConfigManager {
       }
 
       const validated = ConfigSchema.partial().parse(parsed);
+
+      // 深度合并配
       this.config = this.mergeConfig(this.config, validated);
       this.configPaths.push(configPath);
 
       return true;
     } catch (error) {
+      console.warn(`Warning: Failed to load config from ${configPath}:`, (error as Error).message);
       return false;
     }
   }
+
 
   /**
    * 
@@ -152,10 +182,6 @@ export class ConfigManager {
         defaultConfig.apiKey  = process.env.DEEPSEEK_API_KEY;
         defaultConfig.baseURL = 'https://api.deepseek.com/v1';
         defaultConfig.model   = 'deepseek-chat';
-      } else if (process.env.ANTHROPIC_API_KEY) {
-        defaultConfig.apiKey  = process.env.ANTHROPIC_API_KEY;
-        defaultConfig.baseURL = 'https://api.anthropic.com/v1';
-        defaultConfig.model   = 'claude-sonnet-4-6';
       } else if (process.env.GROQ_API_KEY) {
         defaultConfig.apiKey  = process.env.GROQ_API_KEY;
         defaultConfig.baseURL = 'https://api.groq.com/openai/v1';
@@ -165,6 +191,10 @@ export class ConfigManager {
         if (process.env.OPENAI_BASE_URL) defaultConfig.baseURL = process.env.OPENAI_BASE_URL;
         if (process.env.OPENAI_MODEL)    defaultConfig.model   = process.env.OPENAI_MODEL;
         else if (!defaultConfig.model)   defaultConfig.model   = 'gpt-4o';
+      } else if (process.env.ANTHROPIC_API_KEY) {
+        defaultConfig.apiKey  = process.env.ANTHROPIC_API_KEY;
+        defaultConfig.baseURL = 'https://api.anthropic.com/v1';
+        defaultConfig.model   = 'claude-sonnet-4-6';
       }
     }
   }
@@ -212,6 +242,8 @@ export class ConfigManager {
         ...override.ui,
       };
     }
+
+    // 合并权限配置（数组合并而非覆
     if (override.permissions || base.permissions) {
       merged.permissions = {
         allow: [
@@ -233,6 +265,7 @@ export class ConfigManager {
     if ((override as any).currentModelId) {
       (merged as any).currentModelId = (override as any).currentModelId;
     }
+    // 其他字段使用后者覆
     if (override.defaultPermissionMode) {
       merged.defaultPermissionMode = override.defaultPermissionMode;
     }
@@ -242,15 +275,21 @@ export class ConfigManager {
     if (override.toolBlacklist) {
       merged.toolBlacklist = override.toolBlacklist;
     }
+
+    // 合并 MCP 服务器配置（深度合
     if (override.mcpServers || base.mcpServers) {
       merged.mcpServers = {
         ...(base.mcpServers || {}),
         ...(override.mcpServers || {}),
       };
     }
+
+    // MCP 启用状
     if (override.mcpEnabled !== undefined) {
       merged.mcpEnabled = override.mcpEnabled;
     }
+
+    // 合并 Hooks 配置（深度合
     if (override.hooks || base.hooks) {
       merged.hooks = {
         ...(base.hooks || {}),
@@ -339,12 +378,17 @@ export class ConfigManager {
   async createDefaultConfig(): Promise<string> {
     const configDir = this.getUserConfigDir();
     const configPath = this.getUserConfigPath();
+
+    // 创建目
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }
+
+    // 写入默认配置（不包含敏感信
     const defaultConfig: Config = {
       default: {
         model: 'claude-sonnet-4-20250514',
+        // apiKey: 'your-api-key',  // 需要用户自己填
         // baseURL: 'https://api.openai.com/v1',
       },
       ui: {
@@ -352,6 +396,7 @@ export class ConfigManager {
       },
       mcpEnabled: true,
       mcpServers: {
+        // 示例 MCP 服务器配置（已注
         // github: {
         //   type: 'stdio',
         //   command: 'npx',
@@ -381,12 +426,15 @@ export class ConfigManager {
    * 
    */
   getTheme(): string | null {
+    // 优先读取用户配置中的主题（用户主动设置
     const userConfigPath = this.getUserConfigPath();
     
     if (fs.existsSync(userConfigPath)) {
       try {
         const content = fs.readFileSync(userConfigPath, 'utf-8');
         const userConfig = JSON.parse(content);
+        
+        // 如果用户配置中有明确设置的主题，使用
         if (userConfig.theme) {
           return userConfig.theme;
         }
@@ -394,8 +442,11 @@ export class ConfigManager {
           return userConfig.ui.theme;
         }
       } catch {
+        // 解析失败，返
       }
     }
+    
+    // 没有用户设置的主题，返回 null 表示应该自动检
     return null;
   }
 
@@ -405,28 +456,41 @@ export class ConfigManager {
   saveTheme(themeName: string): void {
     const configPath = this.getUserConfigPath();
     const configDir = this.getUserConfigDir();
+
+    // 确保目录存
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }
+
+    // 读取现有配置或创建新配
     let existingConfig: Partial<Config> = {};
     if (fs.existsSync(configPath)) {
       try {
         const content = fs.readFileSync(configPath, 'utf-8');
         existingConfig = JSON.parse(content);
       } catch {
+        // 如果解析失败，使用空配
       }
     }
+
+    // 更新主
     existingConfig.theme = themeName;
     if (!existingConfig.ui) {
       existingConfig.ui = {};
     }
     existingConfig.ui.theme = themeName;
+
+    // 同时更新内存中的配
     this.config.theme = themeName;
     if (this.config.ui) {
       this.config.ui.theme = themeName;
     }
+
+    // 写入文
     const content = JSON.stringify(existingConfig, null, 2);
     fs.writeFileSync(configPath, content, 'utf-8');
   }
 }
+
+// 导出单
 export const configManager = ConfigManager.getInstance();

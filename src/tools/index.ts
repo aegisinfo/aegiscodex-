@@ -1,6 +1,8 @@
 /**
  * 
  */
+
+// 类
 export {
   ToolKind,
   ToolErrorType,
@@ -16,13 +18,21 @@ export type {
   FunctionDeclaration,
   ToolInvocation,
 } from './types.js';
+
+// 工厂函
 export { createTool } from './createTool.js';
 export type { ToolConfig } from './createTool.js';
 
 // Schema
 export { ToolSchemas, optional } from './schemas.js';
+
+// 注册
 export { ToolRegistry, createToolRegistry } from './registry.js';
+
+// 注册表事
 export type { ToolRegisteredEvent } from './registry.js';
+
+// 内置工
 export {
   readTool,
   editTool,
@@ -31,6 +41,8 @@ export {
   bashTool,
   getBuiltinTools,
 } from './builtin/index.js';
+
+// 执行管
 export {
   ExecutionPipeline,
   PermissionMode,
@@ -54,6 +66,8 @@ export type {
   PreToolHookResult,
   PostToolHookParams,
 } from './execution/index.js';
+
+// 验
 export {
   PermissionChecker,
   DEFAULT_PERMISSION_CONFIG,

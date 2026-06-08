@@ -1,4 +1,5 @@
 /**
+ * Store 模块测试
  * 
  * 
  */
@@ -22,61 +23,90 @@ let testsFailed = 0;
 
 function pass(msg: string) {
   testsPassed++;
+  console.log(`✅ ${msg}`);
 }
 
 function fail(msg: string, error?: any) {
   testsFailed++;
-  if (error)
+  console.log(`❌ ${msg}`);
+  if (error) console.log(`   错误: ${error}`);
 }
 
 async function runTests() {
+  console.log('='.repeat(60));
+  console.log('Store 模块测试');
+  console.log('='.repeat(60));
+  console.log();
+
+  // ========== 测试 1: Store 实
+  console.log('📝 测试 1: Store 实例');
+  console.log('-'.repeat(40));
 
   if (vanillaStore && typeof vanillaStore.getState === 'function') {
-    pass('vanillaStore ');
+    pass('vanillaStore 实例存在');
   } else {
-    fail('vanillaStore ');
+    fail('vanillaStore 实例不存在');
   }
 
   const state = getState();
   if (state.session && state.config && state.app && state.focus && state.command) {
-    pass('Store  5  Slice');
+    pass('Store 包含所有 5 个 Slice');
   } else {
-    fail('Store  Slice');
+    fail('Store 缺少 Slice');
   }
+  console.log();
+
+  // ========== 测
+  console.log('📝 测试 2: Session Slice');
+  console.log('-'.repeat(40));
 
   const initialSessionId = getState().session.sessionId;
   if (initialSessionId && typeof initialSessionId === 'string') {
-    pass(` sessionId: ${initialSessionId.slice(0, 20)}...`);
+    pass(`初始 sessionId: ${initialSessionId.slice(0, 20)}...`);
   } else {
-    fail('sessionId ');
+    fail('sessionId 无效');
   }
+
+  // 添加消
   sessionActions().addUserMessage('Hello, test!');
   const messages = getState().session.messages;
   if (messages.length === 1 && messages[0].content === 'Hello, test!') {
-    pass('addUserMessage ');
+    pass('addUserMessage 正常');
   } else {
-    fail('addUserMessage ');
+    fail('addUserMessage 失败');
   }
+
+  // 设
   sessionActions().setThinking(true);
   if (getState().session.isThinking === true) {
-    pass('setThinking(true) ');
+    pass('setThinking(true) 正常');
   } else {
-    fail('setThinking ');
+    fail('setThinking 失败');
   }
 
   sessionActions().setThinking(false);
+
+  // 清空消
   sessionActions().clearMessages();
   if (getState().session.messages.length === 0) {
-    pass('clearMessages ');
+    pass('clearMessages 正常');
   } else {
-    fail('clearMessages ');
+    fail('clearMessages 失败');
+  }
+  console.log();
+
+  // ========== 测
+  console.log('📝 测试 3: Config Slice');
+  console.log('-'.repeat(40));
+
+  // 初始状态 config 
+  if (getConfig() === null) {
+    pass('初始 config 为 null');
+  } else {
+    fail('初始 config 不为 null');
   }
 
-  if (getConfig() === null) {
-    pass(' config  null');
-  } else {
-    fail(' config  null');
-  }
+  // 设置配
   const testConfig: RuntimeConfig = {
     default: { model: 'test-model' },
     theme: 'dark',
@@ -85,126 +115,150 @@ async function runTests() {
   configActions().setConfig(testConfig);
 
   if (getConfig()?.default?.model === 'test-model') {
-    pass('setConfig ');
+    pass('setConfig 正常');
   } else {
-    fail('setConfig ');
-  }
-  configActions().updateConfig({ theme: 'light' });
-  if (getConfig()?.theme === 'light') {
-    pass('updateConfig ');
-  } else {
-    fail('updateConfig ');
+    fail('setConfig 失败');
   }
 
-  if (getState().app.initializationStatus === 'pending') {
-    pass(' initializationStatus  pending');
+  // 更新配
+  configActions().updateConfig({ theme: 'light' });
+  if (getConfig()?.theme === 'light') {
+    pass('updateConfig 正常');
   } else {
-    fail(' initializationStatus ');
+    fail('updateConfig 失败');
+  }
+  console.log();
+
+  // ========== 测
+  console.log('📝 测试 4: App Slice');
+  console.log('-'.repeat(40));
+
+  if (getState().app.initializationStatus === 'pending') {
+    pass('初始 initializationStatus 为 pending');
+  } else {
+    fail('初始 initializationStatus 不正确');
   }
 
   appActions().setInitializationStatus('ready');
   if (getState().app.initializationStatus === 'ready') {
-    pass('setInitializationStatus ');
+    pass('setInitializationStatus 正常');
   } else {
-    fail('setInitializationStatus ');
+    fail('setInitializationStatus 失败');
   }
 
   // Todos
   appActions().addTodo({ id: '1', title: 'Test todo', status: 'pending', createdAt: Date.now() });
   if (getState().app.todos.length === 1) {
-    pass('addTodo ');
+    pass('addTodo 正常');
   } else {
-    fail('addTodo ');
+    fail('addTodo 失败');
   }
 
   appActions().updateTodo('1', { status: 'completed' });
   if (getState().app.todos[0].status === 'completed') {
-    pass('updateTodo ');
+    pass('updateTodo 正常');
   } else {
-    fail('updateTodo ');
+    fail('updateTodo 失败');
   }
 
   appActions().removeTodo('1');
   if (getState().app.todos.length === 0) {
-    pass('removeTodo ');
+    pass('removeTodo 正常');
   } else {
-    fail('removeTodo ');
+    fail('removeTodo 失败');
   }
+  console.log();
+
+  // ========== 测
+  console.log('📝 测试 5: Focus Slice');
+  console.log('-'.repeat(40));
 
   if (getState().focus.currentFocus === 'input') {
-    pass(' input');
+    pass('初始焦点为 input');
   } else {
-    fail('');
+    fail('初始焦点不正确');
   }
 
   focusActions().setFocus('messages');
   if (getState().focus.currentFocus === 'messages') {
-    pass('setFocus ');
+    pass('setFocus 正常');
   } else {
-    fail('setFocus ');
+    fail('setFocus 失败');
   }
 
   if (getState().focus.previousFocus === 'input') {
-    pass('previousFocus ');
+    pass('previousFocus 记录正确');
   } else {
-    fail('previousFocus ');
+    fail('previousFocus 记录不正确');
   }
 
   focusActions().restoreFocus();
   if (getState().focus.currentFocus === 'input') {
-    pass('restoreFocus ');
+    pass('restoreFocus 正常');
   } else {
-    fail('restoreFocus ');
+    fail('restoreFocus 失败');
   }
+  console.log();
+
+  // ========== 测
+  console.log('📝 测试 6: Command Slice');
+  console.log('-'.repeat(40));
 
   if (getState().command.isProcessing === false) {
-    pass(' isProcessing  false');
+    pass('初始 isProcessing 为 false');
   } else {
-    fail(' isProcessing ');
+    fail('初始 isProcessing 不正确');
   }
 
   commandActions().setProcessing(true);
   if (getState().command.isProcessing === true) {
-    pass('setProcessing ');
+    pass('setProcessing 正常');
   } else {
-    fail('setProcessing ');
+    fail('setProcessing 失败');
   }
+
+  // 命令队
   commandActions().enqueueCommand('command1');
   commandActions().enqueueCommand('command2');
   if (getState().command.pendingCommands.length === 2) {
-    pass('enqueueCommand ');
+    pass('enqueueCommand 正常');
   } else {
-    fail('enqueueCommand ');
+    fail('enqueueCommand 失败');
   }
 
   const cmd = commandActions().dequeueCommand();
   if (cmd === 'command1' && getState().command.pendingCommands.length === 1) {
-    pass('dequeueCommand ');
+    pass('dequeueCommand 正常');
   } else {
-    fail('dequeueCommand ');
+    fail('dequeueCommand 失败');
   }
 
   commandActions().clearQueue();
   if (getState().command.pendingCommands.length === 0) {
-    pass('clearQueue ');
+    pass('clearQueue 正常');
   } else {
-    fail('clearQueue ');
+    fail('clearQueue 失败');
   }
 
   // AbortController
   const controller = commandActions().createAbortController();
   if (controller instanceof AbortController) {
-    pass('createAbortController ');
+    pass('createAbortController 正常');
   } else {
-    fail('createAbortController ');
+    fail('createAbortController 失败');
   }
 
   commandActions().abort();
   if (getState().command.isProcessing === false && getState().command.abortController === null) {
-    pass('abort ');
+    pass('abort 正常');
   } else {
-    fail('abort ');
+    fail('abort 失败');
   }
+  console.log();
+
+  // ========== 测试 7: 订阅功
+  console.log('📝 测试 7: 订阅功能');
+  console.log('-'.repeat(40));
 
   let subscriptionTriggered = false;
   const unsubscribe = subscribeToMessages((messages) => {
@@ -212,21 +266,31 @@ async function runTests() {
   });
 
   sessionActions().addUserMessage('Trigger subscription');
+  
+  // 等待一下让订阅触
   await new Promise((resolve) => setTimeout(resolve, 10));
 
   if (subscriptionTriggered) {
-    pass('subscribeToMessages ');
+    pass('subscribeToMessages 正常触发');
   } else {
-    fail('subscribeToMessages ');
+    fail('subscribeToMessages 未触发');
   }
 
   unsubscribe();
+  console.log();
+
+  // ========== 测试总
+  console.log('='.repeat(60));
+  console.log(`测试完成: ${testsPassed} 通过, ${testsFailed} 失败`);
+  console.log('='.repeat(60));
 
   if (testsFailed > 0) {
     process.exit(1);
   }
 }
+
+// 运行测
 runTests().catch((error) => {
-  console.error(':', error);
+  console.error('测试出错:', error);
   process.exit(1);
 });

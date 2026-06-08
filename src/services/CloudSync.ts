@@ -127,6 +127,7 @@ export function getAegisCloudConfig(): { apiKey?: string; syncConversations: boo
   }
 }
 
+
 /** Spara konversation till lokal shared.json memory */
 export async function appendToLocalMemory(
   sessionId: string,

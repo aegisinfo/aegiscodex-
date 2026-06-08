@@ -1,4 +1,5 @@
 /**
+ * CLI 模块导出
  */
 
 export { cliConfig, globalOptions } from './config.js';

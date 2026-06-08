@@ -1,4 +1,5 @@
 /**
+ * ConfirmationPrompt - 权限确认组件
  * 
  * 
  */

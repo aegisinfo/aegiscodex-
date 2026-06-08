@@ -1,4 +1,5 @@
 /**
+ * CustomTextInput - 自定义文本输入组件
  * 
  * 
  */
@@ -9,27 +10,27 @@ import chalk from 'chalk';
 import { useIsFocused, FocusId, focusManager } from '../../focus/index.js';
 
 interface CustomTextInputProps {
-  
+  /** 输入值 */
   value: string;
-  
+  /** 光标位置 */
   cursorPosition: number;
-  
+  /** 值变化回调 */
   onChange: (value: string) => void;
-  
+  /** 光标位置变化回调 */
   onChangeCursorPosition: (pos: number) => void;
-  
+  /** 提交回调 */
   onSubmit?: (value: string) => void;
-  
+  /** 粘贴回调 */
   onPaste?: (text: string) => { prompt?: string } | void;
-  
+  /** 上箭头回调（浏览历史） */
   onArrowUp?: () => void;
-  
+  /** 下箭头回调（浏览历史） */
   onArrowDown?: () => void;
-  
+  /** 占位符 */
   placeholder?: string;
-  
+  /** 焦点 ID */
   focusId?: FocusId;
-  
+  /** 是否禁用 */
   disabled?: boolean;
 }
 
@@ -60,12 +61,15 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
 }) => {
   const isFocused = useIsFocused(focusId);
   const isActive = isFocused && !disabled;
+
+  // 渲染带光标的文
   const renderedValue = useMemo(() => {
     if (!isActive) {
       return value || placeholder;
     }
 
     if (value.length === 0) {
+      // 空输入，显示光标和占位
       return chalk.inverse(' ') + chalk.dim(placeholder);
     }
 
@@ -75,27 +79,36 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
 
     return `${before}${chalk.inverse(cursorChar)}${after}`;
   }, [value, cursorPosition, isActive, placeholder]);
+
+  // 粘贴检测状
   const pasteStateRef = React.useRef({
     chunks: [] as string[],
     timeoutId: null as NodeJS.Timeout | null,
     firstInputTime: null as number | null,
   });
+
+  // 处理粘
   const handlePaste = useCallback(
     (text: string) => {
       if (onPaste) {
         const result = onPaste(text);
         if (result?.prompt) {
+          // 显示粘贴提
           onChange(value + result.prompt);
           onChangeCursorPosition(value.length + result.prompt.length);
           return;
         }
       }
+
+      // 默认行为：插入粘贴的文
       const newValue = value.slice(0, cursorPosition) + text + value.slice(cursorPosition);
       onChange(newValue);
       onChangeCursorPosition(cursorPosition + text.length);
     },
     [value, cursorPosition, onChange, onChangeCursorPosition, onPaste]
   );
+
+  // 键盘输入处
   useInput(
     (input, key) => {
       // Imperative focus check — avoids stale React closure
@@ -107,6 +120,8 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
       const timeSinceFirst = pasteState.firstInputTime
         ? now - pasteState.firstInputTime
         : 0;
+
+      // 检查是否是粘贴操
       const isPaste =
         input.length > PASTE_CONFIG.LARGE_INPUT_THRESHOLD ||
         input.includes('\n') ||
@@ -114,10 +129,13 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
           pasteState.chunks.length > 0);
 
       if (isPaste && input.length > 1) {
+        // 收集粘贴分
         pasteState.chunks.push(input);
         if (!pasteState.firstInputTime) {
           pasteState.firstInputTime = now;
         }
+
+        // 重置超
         if (pasteState.timeoutId) {
           clearTimeout(pasteState.timeoutId);
         }
@@ -125,6 +143,7 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
         pasteState.timeoutId = setTimeout(() => {
           const mergedText = pasteState.chunks.join('');
           handlePaste(mergedText);
+          // 重置状
           pasteState.chunks = [];
           pasteState.timeoutId = null;
           pasteState.firstInputTime = null;
@@ -132,6 +151,8 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
 
         return;
       }
+
+      // 普通键盘输
       if (key.return) {
         onSubmit?.(value);
         return;
@@ -150,10 +171,14 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
         }
         return;
       }
+
+      // 上箭头：浏览历史（上一条命
       if (key.upArrow) {
         onArrowUp?.();
         return;
       }
+
+      // 下箭头：浏览历史（下一条命
       if (key.downArrow) {
         onArrowDown?.();
         return;
@@ -167,23 +192,33 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
         }
         return;
       }
+
+      // Ctrl+A: 移动到行
       if (key.ctrl && input === 'a') {
         onChangeCursorPosition(0);
         return;
       }
+
+      // Ctrl+E: 移动到行
       if (key.ctrl && input === 'e') {
         onChangeCursorPosition(value.length);
         return;
       }
+
+      // Ctrl+K: 删除光标后的内
       if (key.ctrl && input === 'k') {
         onChange(value.slice(0, cursorPosition));
         return;
       }
+
+      // Ctrl+U: 删除光标前的内
       if (key.ctrl && input === 'u') {
         onChange(value.slice(cursorPosition));
         onChangeCursorPosition(0);
         return;
       }
+
+      // 普通字符输
       if (input && !key.ctrl && !key.meta) {
         const newValue = value.slice(0, cursorPosition) + input + value.slice(cursorPosition);
         onChange(newValue);

@@ -8,11 +8,14 @@ import { nanoid } from 'nanoid';
 import type { JSONLEntry, CompactMetadata, SessionContext, ConversationContext, ContextMessage } from '../types.js';
 import { JSONLStore } from './JSONLStore.js';
 import { getSessionFilePath, detectGitBranch } from './pathUtils.js';
+
+// 获取版本
 let packageVersion = '0.1.0';
 try {
   const packageJson = await import('../../../package.json', { with: { type: 'json' } });
   packageVersion = packageJson.default.version || '0.1.0';
 } catch {
+  // 忽略错
 }
 
 export class PersistentStore {
@@ -148,6 +151,8 @@ export class PersistentStore {
     parentUuid: string | null = null
   ): Promise<string> {
     const store = this.getStore(sessionId);
+
+    // 1. 保存压缩边界标
     const boundaryEntry: JSONLEntry = {
       uuid: nanoid(),
       parentUuid,
@@ -160,11 +165,13 @@ export class PersistentStore {
       version: this.version,
       message: {
         role: 'system',
-        content: '===  ===',
+        content: '=== 上下文压缩边界 ===',
       },
       compactMetadata: metadata,
     };
     await store.append(boundaryEntry);
+
+    // 2. 保存压缩总
     const summaryEntry: JSONLEntry = {
       uuid: nanoid(),
       parentUuid: boundaryEntry.uuid,
@@ -217,6 +224,8 @@ export class PersistentStore {
     if (!store.exists()) {
       return null;
     }
+
+    // 只加载压缩边界后的消
     const entries = await store.readAfterCompaction();
     
     const messages: ContextMessage[] = [];
@@ -227,9 +236,13 @@ export class PersistentStore {
       if (timestamp > lastActivity) {
         lastActivity = timestamp;
       }
+
+      // 跳过压缩边
       if (entry.subtype === 'compact_boundary') {
         continue;
       }
+
+      // 转换
       if (entry.type === 'user' || entry.type === 'assistant' || entry.type === 'system') {
         messages.push({
           id: entry.uuid,

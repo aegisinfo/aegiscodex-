@@ -10,20 +10,18 @@ import type { Theme, ThemePreset, RoleStyle, ColorMode } from './types.js';
 import { defaultTheme } from './defaultTheme.js';
 import { darkTheme } from './darkTheme.js';
 import { lightTheme } from './lightTheme.js';
-import {
-  draculaTheme,
-  nordTheme,
-  tokyoNightTheme,
-  catppuccinTheme,
-} from './popularThemes.js';
 import { configManager } from '../../config/ConfigManager.js';
 
 /**
  * 
  * 
  * 
+ * 1. macOS 系统级暗色模式
+ * 2. COLORFGBG 环境变量（一些终端会设置）
+ * 3. 默认返回 unknown
  */
 function detectColorMode(): ColorMode {
+  // 1. macOS 系统级检
   if (process.platform === 'darwin') {
     try {
       const result = execSync('defaults read -g AppleInterfaceStyle 2>/dev/null', {
@@ -34,14 +32,20 @@ function detectColorMode(): ColorMode {
         return 'dark';
       }
     } catch {
+      // 如果命令失败或返回空，说明是亮色模
       return 'light';
     }
   }
+
+  // 2. 检查 COLORFGBG 环境变
+  // 格式: "foreground;background" 如 "15;0" (白字黑底) 或 "0;15" (黑字白
   const colorFgBg = process.env.COLORFGBG;
   if (colorFgBg) {
     const parts = colorFgBg.split(';');
     if (parts.length >= 2) {
       const bg = parseInt(parts[parts.length - 1], 10);
+      // 背景色 0-7 通常是暗色，8-15 通常是亮
+      // 0=黑, 7=白(暗), 8=亮黑(灰), 15=亮
       if (!isNaN(bg)) {
         if (bg === 0 || bg <= 6) {
           return 'dark';
@@ -51,9 +55,13 @@ function detectColorMode(): ColorMode {
       }
     }
   }
+
+  // 3. 检查常见终端的默认模
   const termProgram = process.env.TERM_PROGRAM?.toLowerCase();
   if (termProgram) {
+    // VS Code 集成终端通常跟随编辑器主
     if (termProgram === 'vscode') {
+      // VS Code 的 VSCODE_THEME_KIND 变
       const themeKind = process.env.VSCODE_THEME_KIND;
       if (themeKind === 'vscode-dark' || themeKind === 'vscode-high-contrast') {
         return 'dark';
@@ -148,30 +156,6 @@ const presetThemes: ThemePreset[] = [
       },
     },
   },
-  {
-    id: 'dracula',
-    name: 'Dracula',
-    description: 'Dark purple/pink theme inspired by Dracula',
-    theme: draculaTheme,
-  },
-  {
-    id: 'nord',
-    name: 'Nord',
-    description: 'Arctic, bluish theme with cold colors',
-    theme: nordTheme,
-  },
-  {
-    id: 'tokyo-night',
-    name: 'Tokyo Night',
-    description: 'Deep dark blue with vibrant accents',
-    theme: tokyoNightTheme,
-  },
-  {
-    id: 'catppuccin',
-    name: 'Catppuccin',
-    description: 'Warm pastel theme from Catppuccin Mocha',
-    theme: catppuccinTheme,
-  },
 ];
 
 /**
@@ -183,6 +167,7 @@ export class ThemeManager {
   private initialized: boolean = false;
 
   constructor() {
+    // 注册预设主
     for (const preset of presetThemes) {
       this.themes.set(preset.id, preset.theme);
     }
@@ -192,17 +177,24 @@ export class ThemeManager {
    * 
    * 
    * 
+   * 1. 用户保存的主题（用户配置文件中）
+   * 2. 自动检测终端颜色模式，选择合适的主题
+   * 3. 使用默认主题
    */
   initializeFromConfig(): void {
     if (this.initialized) return;
     
     try {
       const savedTheme = configManager.getTheme();
+      
+      // 如果用户之前保存过主题，使用保存的主
       if (savedTheme && this.themes.has(savedTheme)) {
         this.currentTheme = this.themes.get(savedTheme)!;
         this.initialized = true;
         return;
       }
+      
+      // 没有用户保存的主题，自动检测终端颜色模
       const colorMode = detectColorMode();
       
       if (colorMode === 'dark') {
@@ -210,9 +202,11 @@ export class ThemeManager {
       } else if (colorMode === 'light') {
         this.currentTheme = this.themes.get('light')!;
       }
+      // colorMode === 'unknown' 时保持默认主
       
       this.initialized = true;
     } catch {
+      // 配置读取失败时使用默认主
       this.initialized = true;
     }
   }
@@ -231,10 +225,13 @@ export class ThemeManager {
     const theme = this.themes.get(themeName);
     if (theme) {
       this.currentTheme = theme;
+      
+      // 同步保存到配置文件，确保立即生
       if (persist) {
         try {
           configManager.saveTheme(themeName);
         } catch {
+          // 保存失败时静默忽
         }
       }
     } else {
@@ -323,4 +320,6 @@ export class ThemeManager {
     }
   }
 }
+
+// 导出单
 export const themeManager = new ThemeManager();

@@ -1,4 +1,5 @@
 /**
+ * Slash 命令模块
  * 
  * 
  */
@@ -15,10 +16,14 @@ import type {
 import { builtinCommands } from './builtinCommands.js';
 import { mcpCommand } from './mcpCommand.js';
 import { CustomCommandRegistry } from './custom/CustomCommandRegistry.js';
+
+// 导出类
 export * from './types.js';
 export { mcpCommand } from './mcpCommand.js';
 export { builtinCommands } from './builtinCommands.js';
 export { CustomCommandRegistry } from './custom/CustomCommandRegistry.js';
+
+// ==================== 命令注册
 
 /**
  * 
@@ -34,11 +39,16 @@ let customCommandsInitialized = false;
  * 
  */
 function initializeRegistry(): void {
+  // 注册内置命
   for (const cmd of builtinCommands) {
     commandRegistry[cmd.name] = cmd;
   }
+  
+  // 注册 MCP 命
   commandRegistry[mcpCommand.name] = mcpCommand;
 }
+
+// 初始化内置命
 initializeRegistry();
 
 /**
@@ -63,6 +73,8 @@ export async function initializeCustomCommands(workspaceRoot?: string): Promise<
   
   try {
     const result = await registry.initialize(cwd);
+    
+    // 将自定义命令转换为 SlashCommand 并注
     for (const customCmd of result.commands) {
       const slashCmd = convertCustomToSlashCommand(customCmd, registry);
       commandRegistry[customCmd.name] = slashCmd;
@@ -77,7 +89,7 @@ export async function initializeCustomCommands(workspaceRoot?: string): Promise<
   } catch (error) {
     return {
       count: 0,
-      warnings: [`Custom command initialization failed: ${error instanceof Error ? error.message : String(error)}`],
+      warnings: [`自定义命令初始化失败: ${error instanceof Error ? error.message : String(error)}`],
     };
   }
 }
@@ -93,7 +105,7 @@ function convertCustomToSlashCommand(
   
   return {
     name: customCmd.name,
-    description: customCmd.config.description || ` ${label}`,
+    description: customCmd.config.description || `自定义命令 ${label}`,
     fullDescription: customCmd.config.description,
     usage: customCmd.config.argumentHint 
       ? `/${customCmd.name} ${customCmd.config.argumentHint}`
@@ -102,7 +114,10 @@ function convertCustomToSlashCommand(
     
     async handler(args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
       try {
+        // 解析参
         const argArray = args.trim() ? args.trim().split(/\s+/) : [];
+        
+        // 执行自定义命
         const content = await registry.executeCommand(customCmd.name, {
           args: argArray,
           workspaceRoot: context.cwd,
@@ -112,9 +127,11 @@ function convertCustomToSlashCommand(
           return {
             success: false,
             type: 'error',
-            error: ` /${customCmd.name} `,
+            error: `命令 /${customCmd.name} 未找到`,
           };
         }
+        
+        // 自定义命令：内容发送给 Agent 执行（对齐 Claude Code 设
         return {
           success: true,
           type: 'success',
@@ -125,7 +142,7 @@ function convertCustomToSlashCommand(
         return {
           success: false,
           type: 'error',
-          error: `: ${error instanceof Error ? error.message : String(error)}`,
+          error: `执行失败: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },
@@ -139,6 +156,7 @@ export async function reloadCustomCommands(workspaceRoot?: string): Promise<{
   count: number;
   warnings: string[];
 }> {
+  // 移除现有的自定义命
   for (const [name, cmd] of Object.entries(commandRegistry)) {
     if (cmd.category === 'custom') {
       delete commandRegistry[name];
@@ -149,14 +167,20 @@ export async function reloadCustomCommands(workspaceRoot?: string): Promise<{
   return initializeCustomCommands(workspaceRoot);
 }
 
+// ==================== 命令查
+
 /**
  * 
  */
 export function getCommand(name: string): SlashCommand | undefined {
   const normalizedName = name.toLowerCase();
+  
+  // 直接匹
   if (commandRegistry[normalizedName]) {
     return commandRegistry[normalizedName];
   }
+  
+  // 按别名查
   for (const cmd of Object.values(commandRegistry)) {
     if (cmd.aliases?.includes(normalizedName)) {
       return cmd;
@@ -190,6 +214,8 @@ export function unregisterSlashCommand(name: string): boolean {
   }
   return false;
 }
+
+// ==================== 命令解析与执
 
 /**
  * 
@@ -233,7 +259,7 @@ export async function executeSlashCommand(
     return {
       success: false,
       type: 'error',
-      error: '',
+      error: '无效的命令格式',
     };
   }
   
@@ -241,17 +267,18 @@ export async function executeSlashCommand(
   const command = getCommand(name);
   
   if (!command) {
+    // 尝试模糊匹配建
     const suggestions = getFuzzyCommandSuggestions(name);
-    let errorMsg = `: /${name}`;
+    let errorMsg = `未知命令: /${name}`;
     
     if (suggestions.length > 0) {
-      errorMsg += `\n\n：\n`;
+      errorMsg += `\n\n你是否想输入：\n`;
       for (const s of suggestions.slice(0, 3)) {
         errorMsg += `- \`${s.command}\` - ${s.description}\n`;
       }
     }
     
-    errorMsg += `\n \`/help\` `;
+    errorMsg += `\n使用 \`/help\` 查看可用命令`;
     
     return {
       success: false,
@@ -266,10 +293,12 @@ export async function executeSlashCommand(
     return {
       success: false,
       type: 'error',
-      error: `: ${error instanceof Error ? error.message : String(error)}`,
+      error: `命令执行失败: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
+
+// ==================== 模糊匹
 
 /**
  * 
@@ -282,6 +311,8 @@ export function getFuzzyCommandSuggestions(input: string): CommandSuggestion[] {
     description: cmd.description,
     aliases: cmd.aliases || [],
   }));
+  
+  // 没有输入，返回所有命
   if (!query) {
     return searchableCommands.map((item) => ({
       command: `/${item.name}`,
@@ -289,6 +320,8 @@ export function getFuzzyCommandSuggestions(input: string): CommandSuggestion[] {
       matchScore: 50,
     }));
   }
+  
+  // 精确前缀匹配优
   const prefixMatches = searchableCommands.filter(
     (cmd) => cmd.name.startsWith(query) || cmd.aliases.some((a) => a.startsWith(query))
   );
@@ -300,6 +333,8 @@ export function getFuzzyCommandSuggestions(input: string): CommandSuggestion[] {
       matchScore: 90,
     }));
   }
+  
+  // 使用 Fuse.js 模糊匹
   const fuse = new Fuse(searchableCommands, {
     keys: [
       { name: 'name', weight: 3 },
@@ -334,6 +369,7 @@ export function getCommandCompletions(partialInput: string): CommandSuggestion[]
   const query = partialInput.slice(1).toLowerCase();
   
   if (!query) {
+    // 返回所有命
     return Object.values(commandRegistry).map((cmd) => ({
       command: `/${cmd.name}`,
       description: cmd.description,

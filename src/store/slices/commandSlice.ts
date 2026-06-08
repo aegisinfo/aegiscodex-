@@ -1,4 +1,5 @@
 /**
+ * Command Slice - 命令状态管理
  */
 
 import type { StateCreator } from 'zustand';
@@ -41,6 +42,10 @@ export const createCommandSlice: StateCreator<
 
     /**
      * 
+     * - 发送 abort signal
+     * - 重置 isProcessing
+     * - 重置 isThinking (跨 slice)
+     * - 清空待处理队列
      */
     abort: () => {
       const { abortController } = get().command;
@@ -48,7 +53,11 @@ export const createCommandSlice: StateCreator<
       if (abortController && !abortController.signal.aborted) {
         abortController.abort();
       }
+
+      // 重置 session 的 isThinking 状
       get().session.actions.setThinking(false);
+
+      // 重置 command 状态并清空队
       set((state) => ({
         command: {
           ...state.command,

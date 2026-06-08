@@ -1,6 +1,10 @@
 /**
+ * Hook 管理器
  * 
  * 
+ * - 加载和管理 Hook 配置
+ * - 协调 Hook 的匹配和执行
+ * - 防止重复执行
  */
 
 import { nanoid } from 'nanoid';
@@ -58,6 +62,7 @@ class HookExecutionGuard {
 }
 
 /**
+ * Hook 管理器
  */
 export class HookManager {
   private static instance: HookManager | null = null;
@@ -103,6 +108,7 @@ export class HookManager {
     return {
       ...base,
       ...override,
+      // 合并各事件类型的 Hook 列
       PreToolUse: override.PreToolUse ?? base.PreToolUse,
       PostToolUse: override.PostToolUse ?? base.PostToolUse,
       PostToolUseFailure: override.PostToolUseFailure ?? base.PostToolUseFailure,
@@ -184,12 +190,18 @@ export class HookManager {
     if (!this.isEnabled()) {
       return { decision: 'allow' };
     }
+
+    // Plan 模式跳
     if (context.permissionMode === 'plan') {
       return { decision: 'allow' };
     }
+
+    // 检查是否已执
     if (!this.guard.canExecute(toolUseId, HookEvent.PreToolUse)) {
       return { decision: 'allow' };
     }
+
+    // 获取匹配
     const hooks = this.getMatchingHooks(HookEvent.PreToolUse, {
       toolName,
       filePath: extractFilePath(toolInput),
@@ -199,6 +211,8 @@ export class HookManager {
     if (hooks.length === 0) {
       return { decision: 'allow' };
     }
+
+    // 构建输
     const hookInput: PreToolUseInput = {
       hook_event_name: HookEvent.PreToolUse,
       hook_execution_id: nanoid(),
@@ -210,12 +224,18 @@ export class HookManager {
       session_id: context.sessionId,
       permission_mode: context.permissionMode,
     };
+
+    // 执
     const result = await this.executor.executePreToolHooks(
       hooks,
       hookInput,
       this.createExecutionContext(context)
     );
+
+    // 标记已执
     this.guard.markExecuted(toolUseId, HookEvent.PreToolUse);
+
+    // YOLO 模式：将 ask 转为 allow，但保
     if (context.permissionMode === 'yolo' && result.decision === 'ask') {
       return { ...result, decision: 'allow' };
     }
@@ -238,9 +258,13 @@ export class HookManager {
     if (!this.isEnabled()) {
       return {};
     }
+
+    // 检查是否已执
     if (!this.guard.canExecute(toolUseId, HookEvent.PostToolUse)) {
       return {};
     }
+
+    // 获取匹配
     const hooks = this.getMatchingHooks(HookEvent.PostToolUse, {
       toolName,
       filePath: extractFilePath(toolInput),
@@ -250,6 +274,8 @@ export class HookManager {
     if (hooks.length === 0) {
       return {};
     }
+
+    // 构建输
     const hookInput: PostToolUseInput = {
       hook_event_name: HookEvent.PostToolUse,
       hook_execution_id: nanoid(),
@@ -261,11 +287,15 @@ export class HookManager {
       project_dir: context.projectDir,
       session_id: context.sessionId,
     };
+
+    // 执
     const result = await this.executor.executePostToolHooks(
       hooks,
       hookInput,
       this.createExecutionContext(context)
     );
+
+    // 标记已执
     this.guard.markExecuted(toolUseId, HookEvent.PostToolUse);
 
     return result;
@@ -413,6 +443,8 @@ export class HookManager {
       hookInput,
       this.createExecutionContext(context)
     );
+
+    // 清理执行防
     this.guard.clear();
   }
 
@@ -514,6 +546,8 @@ export class HookManager {
       this.createExecutionContext(context)
     );
   }
+
+  // ==================== 统计信
 
   /**
    * 

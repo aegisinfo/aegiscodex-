@@ -11,6 +11,7 @@ export const lightTheme: Theme = {
   name: 'light',
   colors: {
     ...defaultTheme.colors,
+    // 使用更深的颜色确保对比
     primary: '#2563eb',      // blue-600
     secondary: '#4f46e5',    // indigo-600
     accent: '#7c3aed',       // violet-600
@@ -19,7 +20,7 @@ export const lightTheme: Theme = {
     error: '#dc2626',        // red-600
     info: '#0891b2',         // cyan-600
     text: {
-      primary: '#111827',
+      primary: '#111827',    // gray-900 - 最深的文
       secondary: '#374151',  // gray-700
       muted: '#6b7280',      // gray-500
       light: '#f9fafb',      // gray-50

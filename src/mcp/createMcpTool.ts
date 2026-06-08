@@ -1,4 +1,5 @@
 /**
+ * MCP Tool 转换器
  * 
  */
 
@@ -22,6 +23,8 @@ function convertJsonSchemaToZod(jsonSchema: JSONSchemaProperty): z.ZodSchema {
   }
 
   const type = Array.isArray(jsonSchema.type) ? jsonSchema.type[0] : jsonSchema.type;
+
+  // object 类
   if (type === 'object' || jsonSchema.properties) {
     const shape: Record<string, z.ZodSchema> = {};
     const required = jsonSchema.required || [];
@@ -30,6 +33,8 @@ function convertJsonSchemaToZod(jsonSchema: JSONSchemaProperty): z.ZodSchema {
       for (const [key, value] of Object.entries(jsonSchema.properties)) {
         if (typeof value === 'object' && value !== null) {
           let fieldSchema = convertJsonSchemaToZod(value);
+
+          // 非必填字段标记为可
           if (!required.includes(key)) {
             fieldSchema = fieldSchema.optional();
           }
@@ -41,33 +46,45 @@ function convertJsonSchemaToZod(jsonSchema: JSONSchemaProperty): z.ZodSchema {
 
     return z.object(shape);
   }
+
+  // array 类
   if (type === 'array') {
     if (jsonSchema.items && typeof jsonSchema.items === 'object') {
       return z.array(convertJsonSchemaToZod(jsonSchema.items));
     }
     return z.array(z.any());
   }
+
+  // string 类
   if (type === 'string') {
+    // 枚
     if (jsonSchema.enum && jsonSchema.enum.length > 0) {
       return z.enum(jsonSchema.enum as [string, ...string[]]);
     }
 
     let schema = z.string();
+
+    // 长度限
     if (jsonSchema.minLength !== undefined) {
       schema = schema.min(jsonSchema.minLength);
     }
     if (jsonSchema.maxLength !== undefined) {
       schema = schema.max(jsonSchema.maxLength);
     }
+
+    // 正则模
     if (jsonSchema.pattern) {
       try {
         schema = schema.regex(new RegExp(jsonSchema.pattern));
       } catch {
+        // 忽略无效的正
       }
     }
 
     return schema;
   }
+
+  // number / integer 类型
   if (type === 'number' || type === 'integer') {
     let schema = z.number();
 
@@ -80,6 +97,8 @@ function convertJsonSchemaToZod(jsonSchema: JSONSchemaProperty): z.ZodSchema {
 
     return schema;
   }
+
+  // boolean 类
   if (type === 'boolean') {
     return z.boolean();
   }
@@ -104,6 +123,8 @@ function convertJsonSchemaToZod(jsonSchema: JSONSchemaProperty): z.ZodSchema {
       return z.union(schemas as [z.ZodSchema, z.ZodSchema, ...z.ZodSchema[]]);
     }
   }
+
+  // 默
   return z.any();
 }
 
@@ -122,24 +143,28 @@ export function createMcpTool(
     zodSchema = convertJsonSchemaToZod(toolDef.inputSchema);
   } catch (error) {
     mcpDebug.warn(
-      `Schema ， schema: ${toolDef.name}`,
+      `Schema 转换失败，使用降级 schema: ${toolDef.name}`,
       (error as Error).message
     );
-    zodSchema = z.any();
+    zodSchema = z.any();  // 降级方
   }
+
+  // 2. 决定工具名
   const toolName = customName || toolDef.name;
+
+  // 3. 创
   return createTool({
     name: toolName,
     displayName: `${serverName}: ${toolDef.name}`,
-    kind: ToolKind.Execute,
+    kind: ToolKind.Execute,  // MCP 工具视为 Execute 类型（需要确
     schema: zodSchema,
     description: {
       short: toolDef.description || `MCP Tool: ${toolDef.name}`,
       long: [
-        `MCP ，: ${serverName}`,
+        `MCP 工具，来自服务器: ${serverName}`,
         toolDef.description || '',
         '',
-        '，。',
+        '执行外部工具，需要用户确认。',
       ].filter(Boolean).join('\n'),
       important: [
         `From MCP server: ${serverName}`,
@@ -152,6 +177,8 @@ export function createMcpTool(
     async execute(params) {
       try {
         const result = await mcpClient.callTool(toolDef.name, params);
+
+        // 处理响应内
         let llmContent = '';
         let displayContent = '';
 
@@ -161,10 +188,10 @@ export function createMcpTool(
               llmContent += item.text;
               displayContent += item.text;
             } else if (item.type === 'image') {
-              displayContent += `[: ${item.mimeType || 'unknown'}]\n`;
+              displayContent += `[图片: ${item.mimeType || 'unknown'}]\n`;
               llmContent += `[image: ${item.mimeType || 'unknown'}]\n`;
             } else if (item.type === 'resource') {
-              displayContent += `[: ${item.uri || item.mimeType || 'unknown'}]\n`;
+              displayContent += `[资源: ${item.uri || item.mimeType || 'unknown'}]\n`;
               llmContent += `[resource: ${item.uri || item.mimeType || 'unknown'}]\n`;
             }
           }
@@ -174,7 +201,7 @@ export function createMcpTool(
           return {
             success: false,
             llmContent: llmContent || 'MCP tool execution failed',
-            displayContent: `❌ ${displayContent || 'MCP'}`,
+            displayContent: `❌ ${displayContent || 'MCP工具执行失败'}`,
             error: {
               type: ToolErrorType.EXECUTION_ERROR,
               message: llmContent || 'MCP tool execution failed',
@@ -185,7 +212,7 @@ export function createMcpTool(
         return {
           success: true,
           llmContent: llmContent || 'Execution succeeded',
-          displayContent: `✅ MCP ${toolDef.name} \n${displayContent}`,
+          displayContent: `✅ MCP工具 ${toolDef.name} 执行成功\n${displayContent}`,
           metadata: {
             serverName,
             toolName: toolDef.name,
@@ -197,7 +224,7 @@ export function createMcpTool(
         return {
           success: false,
           llmContent: `MCP tool execution failed: ${errorMessage}`,
-          displayContent: `❌ MCP: ${errorMessage}`,
+          displayContent: `❌ MCP工具执行失败: ${errorMessage}`,
           error: {
             type: ToolErrorType.EXECUTION_ERROR,
             message: errorMessage,

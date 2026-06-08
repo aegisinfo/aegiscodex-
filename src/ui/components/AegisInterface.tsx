@@ -4,12 +4,12 @@
 
 // Polyfill requestAnimationFrame for Bun/Node
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 100);
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 16);
   (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
 }
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 
 // ========== Throttled Stream Updater ==========
@@ -20,24 +20,20 @@ import Spinner from 'ink-spinner';
 function createThrottledStreamUpdater(
   updateContent: (delta: string) => void,
   updateThinking: (delta: string) => void,
-  intervalMs: number = 100 // throttle re-renders to ~10fps during streaming
+  intervalMs: number = 16 // ~60fps
 ) {
   let contentBuffer = '';
   let thinkingBuffer = '';
   let rafId: number | null = null;
-  let isDirty = false;
 
   const flush = () => {
-    if (isDirty) {
-      if (contentBuffer) {
-        updateContent(contentBuffer);
-        contentBuffer = '';
-      }
-      if (thinkingBuffer) {
-        updateThinking(thinkingBuffer);
-        thinkingBuffer = '';
-      }
-      isDirty = false;
+    if (contentBuffer) {
+      updateContent(contentBuffer);
+      contentBuffer = '';
+    }
+    if (thinkingBuffer) {
+      updateThinking(thinkingBuffer);
+      thinkingBuffer = '';
     }
     rafId = null;
   };
@@ -45,14 +41,12 @@ function createThrottledStreamUpdater(
   return {
     appendContent: (delta: string) => {
       contentBuffer += delta;
-      isDirty = true;
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
       }
     },
     appendThinking: (delta: string) => {
       thinkingBuffer += delta;
-      isDirty = true;
       if (rafId === null) {
         rafId = requestAnimationFrame(flush);
       }
@@ -146,7 +140,7 @@ import { ChatStatusBar } from './layout/ChatStatusBar.js';
 import { MessageList } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
-import { ExitMessage, ChatSearch } from './common/index.js';
+import { ExitMessage } from './common/ExitMessage.js';
 import { useConfirmation } from '../hooks/useConfirmation.js';
 
 // Hooks
@@ -263,9 +257,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [initError, setInitError] = useState<string | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
-  const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [searchResults, setSearchResults] = useState<number[]>([]);
-  const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -314,18 +305,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     },
   });
 
-  // Ctrl+F search toggle
-  useInput((_input, key) => {
-    if (key.ctrl && _input === 'f') {
-      setIsSearchVisible(prev => !prev);
-    }
-  });
-
   // ==================== Agent & Context Initialization ====================
   useEffect(() => {
     const initAgent = async () => {
       try {
         if (debug) {
+          console.log('[DEBUG] Initializing Agent and ContextManager...');
         }
 
         contextManagerRef.current = new ContextManager({
@@ -351,9 +336,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
               });
 
             if (debug) {
+              console.log('[DEBUG] Loaded session with', contextMessages.length, 'messages');
             }
           } else {
             if (debug) {
+              console.log('[DEBUG] Failed to load session, creating new one');
             }
             currentSessionId = await contextManagerRef.current.createSession();
           }
@@ -373,8 +360,10 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         const customCmdResult = await initializeCustomCommands(process.cwd());
 
         if (debug && customCmdResult.count > 0) {
+          console.log('[DEBUG] Loaded', customCmdResult.count, 'custom commands');
         }
         if (customCmdResult.warnings.length > 0) {
+          console.warn('[WARN] Custom commands:', customCmdResult.warnings);
         }
 
         import('../../skills/index.js').then(({ initializeSkills }) => {
@@ -389,24 +378,28 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           const hooksConfig = fullConfig.hooks || {};
 
           if (debug) {
-
+            console.log('[DEBUG] Config paths:', configManager.getLoadedConfigPaths());
+            console.log('[DEBUG] Hooks config:', JSON.stringify(hooksConfig, null, 2));
           }
 
           initializeHooks(hooksConfig);
 
           if (debug) {
             const stats = getHookStats();
+            console.log('[DEBUG] Hooks stats:', stats);
           }
 
           await onSessionStart(currentSessionId, process.cwd());
         } catch (hookError) {
           if (debug) {
+            console.warn('[DEBUG] Hooks initialization failed:', hookError);
           }
         }
 
         setIsInitializing(false);
 
         if (debug) {
+          console.log('[DEBUG] Agent initialized successfully, sessionId:', currentSessionId);
         }
       } catch (error) {
         setInitError(error instanceof Error ? error.message : '');
@@ -471,15 +464,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   // ==================== Selector Handlers ====================
   const handleSelectorSelect = useCallback(async (value: string) => {
-    const { handler: h } = getState().app.activeModal === 'themeSelector'
-      ? { handler: 'theme' as const }
-      : selectorState;
+    const { handler } = selectorState;
 
-    if (h === 'theme') {
+    if (handler === 'theme') {
       const { themeManager } = await import('../themes/index.js');
       themeManager.setTheme(value);
       sessionActions().addAssistantMessage('✓  ' + value);
-    } else if (h === 'model') {
+    } else if (handler === 'model') {
       const { configActions } = await import('../../store/index.js');
       configActions().updateConfig({ currentModelId: value });
       sessionActions().addAssistantMessage('✓  ' + value);
@@ -487,7 +478,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
     focusActions.setFocus(FocusId.MAIN_INPUT);
-  }, []);
+  }, [selectorState]);
 
   const handleSelectorCancel = useCallback(() => {
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
@@ -566,6 +557,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
     if (injectedContext) {
       if (debugRef.current) {
+        console.log('[DEBUG] Hook injected context:', injectedContext);
       }
       sessionActions().addAssistantMessage('[Hook] ' + injectedContext);
     }
@@ -574,7 +566,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
     if (debugRef.current) {
       const contextMessages = ctxManager.getMessages();
-
+      console.log('[DEBUG] Sending message:', value);
+      console.log('[DEBUG] Context messages count:', contextMessages.length);
+      console.log('[DEBUG] Current token count:', ctxManager.getTokenCount());
     }
 
     const streamingMessageId = sessionActions().startStreamingMessage();
@@ -586,7 +580,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const streamUpdater = createThrottledStreamUpdater(
       (delta) => sessionActions().appendToStreamingMessage(streamingMessageId, delta),
       (delta) => sessionActions().appendThinkingToStreamingMessage(streamingMessageId, delta),
-      100 // throttle to ~10fps to prevent screen flicker
+      16 // 60fps via RAF
     );
     streamUpdaterRef.current = streamUpdater;
 
@@ -656,7 +650,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       });
 
       if (debugRef.current) {
-
+        console.log('[DEBUG] Token usage - input:', inputTokens, 'output:', outputTokens);
+        console.log('[DEBUG] Total context tokens:', ctxManager.getTokenCount());
       }
 
     } catch (error) {
@@ -683,6 +678,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const nextCommand = commandActions().dequeueCommand();
     if (nextCommand) {
       if (debugRef.current) {
+        console.log('[DEBUG] Processing queued command:', nextCommand);
       }
       await processCommand(nextCommand);
     }
@@ -716,6 +712,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     if (currentIsThinking) {
       commandActions().enqueueCommand(value);
       if (debugRef.current) {
+        console.log('[DEBUG] Command queued:', value, 'Queue size:', currentPendingCount + 1);
       }
       return;
     }
@@ -736,6 +733,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   if (isInitializing) {
     return (
       <Box flexDirection="column" padding={1}>
+        <Box>
+          <Text color="yellow">
+            <Spinner type="dots" />
+          </Text>
+          <Text color="yellow"> Initializing Agent...</Text>
+        </Box>
       </Box>
     );
   }
@@ -766,7 +769,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
             <Text bold color={theme.colors.primary}> aegis</Text>
             <Text color={theme.colors.text.secondary}>code </Text>
-            <Text color={theme.colors.primary}>{'\u25C6'}</Text>
           </Box>
         </Box>
 
@@ -791,32 +793,16 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           <Text bold color={theme.colors.primary}> aegis</Text>
           <Text color={theme.colors.text.secondary}>code </Text>
           <Text color={theme.colors.text.muted}>{'\u2500'} </Text>
-          <Text color={theme.colors.primary}>{'\u25C6'}</Text>
-          <Text color={theme.colors.text.muted} dimColor> v{process.env.npm_package_version || '0.1.0'}</Text>
+          <Text color={theme.colors.text.muted} dimColor>v{process.env.npm_package_version || '0.1.0'}</Text>
           {debug && <Text color={theme.colors.warning}> [debug]</Text>}
         </Box>
-        <Box>
-          <Text color={theme.colors.text.muted} dimColor>{'\u2502'}  </Text>
-          <Text color={theme.colors.secondary}>AEGIS</Text>
-          <Text color={theme.colors.text.muted} dimColor> AI Agent {'\u00B7'} </Text>
-          <Text color={theme.colors.text.muted} dimColor>multi-model</Text>
-        </Box>
+        <Text color={theme.colors.text.muted} dimColor>{'\u2502'}  AEGIS AI Agent</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
         <MessageList terminalWidth={terminalWidth - 2} />
         <QueuedCommands />
       </Box>
-
-      {isSearchVisible && (
-        <ChatSearch
-          onDismiss={() => setIsSearchVisible(false)}
-          onResults={(indices, currentIdx) => {
-            setSearchResults(indices);
-            setSearchCurrentIndex(currentIdx);
-          }}
-        />
-      )}
 
       {confirmationState.isVisible && confirmationState.details && (
         <ConfirmationPrompt

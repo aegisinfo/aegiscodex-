@@ -1,4 +1,5 @@
 /**
+ * Formatting Stage - 结果格式化阶段
  * 
  */
 
@@ -11,8 +12,11 @@ export class FormattingStage implements PipelineStage {
     const result = execution.getResult();
 
     if (!result) {
+      // 没有结果（可能是被中止了），不处
       return;
     }
+
+    // 确保结果格式正
     if (!result.llmContent) {
       result.llmContent = result.success
         ? 'Execution completed successfully'
@@ -24,6 +28,8 @@ export class FormattingStage implements PipelineStage {
         ? `✅ ${execution.toolName} completed`
         : `❌ ${execution.toolName} failed`;
     }
+
+    // 添加执行元数
     result.metadata = {
       ...result.metadata,
       executionId: execution.context.sessionId,
@@ -31,6 +37,8 @@ export class FormattingStage implements PipelineStage {
       timestamp: Date.now(),
       permissionMode: execution.context.permissionMode,
     };
+
+    // 更新结
     execution.setResult(result);
   }
 }

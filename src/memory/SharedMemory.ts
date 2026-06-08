@@ -178,6 +178,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
     };
     return embedPipeline;
   } catch (e) {
+    console.warn('[Memory] Embedding model unavailable, falling back to keyword search');
     return null;
   }
 }

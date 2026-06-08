@@ -1,4 +1,5 @@
 /**
+ * useInputBuffer - 输入缓冲区管理
  * 
  * 
  */
@@ -6,27 +7,27 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface InputBufferResult {
-  
+  /** 当前输入值 */
   value: string;
-  
+  /** 光标位置 */
   cursorPosition: number;
-  
+  /** 设置输入值 */
   setValue: (newValue: string) => void;
-  
+  /** 设置光标位置 */
   setCursorPosition: (pos: number) => void;
-  
+  /** 在光标位置插入文本 */
   insertAt: (text: string) => void;
-  
+  /** 删除光标前的字符 */
   deleteBackward: () => void;
-  
+  /** 删除光标后的字符 */
   deleteForward: () => void;
-  
+  /** 清空输入 */
   clear: () => void;
-  
+  /** 移动光标到开头 */
   moveToStart: () => void;
-  
+  /** 移动光标到结尾 */
   moveToEnd: () => void;
-  
+  /** 获取当前引用（用于避免重渲染时的闭包问题） */
   getRef: () => { value: string; cursorPosition: number };
 }
 
@@ -39,6 +40,8 @@ export const useInputBuffer = (
 ): InputBufferResult => {
   const [value, setValueState] = useState(initialValue);
   const [cursorPosition, setCursorPositionState] = useState(initialCursor);
+
+  // 稳定的引用，避免 resize 时重
   const bufferRef = useRef({ value, cursorPosition });
 
   useEffect(() => {
@@ -46,13 +49,16 @@ export const useInputBuffer = (
   }, [value, cursorPosition]);
 
   const setValue = useCallback((newValue: string) => {
+    // 立即更新 ref，避免 setCursorPosition 使用旧的长度限
     bufferRef.current.value = newValue;
     setValueState(newValue);
+    // 确保光标不超出范
     setCursorPositionState(prev => Math.min(prev, newValue.length));
   }, []);
 
   const setCursorPosition = useCallback((pos: number) => {
     const newPos = Math.max(0, Math.min(pos, bufferRef.current.value.length));
+    // 立即更新 ref，保持同
     bufferRef.current.cursorPosition = newPos;
     setCursorPositionState(newPos);
   }, []);

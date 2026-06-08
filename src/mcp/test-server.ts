@@ -5,6 +5,8 @@
  * 
  * 
  * 
+ * - echo: 返回输入的文本
+ * - time: 返回当前时间
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -25,6 +27,8 @@ const server = new Server(
     },
   }
 );
+
+// 列出工
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -53,6 +57,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     ],
   };
 });
+
+// 调用工
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -71,6 +77,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   throw new Error(`Unknown tool: ${name}`);
 });
+
+// 启动服务
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);

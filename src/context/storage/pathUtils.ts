@@ -21,6 +21,7 @@ export function getStorageRoot(): string {
  */
 export function escapeProjectPath(absPath: string): string {
   const normalized = path.resolve(absPath);
+  // 将路径分隔符替换为 -，移除开头
   return normalized.replace(/[/\\]/g, '-').replace(/^-/, '');
 }
 
@@ -95,6 +96,8 @@ export async function getLatestSessionFile(projectPath: string): Promise<string 
     if (jsonlFiles.length === 0) {
       return null;
     }
+    
+    // 按修改时间排
     const fileStats = await Promise.all(
       jsonlFiles.map(async (file) => {
         const filePath = path.join(storagePath, file);

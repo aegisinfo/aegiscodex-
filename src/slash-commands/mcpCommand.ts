@@ -1,4 +1,5 @@
 /**
+ * /mcp 命令 - 显示 MCP 服务器状态和工具
  */
 
 import type { SlashCommand, SlashCommandResult } from './types.js';
@@ -30,6 +31,7 @@ function formatTime(date: Date | undefined): string {
 }
 
 /**
+ * /mcp 命令实现
  */
 export const mcpCommand: SlashCommand = {
   name: 'mcp',
@@ -40,6 +42,8 @@ export const mcpCommand: SlashCommand = {
     const mcpRegistry = McpRegistry.getInstance();
     const stats = mcpRegistry.getStatistics();
     const servers = mcpRegistry.getAllServers();
+
+    // 没有配置任何 MCP 服务
     if (stats.totalServers === 0) {
       return {
         success: true,
@@ -70,15 +74,22 @@ add \`mcpServers\` to config:
     }
 
     const trimmedArgs = args.trim().toLowerCase();
+
+    // /mcp tools - 列出所有工具
     if (trimmedArgs === 'tools') {
       return await handleToolsSubcommand(mcpRegistry);
     }
+
+    // /mcp <server-name> - 显示特定服务器详情
     if (trimmedArgs && trimmedArgs !== '') {
       const serverInfo = mcpRegistry.getServer(trimmedArgs);
       if (serverInfo) {
         return handleServerDetail(trimmedArgs, serverInfo);
       }
+      // 服务器不存在，显示概
     }
+
+    // 默认：显示概
     let output = '## mcp\n\n';
     output += `| key | value |\n`;
     output += `|-----|-------|\n`;

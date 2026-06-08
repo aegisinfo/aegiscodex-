@@ -90,9 +90,11 @@ class SubAgentRunner {
         },
       };
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      agentDebug.error(`[${this.config.name}] LLM call failed: ${errMsg}`);
       return {
         agentName: this.config.name,
-        content: '',
+        content: `[Error: ${errMsg}]`,
         metadata: {
           durationMs: Date.now() - startTime,
         },
@@ -166,19 +168,30 @@ export class OrchestratorAgent {
    * Run multiple tasks in parallel across different agents
    * Each delegation in the array runs concurrently
    */
-  async delegateParallel(delegations: TaskDelegation[]): Promise<AgentResponse[]> {
-    const results = await Promise.allSettled(
-      delegations.map(d => this.delegate(d.agentName, d.task, d.context))
-    );
-
-    return results.map((r, i) => {
-      if (r.status === 'fulfilled') return r.value;
-      return {
-        agentName: delegations[i].agentName,
-        content: '',
-        metadata: { durationMs: 0 },
-      };
-    });
+  async delegateParallel(delegations: TaskDelegation[], concurrency: number = 2): Promise<AgentResponse[]> {
+    const results: AgentResponse[] = [];
+    // Run in batches to avoid overwhelming API rate limits
+    for (let i = 0; i < delegations.length; i += concurrency) {
+      const batch = delegations.slice(i, i + concurrency);
+      const batchResults = await Promise.allSettled(
+        batch.map(d => this.delegate(d.agentName, d.task, d.context))
+      );
+      for (let j = 0; j < batchResults.length; j++) {
+        const r = batchResults[j];
+        if (r.status === 'fulfilled') {
+          results.push(r.value);
+        } else {
+          const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          agentDebug.error(`[${batch[j].agentName}] delegateParallel unhandled: ${reason}`);
+          results.push({
+            agentName: batch[j].agentName,
+            content: `[Fatal: ${reason}]`,
+            metadata: { durationMs: 0 },
+          });
+        }
+      }
+    }
+    return results;
   }
 
   /**

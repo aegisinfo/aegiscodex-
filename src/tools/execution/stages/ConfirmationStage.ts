@@ -1,4 +1,5 @@
 /**
+ * Confirmation Stage - 用户确认阶段
  * 
  */
 
@@ -14,6 +15,7 @@ export class ConfirmationStage implements PipelineStage {
   constructor(private sessionApprovals: Set<string>) {}
 
   async process(execution: ToolExecution): Promise<void> {
+    // 如果不需要确认，直接通
     if (!execution._internal.needsConfirmation) {
       return;
     }
@@ -23,10 +25,14 @@ export class ConfirmationStage implements PipelineStage {
       execution.abort('Tool not found in execution context');
       return;
     }
+
+    // 检查是否已在会话中批
     const signature = execution._internal.permissionSignature;
     if (signature && this.sessionApprovals.has(signature)) {
       return;
     }
+
+    // 构建确认详
     const confirmationDetails: ConfirmationDetails = {
       title: `Permission Required: ${tool.name}`,
       message: execution._internal.confirmationReason || 'This operation requires your confirmation',
@@ -34,8 +40,11 @@ export class ConfirmationStage implements PipelineStage {
       risks: this.extractRisks(execution),
       affectedFiles: this.getAffectedPaths(execution),
     };
+
+    // 请求用户确
     const handler = execution.context.confirmationHandler;
     if (!handler) {
+      // 无确认处理器，默认拒
       execution.abort('No confirmation handler available - operation requires user approval');
       return;
     }
@@ -46,6 +55,8 @@ export class ConfirmationStage implements PipelineStage {
       execution.abort(`User rejected: ${response.reason || 'No reason provided'}`);
       return;
     }
+
+    // 如果用户选择"记住此决定"，保存到会话批准列
     if (response.scope === 'session' && signature) {
       this.sessionApprovals.add(signature);
     }
@@ -107,11 +118,15 @@ ${this.truncate(content, 20)}
     const risks: string[] = [];
     const { toolName, params } = execution;
     const tool = execution._internal.tool;
+
+    // 基于工具类型的风
     if (tool?.kind === 'write') {
       risks.push('This operation will modify files');
     } else if (tool?.kind === 'execute') {
       risks.push('This operation will execute system commands');
     }
+
+    // 基于参数的风
     if (toolName === 'Bash') {
       const command = params.command as string;
       if (command.includes('rm')) {
@@ -124,6 +139,8 @@ ${this.truncate(content, 20)}
         risks.push('Command uses piping');
       }
     }
+
+    // 检查敏感文
     const confirmReason = execution._internal.confirmationReason || '';
     if (confirmReason.includes('Sensitive file')) {
       risks.push('Operation involves sensitive files');

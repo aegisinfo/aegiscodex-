@@ -1,4 +1,5 @@
 /**
+ * CLI 配置 - yargs 选项定义
  */
 
 import type { Options } from 'yargs';
@@ -18,8 +19,8 @@ function readVersionSync(): string {
   const __dirname = path.dirname(__filename);
   
   const possiblePaths = [
-    path.resolve(__dirname, '../package.json'),
-    path.resolve(__dirname, '../../package.json'),
+    path.resolve(__dirname, '../package.json'),     // 打包
+    path.resolve(__dirname, '../../package.json'),  // 开发环
   ];
 
   for (const pkgPath of possiblePaths) {
@@ -30,6 +31,7 @@ function readVersionSync(): string {
         return pkg.version;
       }
     } catch {
+      // 继续尝试下一个路
     }
   }
 
@@ -39,6 +41,7 @@ function readVersionSync(): string {
 const version = readVersionSync();
 
 /**
+ * CLI 基础配置
  */
 export const cliConfig = {
   scriptName: 'aegis',
@@ -50,6 +53,11 @@ export const cliConfig = {
  * 
  * 
  * 
+ * - Debug Options: 调试相关
+ * - AI Options: 模型和 AI 相关
+ * - Security Options: 权限和安全相关
+ * - Session Options: 会话管理相关
+ * - Output Options: 输出格式相关
  */
 export const globalOptions = {
   // ========== Debug Options ==========

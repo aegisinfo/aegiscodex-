@@ -12,11 +12,11 @@ import { FileAnalyzer } from './FileAnalyzer.js';
 import { onCompaction } from '../hooks/index.js';
 
 export class CompactionService {
-  
+  /** 压缩阈值百分比（80%） */
   private static readonly THRESHOLD_PERCENT = 0.8;
-  
+  /** 保留比例（20%） */
   private static readonly RETAIN_PERCENT = 0.2;
-  
+  /** 降级时保留比例（30%） */
   private static readonly FALLBACK_RETAIN_PERCENT = 0.3;
 
   /**
@@ -44,6 +44,8 @@ export class CompactionService {
   ): Promise<CompactionResult> {
     const preTokens = options.actualPreTokens
       ?? TokenCounter.countTokens(messages, options.modelName);
+
+    // 执行 Compaction Hook - 检查是否应该阻止压
     const shouldPrevent = await onCompaction(
       preTokens,
       messages.length,
@@ -52,6 +54,7 @@ export class CompactionService {
     );
 
     if (shouldPrevent) {
+      console.log('[CompactionService] 压缩被 Hook 阻止');
       return {
         success: false,
         summary: '',
@@ -64,17 +67,28 @@ export class CompactionService {
     }
 
     try {
+      console.log('[CompactionService] 开始压缩，消息数:', messages.length);
+
+      // 1. 分析并读取重点文
       const fileRefs = FileAnalyzer.analyzeFiles(messages);
       const filePaths = fileRefs.map(f => f.path);
       const fileContents = await FileAnalyzer.readFilesContent(filePaths);
+
+      // 2. 调用 LLM 生成总
       const summary = await this.generateSummary(messages, fileContents, options);
+
+      // 3. 计算保留范围并过滤孤儿 tool 消
       const retainCount = Math.ceil(messages.length * this.RETAIN_PERCENT);
       const candidateMessages = messages.slice(-retainCount);
       const retainedMessages = this.filterOrphanToolMessages(candidateMessages);
+
+      // 4. 创建压缩消
       const summaryMessage = this.createSummaryMessage(nanoid(), summary);
       const compactedMessages = [summaryMessage, ...retainedMessages];
 
       const postTokens = TokenCounter.countTokens(compactedMessages, options.modelName);
+
+      console.log(`[CompactionService] Token 变化: ${preTokens} → ${postTokens}`);
 
       return {
         success: true,
@@ -85,6 +99,7 @@ export class CompactionService {
         compactedMessages,
       };
     } catch (error) {
+      // 降级策略：简单截
       return this.fallbackCompact(messages, options, preTokens, error);
     }
   }
@@ -98,6 +113,8 @@ export class CompactionService {
     options: CompactionOptions
   ): Promise<string> {
     const prompt = this.buildCompactionPrompt(messages, fileContents);
+
+    // 如果提供了 chatService，使用它来生成总
     if (options.chatService && typeof (options.chatService as any).chat === 'function') {
       try {
         const response = await (options.chatService as any).chat([
@@ -106,9 +123,12 @@ export class CompactionService {
         ]);
         return response.content || this.createFallbackSummary(messages);
       } catch (error) {
+        console.warn('[CompactionService] LLM 调用失败，使用回退总结', error);
         return this.createFallbackSummary(messages);
       }
     }
+
+    // 没有 chatService，使用简单的摘
     return this.createFallbackSummary(messages);
   }
 
@@ -119,11 +139,14 @@ export class CompactionService {
     messages: Message[],
     fileContents: FileContent[]
   ): string {
+    // 格式化消息历
     const messagesText = messages.map((msg, i) => {
       const role = msg.role || 'unknown';
       const content = typeof msg.content === 'string'
         ? msg.content
         : JSON.stringify(msg.content);
+
+      // 截断过长消
       const maxLength = 5000;
       const truncated = content.length > maxLength
         ? content.substring(0, maxLength) + '...'
@@ -131,6 +154,8 @@ export class CompactionService {
 
       return `[${i + 1}] ${role}: ${truncated}`;
     }).join('\n\n');
+
+    // 格式化文件内
     const filesText = fileContents.map(file =>
       `### ${file.path}\n\`\`\`\n${file.content}\n\`\`\``
     ).join('\n\n');
@@ -190,6 +215,7 @@ The conversation can continue normally.`;
    * 
    */
   private static filterOrphanToolMessages(messages: Message[]): Message[] {
+    // 收集保留消息中所有 tool_call 
     const availableToolCallIds = new Set<string>();
     for (const msg of messages) {
       if (msg.role === 'assistant' && msg.tool_calls) {
@@ -200,6 +226,8 @@ The conversation can continue normally.`;
         }
       }
     }
+
+    // 过滤孤儿 tool 消
     return messages.filter(msg => {
       if (msg.role === 'tool' && msg.tool_call_id) {
         return availableToolCallIds.has(msg.tool_call_id);
@@ -227,6 +255,9 @@ The conversation can continue normally.`;
     preTokens: number,
     error: unknown
   ): CompactionResult {
+    console.warn('[CompactionService] 使用降级策略', error);
+
+    // 保留 30% 的最近消
     const retainCount = Math.ceil(messages.length * this.FALLBACK_RETAIN_PERCENT);
     const candidateMessages = messages.slice(-retainCount);
     const retainedMessages = this.filterOrphanToolMessages(candidateMessages);

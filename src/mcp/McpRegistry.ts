@@ -1,4 +1,5 @@
 /**
+ * MCP 服务器注册中心
  * 
  */
 
@@ -16,6 +17,7 @@ import type { Tool } from '../tools/types.js';
 import { mcpRegistryDebug } from '../utils/debug.js';
 
 /**
+ * MCP 注册中心（单例）
  */
 export class McpRegistry extends EventEmitter {
   private static instance: McpRegistry | null = null;
@@ -23,6 +25,7 @@ export class McpRegistry extends EventEmitter {
 
   private constructor() {
     super();
+    // 增加监听器上限，因为可能有多个 Agent 实例监听同一事
     this.setMaxListeners(20);
   }
 
@@ -50,13 +53,14 @@ export class McpRegistry extends EventEmitter {
    * 
    */
   async registerServer(name: string, config: McpServerConfig): Promise<void> {
+    // 检查是否已禁
     if (config.enabled === false) {
-      mcpRegistryDebug.log(` "${name}" ，`);
+      mcpRegistryDebug.log(`服务器 "${name}" 已禁用，跳过注册`);
       return;
     }
 
     if (this.servers.has(name)) {
-      throw new Error(`MCP "${name}" `);
+      throw new Error(`MCP服务器 "${name}" 已经注册`);
     }
 
     const client = new McpClient(config, name, config.healthCheck);
@@ -66,16 +70,20 @@ export class McpRegistry extends EventEmitter {
       status: McpConnectionStatus.DISCONNECTED,
       tools: [],
     };
+
+    // 设置事件处理
     this.setupClientEventHandlers(client, serverInfo, name);
 
     this.servers.set(name, serverInfo);
     this.emit('serverRegistered', name, serverInfo);
 
-    mcpRegistryDebug.log(`: ${name} (${config.type})`);
+    mcpRegistryDebug.log(`已注册服务器: ${name} (${config.type})`);
+
+    // 尝试连
     try {
       await this.connectServer(name);
     } catch (error) {
-      mcpRegistryDebug.warn(` "${name}" :`, (error as Error).message);
+      mcpRegistryDebug.warn(`服务器 "${name}" 连接失败:`, (error as Error).message);
     }
   }
 
@@ -85,7 +93,7 @@ export class McpRegistry extends EventEmitter {
   async registerServers(servers: Record<string, McpServerConfig>): Promise<void> {
     const promises = Object.entries(servers).map(([name, config]) =>
       this.registerServer(name, config).catch(error => {
-        mcpRegistryDebug.warn(` "${name}" :`, (error as Error).message);
+        mcpRegistryDebug.warn(`注册服务器 "${name}" 失败:`, (error as Error).message);
         return error;
       })
     );
@@ -99,11 +107,11 @@ export class McpRegistry extends EventEmitter {
   async connectServer(name: string): Promise<void> {
     const serverInfo = this.servers.get(name);
     if (!serverInfo) {
-      throw new Error(` "${name}" `);
+      throw new Error(`服务器 "${name}" 未注册`);
     }
 
     if (serverInfo.status === McpConnectionStatus.CONNECTED) {
-      mcpRegistryDebug.log(` "${name}" `);
+      mcpRegistryDebug.log(`服务器 "${name}" 已连接`);
       return;
     }
 
@@ -116,7 +124,7 @@ export class McpRegistry extends EventEmitter {
   async disconnectServer(name: string): Promise<void> {
     const serverInfo = this.servers.get(name);
     if (!serverInfo) {
-      throw new Error(` "${name}" `);
+      throw new Error(`服务器 "${name}" 未注册`);
     }
 
     await serverInfo.client.disconnect();
@@ -144,7 +152,7 @@ export class McpRegistry extends EventEmitter {
     await serverInfo.client.disconnect().catch(() => {});
     this.servers.delete(name);
 
-    mcpRegistryDebug.log(`: ${name}`);
+    mcpRegistryDebug.log(`已移除服务器: ${name}`);
   }
 
   /**
@@ -186,16 +194,16 @@ export class McpRegistry extends EventEmitter {
 
     client.on('reconnecting', (attempt: number) => {
       serverInfo.status = McpConnectionStatus.CONNECTING;
-      mcpRegistryDebug.log(` "${name}"  ( ${attempt} )`);
+      mcpRegistryDebug.log(`服务器 "${name}" 正在重连 (第 ${attempt} 次)`);
     });
 
     client.on('reconnected', () => {
-      mcpRegistryDebug.log(` "${name}" `);
+      mcpRegistryDebug.log(`服务器 "${name}" 重连成功`);
     });
 
     client.on('reconnectFailed', () => {
       serverInfo.status = McpConnectionStatus.ERROR;
-      mcpRegistryDebug.error(` "${name}" `);
+      mcpRegistryDebug.error(`服务器 "${name}" 重连失败`);
     });
   }
 
@@ -203,10 +211,14 @@ export class McpRegistry extends EventEmitter {
    * 
    *
    * 
+   * - 无冲突: toolName
+   * - 有冲突: serverName__toolName
    */
   async getAvailableTools(): Promise<Tool[]> {
     const tools: Tool[] = [];
     const nameConflicts = new Map<string, number>();
+
+    // 第一遍：检测冲
     for (const [, serverInfo] of this.servers) {
       if (serverInfo.status === McpConnectionStatus.CONNECTED) {
         for (const mcpTool of serverInfo.tools) {
@@ -215,13 +227,15 @@ export class McpRegistry extends EventEmitter {
         }
       }
     }
+
+    // 第二遍：创建工具（冲突时添加前
     for (const [serverName, serverInfo] of this.servers) {
       if (serverInfo.status === McpConnectionStatus.CONNECTED) {
         for (const mcpTool of serverInfo.tools) {
           const hasConflict = (nameConflicts.get(mcpTool.name) || 0) > 1;
           const toolName = hasConflict
-            ? `${serverName}__${mcpTool.name}`
-            : mcpTool.name;
+            ? `${serverName}__${mcpTool.name}`  // 冲突
+            : mcpTool.name;                     // 无冲
 
           try {
             const tool = createMcpTool(
@@ -233,7 +247,7 @@ export class McpRegistry extends EventEmitter {
             tools.push(tool);
           } catch (error) {
             mcpRegistryDebug.warn(
-              ` "${mcpTool.name}" :`,
+              `创建工具 "${mcpTool.name}" 失败:`,
               (error as Error).message
             );
           }

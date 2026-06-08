@@ -1,7 +1,7 @@
 {
-  "name": "aegiscode",
-  "version": "0.1.0",
-  "description": "Multi-model AI agent for the terminal. Claude, DeepSeek, Groq, Ollama. Semantic memory, council voting, orchestration. BYOK.",
+  "name": "aegis-cli",
+  "version": "1.8.0",
+  "description": "A CLI Coding Agent inspired by Claude Code - An AI-powered coding assistant that can read, write, and execute code",
   "type": "module",
   "main": "dist/main.js",
   "bin": {
@@ -33,15 +33,15 @@
     "terminal",
     "developer-tools"
   ],
-  "author": "\u00c6GIS <hello@aegiscloud.org>",
-  "license": "AGPL-3.0",
+  "author": "kkkhs",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aegisinfo/aegiscode.git"
+    "url": "git+https://github.com/kkkhs/ClawdCode.git"
   },
-  "homepage": "https://aegiscloud.org/aegiscode",
+  "homepage": "https://github.com/kkkhs/ClawdCode#readme",
   "bugs": {
-    "url": "https://github.com/aegisinfo/aegiscode/issues"
+    "url": "https://github.com/kkkhs/ClawdCode/issues"
   },
   "files": [
     "dist",
@@ -86,7 +86,6 @@
     "@types/uuid": "^11.0.0",
     "@types/yargs": "^17.0.33",
     "esbuild": "^0.28.0",
-    "javascript-obfuscator": "^5.4.3",
     "react-devtools-core": "^7.0.1",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2"

@@ -25,6 +25,7 @@ export class CacheStore {
    * 
    */
   set<T>(key: string, value: T, ttl?: number): void {
+    // 检查是否需要淘
     if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       this.evictLRU();
     }
@@ -46,11 +47,15 @@ export class CacheStore {
     if (!entry) {
       return undefined;
     }
+
+    // 检查是否过
     const now = Date.now();
     if (now - entry.createdAt > entry.ttl) {
       this.cache.delete(key);
       return undefined;
     }
+
+    // 更新访问时
     entry.lastAccessedAt = now;
     return entry.value as T;
   }

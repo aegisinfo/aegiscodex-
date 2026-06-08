@@ -1,4 +1,5 @@
 /**
+ * CommandSuggestions - 命令补全建议列表
  */
 
 import React, { useMemo } from 'react';
@@ -7,11 +8,11 @@ import type { CommandSuggestion } from '../../../slash-commands/types.js';
 import { themeManager } from '../../themes/index.js';
 
 interface CommandSuggestionsProps {
-  
+  /** 建议列表 */
   suggestions: CommandSuggestion[];
-  
+  /** 当前选中索引 */
   selectedIndex: number;
-  
+  /** 是否显示 */
   visible: boolean;
 }
 
@@ -26,11 +27,17 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
   visible,
 }) => {
   const theme = themeManager.getTheme();
+
+  // 计算可见窗口，确保选中项始终可
   const { displaySuggestions, startIndex } = useMemo(() => {
     if (suggestions.length <= MAX_VISIBLE) {
       return { displaySuggestions: suggestions, startIndex: 0 };
     }
+
+    // 计算窗口起始位置，让选中项尽量居
     let start = Math.max(0, selectedIndex - Math.floor(MAX_VISIBLE / 2));
+    
+    // 确保不超出末
     if (start + MAX_VISIBLE > suggestions.length) {
       start = suggestions.length - MAX_VISIBLE;
     }
@@ -54,7 +61,7 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
       paddingX={1}
       marginBottom={0}
     >
-      {}
+      {/* 上方省略提示 */}
       {hasMoreAbove && (
         <Text color={theme.colors.text.muted} dimColor>
           ... {startIndex} more above
@@ -67,12 +74,12 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
         
         return (
           <Box key={suggestion.command} flexDirection="row">
-            {}
+            {/* 选中指示器 */}
             <Text color={isSelected ? theme.colors.primary : theme.colors.text.muted}>
               {isSelected ? '> ' : '  '}
             </Text>
             
-            {}
+            {/* 命令名 */}
             <Text
               color={isSelected ? theme.colors.primary : theme.colors.success}
               bold={isSelected}
@@ -80,7 +87,7 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
               {suggestion.command}
             </Text>
             
-            {}
+            {/* 描述 */}
             <Text color={theme.colors.text.muted} dimColor={!isSelected}>
               {' '}
               {suggestion.description}
@@ -89,14 +96,14 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
         );
       })}
       
-      {}
+      {/* 下方省略提示 */}
       {hasMoreBelow && (
         <Text color={theme.colors.text.muted} dimColor>
           ... {suggestions.length - startIndex - MAX_VISIBLE} more below
         </Text>
       )}
 
-      {}
+      {/* 简洁的操作提示 */}
       <Text color={theme.colors.text.muted} dimColor>
         ─ tab · ↑↓ · esc
       </Text>

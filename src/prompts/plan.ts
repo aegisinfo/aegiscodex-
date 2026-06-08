@@ -1,5 +1,7 @@
 /**
+ * Plan 模式提示词
  * 
+ * Plan 模式是只读研究模式，用于规划复杂任务
  */
 
 export const PLAN_MODE_SYSTEM_PROMPT = `You are in **PLAN MODE** - a read-only research phase for designing implementation plans.

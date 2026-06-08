@@ -1,6 +1,8 @@
 /**
  * 
  */
+
+// 类
 export {
   PermissionMode,
   PermissionResult,
@@ -21,7 +23,11 @@ export {
   type StageStartEvent,
   type StageCompleteEvent,
 } from './types.js';
+
+// 主
 export { ExecutionPipeline, type ExecutionPipelineEvents } from './ExecutionPipeline.js';
+
+// 阶
 export {
   DiscoveryStage,
   PermissionStage,

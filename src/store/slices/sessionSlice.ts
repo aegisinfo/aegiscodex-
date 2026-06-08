@@ -1,4 +1,5 @@
 /**
+ * Session Slice - 会话状态管理
  */
 
 import type { StateCreator } from 'zustand';
@@ -101,8 +102,7 @@ export const createSessionSlice: StateCreator<
       const messages = state.session.messages;
       const idx = messages.findIndex(m => m.id === id);
       if (idx !== -1) {
-        // Optimize: only create new array + spread once instead of spread + map
-        const updated = messages.slice();
+        const updated = [...messages];
         updated[idx] = { ...updated[idx], content: updated[idx].content + contentDelta };
         set((state) => ({
           session: { ...state.session, messages: updated },
@@ -114,32 +114,32 @@ export const createSessionSlice: StateCreator<
      * 
      */
     appendThinkingToStreamingMessage: (id: string, thinkingDelta: string) => {
-      const state = get();
-      const messages = state.session.messages;
-      const idx = messages.findIndex(m => m.id === id);
-      if (idx !== -1) {
-        const updated = messages.slice();
-        updated[idx] = { ...updated[idx], thinking: (updated[idx].thinking || '') + thinkingDelta };
-        set((state) => ({
-          session: { ...state.session, messages: updated },
-        }));
-      }
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === id
+              ? { ...msg, thinking: (msg.thinking || '') + thinkingDelta }
+              : msg
+          ),
+        },
+      }));
     },
 
     /**
      * 
      */
     finishStreamingMessage: (id: string) => {
-      const state = get();
-      const messages = state.session.messages;
-      const idx = messages.findIndex(m => m.id === id);
-      if (idx !== -1 && messages[idx].isStreaming) {
-        const updated = messages.slice();
-        updated[idx] = { ...updated[idx], isStreaming: false };
-        set((state) => ({
-          session: { ...state.session, messages: updated },
-        }));
-      }
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === id
+              ? { ...msg, isStreaming: false }
+              : msg
+          ),
+        },
+      }));
     },
 
     /**

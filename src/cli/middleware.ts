@@ -1,6 +1,10 @@
 /**
+ * CLI 中间件
  * 
  * 
+ * - 验证参数
+ * - 加载配置
+ * - 设置全局状态
  */
 
 import type { CliArguments } from './types.js';
@@ -10,8 +14,11 @@ import { configManager } from '../config/index.js';
  * 
  * 
  * 
+ * 1. 处理 --yolo 快捷方式
+ * 2. 检测工具列表冲突
  */
 export const validatePermissions = (argv: CliArguments): void => {
+  // 1. 处理 --yolo 快捷方
   if (argv.yolo) {
     if (argv.permissionMode && argv.permissionMode !== 'yolo') {
       throw new Error(
@@ -21,6 +28,8 @@ export const validatePermissions = (argv: CliArguments): void => {
     argv.permissionMode = 'yolo';
     console.error('\x1b[33m⚠ YOLO MODE — Claude will execute ALL commands without confirmation. Use with caution.\x1b[0m');
   }
+
+  // 2. 验证工具列表冲
   if (Array.isArray(argv.allowedTools) && Array.isArray(argv.disallowedTools)) {
     const allowedSet = new Set(argv.allowedTools);
     const intersection = argv.disallowedTools.filter(tool => allowedSet.has(tool));
@@ -37,14 +46,21 @@ export const validatePermissions = (argv: CliArguments): void => {
  * 
  * 
  * 
+ * 1. 初始化 ConfigManager
+ * 2. 应用 CLI 参数
+ * 3. 验证会话选项
  */
 export const loadConfiguration = async (argv: CliArguments): Promise<void> => {
+  // 跳过 --init 命令的配置加
   if (argv.init) {
     return;
   }
 
   try {
+    // 1. 初始化 ConfigManager（加载配置文件 + 环境变
     await configManager.initialize();
+
+    // 2. 应用 CLI 参数（最高优先
     configManager.applyCliArgs({
       apiKey: argv.apiKey,
       baseURL: argv.baseUrl,
@@ -52,8 +68,10 @@ export const loadConfiguration = async (argv: CliArguments): Promise<void> => {
     });
 
     if (argv.debug) {
+      console.log('[CLI] Configuration loaded successfully');
       const paths = configManager.getLoadedConfigPaths();
       if (paths.length > 0) {
+        console.log('[CLI] Loaded config files:', paths);
       }
     }
   } catch (error) {
@@ -69,6 +87,8 @@ export const loadConfiguration = async (argv: CliArguments): Promise<void> => {
     console.error('  3. Config file permissions');
     process.exit(1);
   }
+
+  // 3. 验证会话选
   if (argv.continue && argv.resume) {
     throw new Error('Cannot use both --continue and --resume flags');
   }
@@ -78,8 +98,10 @@ export const loadConfiguration = async (argv: CliArguments): Promise<void> => {
  * 
  * 
  * 
+ * 1. 验证输出格式组合
  */
 export const validateOutput = (argv: CliArguments): void => {
+  // 验证输出格式只能与 --print 一起使
   if (argv.outputFormat && argv.outputFormat !== 'text' && !argv.print) {
     throw new Error('--output-format can only be used with --print flag');
   }

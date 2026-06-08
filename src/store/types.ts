@@ -1,7 +1,10 @@
 /**
+ * Zustand Store 类型定义
  */
 
 import type { RuntimeConfig } from '../config/types.js';
+
+// ========== 会话状
 
 export interface TokenUsage {
   inputTokens: number;
@@ -17,7 +20,7 @@ export interface SessionMessage {
   timestamp: number;
   toolCalls?: unknown[];
   toolCallId?: string;
-  
+  /** 思考过程内容（用于支持 DeepSeek R1 等推理模型） */
   thinking?: string;
   isStreaming?: boolean;
 }
@@ -37,7 +40,7 @@ export interface SessionActions {
   addMessage: (message: SessionMessage) => void;
   addUserMessage: (content: string) => void;
   addAssistantMessage: (content: string) => void;
-  
+  /** 开始流式助手消息（创建空消息占位） */
   startStreamingMessage: () => string;
   appendToStreamingMessage: (id: string, contentDelta: string) => void;
   appendThinkingToStreamingMessage: (id: string, thinkingDelta: string) => void;
@@ -57,6 +60,8 @@ export interface SessionSlice extends SessionState {
   actions: SessionActions;
 }
 
+// ========== 配置状
+
 export interface ConfigState {
   config: RuntimeConfig | null;
 }
@@ -70,6 +75,8 @@ export interface ConfigSlice extends ConfigState {
   actions: ConfigActions;
 }
 
+// ========== 应用状
+
 export type InitializationStatus = 'pending' | 'loading' | 'ready' | 'error' | 'needsSetup';
 export type ActiveModal = 'none' | 'shortcuts' | 'settings' | 'confirmation' | 'update' | 'themeSelector';
 
@@ -78,7 +85,7 @@ export interface AppState {
   initializationError: string | null;
   activeModal: ActiveModal;
   awaitingSecondCtrlC: boolean;
-  
+  /** 是否展开所有思考块（全局开关） */
   showAllThinking: boolean;
   todos: TodoItem[];
 }
@@ -99,8 +106,11 @@ export interface AppSlice extends AppState {
   actions: AppActions;
 }
 
+// ========== 焦点状
+
 export type FocusId = 'input' | 'messages' | 'confirmation' | 'modal' | 'none' | 'theme-selector' | 'selector';
 
+/** FocusId 常量枚举 */
 export const FocusId = {
   MAIN_INPUT: 'input' as FocusId,
   MESSAGES: 'messages' as FocusId,
@@ -126,6 +136,8 @@ export interface FocusSlice extends FocusState {
   actions: FocusActions;
 }
 
+// ========== 命令状
+
 export interface CommandState {
   isProcessing: boolean;
   abortController: AbortController | null;
@@ -144,6 +156,8 @@ export interface CommandActions {
 export interface CommandSlice extends CommandState {
   actions: CommandActions;
 }
+
+// ========== 完
 
 // ========== Todo support (for progress tracking in tasks)
 export interface TodoItem {

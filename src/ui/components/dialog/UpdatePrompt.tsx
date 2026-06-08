@@ -1,6 +1,10 @@
 /**
+ * UpdatePrompt - 版本更新提示组件
  * 
  * 
+ * - Update now: 立即执行升级
+ * - Skip: 跳过本次提示
+ * - Skip until next version: 跳过当前版本的提示
  */
 
 import React, { useState } from 'react';
@@ -36,6 +40,8 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
 
   useInput(async (input, key) => {
     if (isUpdating) return;
+
+    // 上下键选
     if (key.upArrow) {
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : menuOptions.length - 1));
       return;
@@ -44,11 +50,15 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
       setSelectedIndex((prev) => (prev < menuOptions.length - 1 ? prev + 1 : 0));
       return;
     }
+
+    // 数字键快速选
     const numKey = parseInt(input, 10);
     if (numKey >= 1 && numKey <= menuOptions.length) {
       setSelectedIndex(numKey - 1);
       return;
     }
+
+    // Enter 确认选
     if (key.return) {
       const selected = menuOptions[selectedIndex];
       await handleSelection(selected.key);
@@ -62,8 +72,10 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
         const result = await performUpgrade();
         setUpdateResult(result.message);
         if (result.success) {
+          // 升级成功，自动重启应
           setTimeout(() => restartApp(), 1500);
         } else {
+          // 升级失败，继续进入应
           setTimeout(() => onComplete(), 2000);
         }
         break;
@@ -80,6 +92,8 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
         break;
     }
   };
+
+  // 显示升级结
   if (updateResult) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -87,6 +101,8 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
       </Box>
     );
   }
+
+  // 显示升级
   if (isUpdating) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -98,14 +114,14 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
 
   return (
     <Box flexDirection="column" padding={1}>
-      {}
+      {/* 标题 */}
       <Box marginBottom={1}>
         <Text bold color="cyan">
           🎉 New version available!
         </Text>
       </Box>
 
-      {}
+      {/* 版本信息 */}
       <Box marginBottom={1}>
         <Text>
           <Text color="gray">{versionInfo.currentVersion}</Text>
@@ -114,7 +130,7 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
         </Text>
       </Box>
 
-      {}
+      {/* 菜单选项 */}
       <Box flexDirection="column" marginBottom={1}>
         {menuOptions.map((option, index) => (
           <Box key={option.key}>
@@ -126,7 +142,7 @@ export const UpdatePrompt: React.FC<UpdatePromptProps> = ({
         ))}
       </Box>
 
-      {}
+      {/* 提示 */}
       <Box>
         <Text color="gray">
           Use ↑↓ to navigate, Enter to select, or press 1-3

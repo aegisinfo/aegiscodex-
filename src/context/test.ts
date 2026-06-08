@@ -22,8 +22,10 @@ function test(name: string, fn: () => void | Promise<void>) {
   return (async () => {
     try {
       await fn();
+      console.log(`✅ ${name}`);
       passed++;
     } catch (error) {
+      console.log(`❌ ${name}`);
       console.error('  ', error instanceof Error ? error.message : error);
       failed++;
     }
@@ -37,34 +39,40 @@ function assert(condition: boolean, message: string) {
 }
 
 async function runTests() {
-  await test('TokenCounter:  Token ', () => {
+  console.log('\n=== 上下文管理测试 ===\n');
+
+  // TokenCounter 测
+  await test('TokenCounter: 计算文本 Token 数量', () => {
     const tokens = TokenCounter.estimateTokens('Hello, world!');
-    assert(tokens > 0, 'Token  0');
+    assert(tokens > 0, 'Token 数量应该大于 0');
   });
 
-  await test('TokenCounter: ', () => {
-    const text = 'Hello  World ';
+  await test('TokenCounter: 中英文混合估算', () => {
+    const text = 'Hello 你好 World 世界';
     const tokens = TokenCounter.estimateTokens(text);
-    assert(tokens > 0, 'Token  0');
+    assert(tokens > 0, 'Token 数量应该大于 0');
   });
 
-  await test('TokenCounter:  Token', () => {
+  await test('TokenCounter: 计算消息 Token', () => {
     const messages: Message[] = [
       { role: 'user', content: 'Hello' },
       { role: 'assistant', content: 'Hi there!' },
     ];
     const tokens = TokenCounter.countTokens(messages, 'claude-sonnet-4-20250514');
-    assert(tokens > 0, 'Token  0');
+    assert(tokens > 0, 'Token 数量应该大于 0');
   });
 
-  await test('TokenCounter: shouldCompact ', () => {
+  await test('TokenCounter: shouldCompact 检测', () => {
     const messages: Message[] = [
       { role: 'user', content: 'Hello' },
     ];
     const shouldCompact = TokenCounter.shouldCompact(messages, 'claude-sonnet-4-20250514', 100, 0.8);
-    assert(!shouldCompact, '');
+    // 消息很短，不应该触发压
+    assert(!shouldCompact, '短消息不应该触发压缩');
   });
-  await test('MemoryStore: ', () => {
+
+  // MemoryStore 测
+  await test('MemoryStore: 初始化和设置上下文', () => {
     const store = new MemoryStore(100);
     const contextData: ContextData = {
       layers: {
@@ -77,11 +85,11 @@ async function runTests() {
       metadata: { totalTokens: 0, priority: 1, lastUpdated: Date.now() },
     };
     store.setContext(contextData);
-    assert(store.hasData(), '');
-    assert(store.getSessionId() === 'test-123', ' ID ');
+    assert(store.hasData(), '应该有数据');
+    assert(store.getSessionId() === 'test-123', '会话 ID 应该匹配');
   });
 
-  await test('MemoryStore: ', () => {
+  await test('MemoryStore: 添加消息', () => {
     const store = new MemoryStore(100);
     const contextData: ContextData = {
       layers: {
@@ -104,12 +112,12 @@ async function runTests() {
     store.addMessage(message);
 
     const messages = store.getMessages();
-    assert(messages.length === 1, ' 1 ');
-    assert(messages[0].content === 'Hello', '');
+    assert(messages.length === 1, '应该有 1 条消息');
+    assert(messages[0].content === 'Hello', '消息内容应该匹配');
   });
 
-  await test('MemoryStore: ', () => {
-    const store = new MemoryStore(5);
+  await test('MemoryStore: 内存限制', () => {
+    const store = new MemoryStore(5); // 最多 5 条消
     const contextData: ContextData = {
       layers: {
         system: { osType: 'test', osVersion: '1.0', shell: 'bash', nodeVersion: 'v18', cwd: '/' },
@@ -121,6 +129,8 @@ async function runTests() {
       metadata: { totalTokens: 0, priority: 1, lastUpdated: Date.now() },
     };
     store.setContext(contextData);
+
+    // 添加 10 条消
     for (let i = 0; i < 10; i++) {
       store.addMessage({
         id: `msg-${i}`,
@@ -131,51 +141,61 @@ async function runTests() {
     }
 
     const messages = store.getMessages();
-    assert(messages.length <= 5, '');
+    assert(messages.length <= 5, '消息数量应该被限制');
   });
-  await test('CacheStore: ', () => {
+
+  // CacheStore 测
+  await test('CacheStore: 设置和获取', () => {
     const cache = new CacheStore(10, 1000);
     cache.set('key1', 'value1');
     const value = cache.get<string>('key1');
-    assert(value === 'value1', '');
+    assert(value === 'value1', '值应该匹配');
   });
 
-  await test('CacheStore: TTL ', async () => {
+  await test('CacheStore: TTL 过期', async () => {
     const cache = new CacheStore(10, 50); // 50ms TTL
     cache.set('key1', 'value1');
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 100)); // 等
     const value = cache.get<string>('key1');
-    assert(value === undefined, ' undefined');
+    assert(value === undefined, '过期后应该返回 undefined');
   });
 
-  await test('CacheStore: LRU ', () => {
+  await test('CacheStore: LRU 淘汰', () => {
     const cache = new CacheStore(3, 10000);
     cache.set('key1', 'value1');
     cache.set('key2', 'value2');
     cache.set('key3', 'value3');
+    
+    // 访问 key2 和 key3 使它们成为最近使用（key1 最久未使
     cache.get('key2');
     cache.get('key3');
+    
+    // 添加新项，应该淘汰 key1（最久未使
     cache.set('key4', 'value4');
     
-    assert(cache.has('key2'), 'key2 ');
-    assert(cache.has('key3'), 'key3 ');
-    assert(cache.has('key4'), 'key4 ');
+    assert(cache.has('key2'), 'key2 应该存在');
+    assert(cache.has('key3'), 'key3 应该存在');
+    assert(cache.has('key4'), 'key4 应该存在');
   });
+
+  // 路径工具函数测
   await test('pathUtils: escapeProjectPath', () => {
     const escaped = escapeProjectPath('/Users/foo/project');
-    assert(!escaped.includes('/'), '');
-    assert(escaped.includes('Users'), ' Users');
+    assert(!escaped.includes('/'), '不应该包含斜杠');
+    assert(escaped.includes('Users'), '应该包含 Users');
   });
 
   await test('pathUtils: getProjectStoragePath', () => {
     const storagePath = getProjectStoragePath('/Users/foo/project');
-    assert(storagePath.includes('.aegis'), ' .aegis');
-    assert(storagePath.includes('projects'), ' projects');
+    assert(storagePath.includes('.aegis'), '应该包含 .aegis');
+    assert(storagePath.includes('projects'), '应该包含 projects');
   });
+
+  // JSONLStore 测
   const testDir = path.join(os.tmpdir(), 'aegis-test-' + Date.now());
   const testFile = path.join(testDir, 'test.jsonl');
 
-  await test('JSONLStore: ', async () => {
+  await test('JSONLStore: 追加和读取', async () => {
     const store = new JSONLStore(testFile);
     
     const entry: JSONLEntry = {
@@ -192,11 +212,11 @@ async function runTests() {
     await store.append(entry);
     const entries = await store.readAll();
     
-    assert(entries.length === 1, ' 1 ');
-    assert(entries[0].uuid === 'test-uuid', 'UUID ');
+    assert(entries.length === 1, '应该有 1 条记录');
+    assert(entries[0].uuid === 'test-uuid', 'UUID 应该匹配');
   });
 
-  await test('JSONLStore: ', async () => {
+  await test('JSONLStore: 批量追加', async () => {
     const store = new JSONLStore(testFile);
     
     const entries: JSONLEntry[] = [
@@ -224,28 +244,35 @@ async function runTests() {
 
     await store.appendBatch(entries);
     const all = await store.readAll();
-    assert(all.length === 3, ' 3 ');
+    
+    // 之前有 1 条，现在加 2 
+    assert(all.length === 3, '应该有 3 条记录');
   });
-  await test('FileAnalyzer: ', () => {
+
+  // FileAnalyzer 测
+  await test('FileAnalyzer: 分析消息中的文件', () => {
     const messages: Message[] = [
-      { role: 'user', content: ' src/index.ts ' },
-      { role: 'assistant', content: '，', tool_calls: [
+      { role: 'user', content: '请帮我看看 src/index.ts 文件' },
+      { role: 'assistant', content: '好的，让我读取这个文件', tool_calls: [
         { id: 'tc1', type: 'function', function: { name: 'Read', arguments: JSON.stringify({ file_path: 'src/index.ts' }) } }
       ]},
     ];
 
     const fileRefs = FileAnalyzer.analyzeFiles(messages);
-    assert(Array.isArray(fileRefs), '');
+    // 文件可能不存在，所以这里只检查逻辑是否正确执
+    assert(Array.isArray(fileRefs), '应该返回数组');
   });
+
+  // CompactionService 测
   await test('CompactionService: shouldCompact', () => {
     const messages: Message[] = [
       { role: 'user', content: 'Hello' },
     ];
     const should = CompactionService.shouldCompact(messages, 'claude-sonnet-4-20250514', 100000);
-    assert(!should, '');
+    assert(!should, '短消息不应该触发压缩');
   });
 
-  await test('CompactionService: ', async () => {
+  await test('CompactionService: 压缩降级', async () => {
     const messages: Message[] = [
       { role: 'user', content: 'Hello' },
       { role: 'assistant', content: 'Hi there!' },
@@ -256,15 +283,23 @@ async function runTests() {
       trigger: 'manual',
       modelName: 'claude-sonnet-4-20250514',
       maxContextTokens: 100000,
+      // 不提供 chatService，会使用降级策
     });
 
-    assert(result.compactedMessages.length > 0, '');
-    assert(result.preTokens > 0, ' Token ');
+    assert(result.compactedMessages.length > 0, '应该有压缩后的消息');
+    assert(result.preTokens > 0, '应该有压缩前的 Token 数');
   });
+
+  // 清理测试文
   try {
     await fs.rm(testDir, { recursive: true });
   } catch {
+    // 忽略清理错
   }
+
+  // 输出结
+  console.log('\n---');
+  console.log(`测试完成: ${passed} 通过, ${failed} 失败`);
 
   if (failed > 0) {
     process.exit(1);

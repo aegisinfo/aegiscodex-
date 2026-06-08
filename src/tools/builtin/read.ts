@@ -1,4 +1,5 @@
 /**
+ * Read 工具 - 文件读取
  */
 
 import fs from 'fs/promises';
@@ -13,10 +14,11 @@ import { ToolKind, ToolErrorType } from '../types.js';
 const DEFAULT_LINE_LIMIT = 2000;
 
 /**
+ * Read 工具 Schema
  */
 const ReadSchema = z.object({
   file_path: z.string()
-    .min(1, '')
+    .min(1, '文件路径不能为空')
     .describe('The absolute path to the file to read'),
   
   offset: z.number()
@@ -34,6 +36,7 @@ const ReadSchema = z.object({
 });
 
 /**
+ * Read 工具
  */
 export const readTool = createTool({
   name: 'Read',
@@ -68,7 +71,7 @@ If the User provides a path to a file assume that path is valid.`,
     ],
   },
 
-  category: '',
+  category: '文件操作',
   tags: ['file', 'read', 'io'],
 
   async execute(params, context) {
@@ -76,51 +79,66 @@ If the User provides a path to a file assume that path is valid.`,
     const effectiveLimit = limit ?? DEFAULT_LINE_LIMIT;
 
     try {
+      // 检查文件是否存
       try {
         await fs.access(file_path);
       } catch {
         return {
           success: false,
           llmContent: `File not found: ${file_path}`,
-          displayContent: `❌ : ${file_path}`,
+          displayContent: `❌ 文件不存在: ${file_path}`,
           error: {
             type: ToolErrorType.EXECUTION_ERROR,
             message: 'File not found',
           },
         };
       }
+
+      // 获取文件信
       const stat = await fs.stat(file_path);
+      
+      // 检查是否为目
       if (stat.isDirectory()) {
         return {
           success: false,
           llmContent: `Path is a directory, not a file: ${file_path}`,
-          displayContent: `❌ : ${file_path}`,
+          displayContent: `❌ 路径是目录而非文件: ${file_path}`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'Path is a directory',
           },
         };
       }
+
+      // 读取文件内
       const content = await fs.readFile(file_path, 'utf-8');
       const lines = content.split('\n');
       const totalLines = lines.length;
+
+      // 应用 offset 
       const selectedLines = lines.slice(offset, offset + effectiveLimit);
+      
+      // 格式化输出（带行
       const formattedContent = selectedLines
         .map((line, i) => {
           const lineNum = (offset + i + 1).toString().padStart(6, ' ');
           return `${lineNum}|${line}`;
         })
         .join('\n');
+
+      // 计算是否有更多内
       const hasMore = offset + effectiveLimit < totalLines;
       const fileName = path.basename(file_path);
-      let summary = `✅ : ${fileName}`;
+
+      // 构建摘要信
+      let summary = `✅ 读取文件: ${fileName}`;
       if (offset > 0 || limit) {
-        summary += ` ( ${offset + 1}-${Math.min(offset + effectiveLimit, totalLines)}/${totalLines})`;
+        summary += ` (行 ${offset + 1}-${Math.min(offset + effectiveLimit, totalLines)}/${totalLines})`;
       } else {
-        summary += ` (${totalLines} )`;
+        summary += ` (${totalLines} 行)`;
       }
       if (hasMore) {
-        summary += ` [...]`;
+        summary += ` [还有更多...]`;
       }
 
       return {
@@ -136,11 +154,11 @@ If the User provides a path to a file assume that path is valid.`,
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '';
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
       return {
         success: false,
         llmContent: `Failed to read file: ${errorMessage}`,
-        displayContent: `❌ : ${errorMessage}`,
+        displayContent: `❌ 读取文件失败: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

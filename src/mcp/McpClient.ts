@@ -1,4 +1,5 @@
 /**
+ * MCP 客户端
  * 
  */
 
@@ -30,6 +31,8 @@ function classifyError(error: unknown): ClassifiedError {
   }
 
   const msg = error.message.toLowerCase();
+
+  // 永久性配置错误（不重
   const permanentErrors = [
     'command not found',
     'no such file',
@@ -41,9 +44,13 @@ function classifyError(error: unknown): ClassifiedError {
   if (permanentErrors.some(p => msg.includes(p))) {
     return { type: ErrorType.CONFIG_ERROR, isRetryable: false, originalError: error };
   }
+
+  // 认证错误（需要用户介
   if (msg.includes('unauthorized') || msg.includes('401') || msg.includes('authentication failed')) {
     return { type: ErrorType.AUTH_ERROR, isRetryable: false, originalError: error };
   }
+
+  // 临时网络错误（可重
   const temporaryErrors = [
     'timeout',
     'connection refused',
@@ -57,20 +64,29 @@ function classifyError(error: unknown): ClassifiedError {
   if (temporaryErrors.some(t => msg.includes(t))) {
     return { type: ErrorType.NETWORK_TEMPORARY, isRetryable: true, originalError: error };
   }
+
+  // 默认允许重
   return { type: ErrorType.UNKNOWN, isRetryable: true, originalError: error };
 }
 
 /**
+ * MCP 客户端实现
  */
 export class McpClient extends EventEmitter implements McpClientInterface {
   private status: McpConnectionStatus = McpConnectionStatus.DISCONNECTED;
   private sdkClient: any = null;  // @modelcontextprotocol/sdk Client
   private tools = new Map<string, McpToolDefinition>();
   private serverInfo: { name: string; version: string } | null = null;
+
+  // 重连配
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isManualDisconnect = false;
+
+  // 健康监
   private healthMonitor: HealthMonitor | null = null;
+
+  // 服务器名称（用于日
   public readonly serverName: string;
   
   // Debug logger
@@ -84,10 +100,13 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     super();
     this.serverName = serverName || 'default';
     this.debug = createDebugLogger(`McpClient:${this.serverName}`);
+
+    // 初始化健康监
     if (healthCheckConfig?.enabled) {
       this.healthMonitor = new HealthMonitor(this, healthCheckConfig);
       this.healthMonitor.on('unhealthy', (failures: number, error: Error) => {
         this.emit('unhealthy', failures, error);
+        // 触发重
         if (this.status === McpConnectionStatus.CONNECTED) {
           this.handleUnexpectedClose();
         }
@@ -128,7 +147,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     initialDelay = DEFAULT_CONNECTION_CONFIG.initialDelay
   ): Promise<void> {
     if (this.status !== McpConnectionStatus.DISCONNECTED) {
-      throw new Error('');
+      throw new Error('客户端已连接或正在连接中');
     }
 
     let lastError: Error | null = null;
@@ -143,23 +162,27 @@ export class McpClient extends EventEmitter implements McpClientInterface {
         const classified = classifyError(error);
 
         this.debug.warn(
-          `（${attempt}/${maxRetries}）:`,
+          `连接失败（${attempt}/${maxRetries}）:`,
           classified.type,
           (error as Error).message
         );
+
+        // 永久性错误不重
         if (!classified.isRetryable) {
-          this.debug.error(`，`);
+          this.debug.error(`检测到永久性错误，放弃重试`);
           throw error;
         }
+
+        // 指数退避重
         if (attempt < maxRetries) {
           const delay = initialDelay * Math.pow(2, attempt - 1);
-          this.debug.log(`${delay}ms ...`);
+          this.debug.log(`${delay}ms 后重试...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
-    throw lastError || new Error('');
+    throw lastError || new Error('连接失败');
   }
 
   /**
@@ -168,32 +191,48 @@ export class McpClient extends EventEmitter implements McpClientInterface {
   private async doConnect(): Promise<void> {
     try {
       this.setStatus(McpConnectionStatus.CONNECTING);
+
+      // 动态导
       const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+
+      // 创建 SDK 客户
       this.sdkClient = new Client(
         { name: 'aegis', version: '1.0.0' },
         { capabilities: { roots: { listChanged: true }, sampling: {} } }
       );
+
+      // 监听关闭事
       this.sdkClient.onclose = () => this.handleUnexpectedClose();
+
+      // 创建传输
       const transport = await this.createTransport();
+
+      // 连
       await this.sdkClient.connect(transport);
+
+      // 获取服务器信
       const serverVersion = this.sdkClient.getServerVersion?.();
       this.serverInfo = {
         name: serverVersion?.name || 'Unknown',
         version: serverVersion?.version || '0.0.0',
       };
+
+      // 加载工具列
       await this.loadTools();
 
       this.setStatus(McpConnectionStatus.CONNECTED);
       this.emit('connected', this.serverInfo);
+
+      // 启动健康监
       if (this.healthMonitor) {
         this.healthMonitor.start();
       }
 
       this.debug.log(
-        `:`,
+        `已连接到服务器:`,
         this.serverInfo.name,
         `v${this.serverInfo.version}`,
-        `(${this.tools.size} )`
+        `(${this.tools.size} 个工具)`
       );
     } catch (error) {
       this.setStatus(McpConnectionStatus.ERROR);
@@ -210,7 +249,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
 
     if (type === 'stdio') {
       if (!command) {
-        throw new Error('stdio  command ');
+        throw new Error('stdio 传输需要 command 参数');
       }
 
       const { StdioClientTransport } = await import(
@@ -240,7 +279,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
 
     if (type === 'sse') {
       if (!url) {
-        throw new Error('sse  url ');
+        throw new Error('sse 传输需要 url 参数');
       }
 
       const { SSEClientTransport } = await import(
@@ -254,8 +293,10 @@ export class McpClient extends EventEmitter implements McpClientInterface {
 
     if (type === 'http') {
       if (!url) {
-        throw new Error('http  url ');
+        throw new Error('http 传输需要 url 参数');
       }
+
+      // HTTP Streamable 传输（如果 SDK 支
       try {
         const { StreamableHTTPClientTransport } = await import(
           '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -264,6 +305,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
           requestInit: { headers: headers || {} },
         });
       } catch {
+        // 回退
         const { SSEClientTransport } = await import(
           '@modelcontextprotocol/sdk/client/sse.js'
         );
@@ -273,7 +315,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
       }
     }
 
-    throw new Error(`: ${type}`);
+    throw new Error(`不支持的传输类型: ${type}`);
   }
 
   /**
@@ -281,7 +323,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
    */
   private async loadTools(): Promise<void> {
     if (!this.sdkClient) {
-      throw new Error('');
+      throw new Error('客户端未连接');
     }
 
     try {
@@ -303,7 +345,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
         this.emit('toolsUpdated', this.availableTools);
       }
     } catch (error) {
-      this.debug.error(`:`, error);
+      this.debug.error(`加载工具列表失败:`, error);
       throw error;
     }
   }
@@ -323,11 +365,11 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     arguments_: Record<string, any> = {}
   ): Promise<McpToolCallResponse> {
     if (!this.sdkClient) {
-      throw new Error('');
+      throw new Error('客户端未连接到服务器');
     }
 
     if (!this.tools.has(name)) {
-      throw new Error(` "${name}" `);
+      throw new Error(`工具 "${name}" 不存在`);
     }
 
     try {
@@ -338,7 +380,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
 
       return result as McpToolCallResponse;
     } catch (error) {
-      this.debug.error(` "${name}" :`, error);
+      this.debug.error(`调用工具 "${name}" 失败:`, error);
       throw error;
     }
   }
@@ -348,18 +390,24 @@ export class McpClient extends EventEmitter implements McpClientInterface {
    */
   async disconnect(): Promise<void> {
     this.isManualDisconnect = true;
+
+    // 停止健康监
     if (this.healthMonitor) {
       this.healthMonitor.stop();
     }
+
+    // 清除重连计时
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+
+    // 关闭 SDK 客户
     if (this.sdkClient) {
       try {
         await this.sdkClient.close();
       } catch (error) {
-        this.debug.warn(`:`, error);
+        this.debug.warn(`关闭连接时出错:`, error);
       }
       this.sdkClient = null;
     }
@@ -368,7 +416,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     this.setStatus(McpConnectionStatus.DISCONNECTED);
     this.emit('disconnected');
 
-    this.debug.log(``);
+    this.debug.log(`已断开连接`);
   }
 
   /**
@@ -380,9 +428,9 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     }
 
     if (this.status === McpConnectionStatus.CONNECTED) {
-      this.debug.warn(`，...`);
+      this.debug.warn(`检测到意外断连，准备重连...`);
       this.setStatus(McpConnectionStatus.ERROR);
-      this.emit('error', new Error('MCP'));
+      this.emit('error', new Error('MCP服务器连接意外关闭'));
       this.scheduleReconnect();
     }
   }
@@ -397,10 +445,12 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     }
 
     if (this.reconnectAttempts >= DEFAULT_CONNECTION_CONFIG.maxReconnectAttempts) {
-      this.debug.error(`，`);
+      this.debug.error(`达到最大重连次数，放弃重连`);
       this.emit('reconnectFailed');
       return;
     }
+
+    // 指数退避：1s, 2s, 4s, 8s, 16s（最
     const delay = Math.min(
       1000 * Math.pow(2, this.reconnectAttempts),
       DEFAULT_CONNECTION_CONFIG.maxReconnectDelay
@@ -408,13 +458,14 @@ export class McpClient extends EventEmitter implements McpClientInterface {
     this.reconnectAttempts++;
 
     this.debug.log(
-      ` ${delay}ms  ${this.reconnectAttempts} ...`
+      `将在 ${delay}ms 后进行第 ${this.reconnectAttempts} 次重连...`
     );
 
     this.emit('reconnecting', this.reconnectAttempts);
 
     this.reconnectTimer = setTimeout(async () => {
       try {
+        // 清理旧连
         if (this.sdkClient) {
           await this.sdkClient.close().catch(() => {});
           this.sdkClient = null;
@@ -423,7 +474,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
         this.setStatus(McpConnectionStatus.DISCONNECTED);
         await this.doConnect();
 
-        this.debug.log(``);
+        this.debug.log(`重连成功`);
         this.reconnectAttempts = 0;
         this.emit('reconnected');
       } catch (error) {
@@ -431,7 +482,7 @@ export class McpClient extends EventEmitter implements McpClientInterface {
         if (classified.isRetryable) {
           this.scheduleReconnect();
         } else {
-          this.debug.error(`，`);
+          this.debug.error(`检测到永久性错误，停止重连`);
           this.emit('reconnectFailed');
         }
       }

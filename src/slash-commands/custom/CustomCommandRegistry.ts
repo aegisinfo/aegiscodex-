@@ -1,4 +1,5 @@
 /**
+ * CustomCommandRegistry - 自定义命令注册中心
  * 
  * 
  */
@@ -39,7 +40,11 @@ export class CustomCommandRegistry {
    */
   async initialize(workspaceRoot: string): Promise<CustomCommandDiscoveryResult> {
     const result = await this.loader.discover(workspaceRoot);
+
+    // 清空现有命
     this.commands.clear();
+
+    // 按顺序注册（后面的覆盖前面的同名命
     for (const cmd of result.commands) {
       const key = this.getCommandKey(cmd.name, cmd.namespace);
       this.commands.set(key, cmd);
@@ -60,11 +65,14 @@ export class CustomCommandRegistry {
    * 
    */
   getCommand(name: string, namespace?: string): CustomCommand | undefined {
+    // 先尝试带命名空
     if (namespace) {
       const key = this.getCommandKey(name, namespace);
       const cmd = this.commands.get(key);
       if (cmd) return cmd;
     }
+
+    // 再尝试不带命名空
     return this.commands.get(name);
   }
 
@@ -79,6 +87,8 @@ export class CustomCommandRegistry {
    * 
    * 
    * 
+   * - 有 description
+   * - 没有设置 disableModelInvocation: true
    */
   getModelInvocableCommands(): CustomCommand[] {
     return this.getAllCommands().filter(

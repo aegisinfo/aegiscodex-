@@ -1,20 +1,21 @@
 /**
+ * useCommandHistory - 命令历史管理
  */
 
 import { useState, useCallback } from 'react';
 
 interface CommandHistoryResult {
-  
+  /** 添加命令到历史 */
   addToHistory: (command: string) => void;
-  
+  /** 获取上一条命令 */
   getPreviousCommand: () => string | null;
-  
+  /** 获取下一条命令 */
   getNextCommand: () => string | null;
-  
+  /** 重置历史索引 */
   resetIndex: () => void;
-  
+  /** 历史记录 */
   history: string[];
-  
+  /** 当前索引 */
   historyIndex: number;
 }
 
@@ -29,9 +30,11 @@ export const useCommandHistory = (maxHistory = 100): CommandHistoryResult => {
   const addToHistory = useCallback((command: string) => {
     if (command.trim()) {
       setHistory(prev => {
+        // 避免重复添加相同命
         if (prev[prev.length - 1] === command) {
           return prev;
         }
+        // 限制历史记录数
         const newHistory = [...prev, command];
         if (newHistory.length > maxHistory) {
           newHistory.shift();
@@ -52,6 +55,8 @@ export const useCommandHistory = (maxHistory = 100): CommandHistoryResult => {
       setHistoryIndex(newIndex);
       return history[history.length - 1 - newIndex];
     }
+    
+    // 已经到达最早的命
     return history[0];
   }, [history, historyIndex]);
 
@@ -61,6 +66,8 @@ export const useCommandHistory = (maxHistory = 100): CommandHistoryResult => {
       setHistoryIndex(newIndex);
       return history[history.length - 1 - newIndex];
     }
+    
+    // 返回到最新（清空输
     setHistoryIndex(-1);
     return '';
   }, [history, historyIndex]);
