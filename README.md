@@ -35,8 +35,8 @@ A terminal-based AI coding assistant with multi-model support, semantic memory, 
 ```bash
 git clone https://github.com/aegisinfo/aegiscode.git
 cd aegiscode
-bun install
-bun run build
+npm install
+npm run build
 ```
 
 > 💡 Using Node.js? Replace `bun` with `npm` — e.g. `npm install`, `npm run build`.
