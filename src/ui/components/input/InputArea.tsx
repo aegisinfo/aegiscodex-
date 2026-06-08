@@ -10,13 +10,11 @@ import { Box, Text, useInput } from 'ink';
 import { RubiksSpinner } from '../common/RubiksSpinner.js';
 import Spinner from 'ink-spinner';
 import { CustomTextInput } from './CustomTextInput.js';
-import { CommandSuggestions } from './CommandSuggestions.js';
+
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import { getCommandCompletions } from '../../../slash-commands/index.js';
 import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import type { CommandSuggestion } from '../../../slash-commands/types.js';
 
 interface InputAreaProps {
   /** 提交回调 */
@@ -115,9 +113,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       inputRef.current = { value: input, cursorPosition };
     }, [input, cursorPosition]);
     
-    // 补全状
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [selectedIndex, setSelectedIndex] = useState(0);
+
     
     // 设置输入
     const handleChange = useCallback((newValue: string) => {
@@ -140,63 +136,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       inputRef.current = { value: '', cursorPosition: 0 };
     }, []);
     
-    // 计算命令建
-    const suggestions = useMemo<CommandSuggestion[]>(() => {
-      // 只有输
-      if (!input.startsWith('/')) {
-        return [];
-      }
-      
-      // 如果输入中有空格，说明已经是完整命令+参数
-      if (input.includes(' ')) {
-        return [];
-      }
-      
-      return getCommandCompletions(input);
-    }, [input]);
-    
-    // 当建议变化时，重置选中索
-    useEffect(() => {
-      setSelectedIndex(0);
-      setShowSuggestions(suggestions.length > 0);
-    }, [suggestions]);
-    
-    // 处理 Tab 补
-    const handleTabComplete = useCallback(() => {
-      if (suggestions.length > 0 && showSuggestions) {
-        const selected = suggestions[selectedIndex];
-        if (selected) {
-          // 补全命令（保留可能的空格给参
-          const newValue = selected.command + ' ';
-          handleChange(newValue);
-          handleChangeCursorPosition(newValue.length);
-          setShowSuggestions(false);
-        }
-      }
-    }, [suggestions, selectedIndex, showSuggestions, handleChange, handleChangeCursorPosition]);
-    
-    // 处理选择上一个建
-    const handleSelectPrev = useCallback(() => {
-      if (showSuggestions && suggestions.length > 0) {
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-        return true;
-      }
-      return false;
-    }, [showSuggestions, suggestions.length]);
-    
-    // 处理选择下一个建
-    const handleSelectNext = useCallback(() => {
-      if (showSuggestions && suggestions.length > 0) {
-        setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
-        return true;
-      }
-      return false;
-    }, [showSuggestions, suggestions.length]);
-    
-    // 处理关闭建
-    const handleCloseSuggestions = useCallback(() => {
-      setShowSuggestions(false);
-    }, []);
+
 
     // 大段文本粘贴处
     const handlePaste = useCallback((text: string) => {
@@ -213,57 +153,38 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     // 提交处
     const handleSubmit = useCallback(
       (value: string) => {
-        // 如果有建议显示且按回车，先补
-        if (showSuggestions && suggestions.length > 0) {
-          handleTabComplete();
-          return;
-        }
-        
         if (value.trim() && onSubmitRef.current) {
           addToHistory(value); // 添加到内部历
           onSubmitRef.current(value);
           clearInput();
-          setShowSuggestions(false);
         }
       },
-      [showSuggestions, suggestions.length, handleTabComplete, clearInput, addToHistory]
+      [clearInput, addToHistory]
     );
     
     // 处理上下箭
     const handleArrowUpInternal = useCallback(() => {
-      // 如果有建议显示，用于选择建
-      if (handleSelectPrev()) {
-        return;
-      }
-      // 否则用于浏览历史（使用内部管理的历
       const prevCmd = getPreviousCommand();
       if (prevCmd !== null && prevCmd !== undefined) {
         handleChange(prevCmd);
         handleChangeCursorPosition(prevCmd.length);
       }
-    }, [handleSelectPrev, handleChange, handleChangeCursorPosition, getPreviousCommand]);
+    }, [handleChange, handleChangeCursorPosition, getPreviousCommand]);
     
     const handleArrowDownInternal = useCallback(() => {
-      // 如果有建议显示，用于选择建
-      if (handleSelectNext()) {
-        return;
-      }
-      // 否则用于浏览历史（使用内部管理的历
       const nextCmd = getNextCommand();
       if (nextCmd !== null && nextCmd !== undefined) {
         handleChange(nextCmd);
         handleChangeCursorPosition(nextCmd.length);
       }
-    }, [handleSelectNext, handleChange, handleChangeCursorPosition, getNextCommand]);
+    }, [handleChange, handleChangeCursorPosition, getNextCommand]);
     
-    // 处理 Tab 和 Escape 
+    // 处理 Tab 
     useInput((char, key) => {
       // Imperative focus check — avoids stale React closure
       if (focusManager.getCurrentFocus() !== FocusId.MAIN_INPUT) return;
       if (key.tab) {
-        handleTabComplete();
-      } else if (key.escape) {
-        handleCloseSuggestions();
+        // Tab - 不做任何事
       }
     });
 
@@ -279,13 +200,6 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <Box flexDirection="column">
-        {/* 命令补全建议 */}
-        <CommandSuggestions
-          suggestions={suggestions}
-          selectedIndex={selectedIndex}
-          visible={showSuggestions}
-        />
-        
         {/* 思考/生成状态指示器 - 紧贴输入框上方 */}
         {thinkingLabel && (
           <Box paddingX={1} marginBottom={0}>

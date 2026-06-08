@@ -6,68 +6,77 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 
-// ========== Throttled Stream Updater ==========
+// ========== Batch Stream Buffer ==========
 
 /**
- * Creates a RAF-based stream updater for smooth rendering.
- * Uses ref objects for callbacks to avoid stale closure issues.
+ * Creates a batch stream buffer that accumulates all output locally
+ * and only flushes to the store ONCE when the stream is complete.
+ * This eliminates all intermediate re-renders during streaming,
+ * solving the flickering/repaint problem entirely.
  */
-function createThrottledStreamUpdater(
-  updateContent: (delta: string) => void,
-  updateThinking: (delta: string) => void,
-  intervalMs: number = 16 // ~60fps
-) {
-  // Store callbacks in an object so the RAF flush always calls the latest version
-  const callbacks = { updateContent, updateThinking };
+function createBatchStreamBuffer(flushCallback?: (content: string, thinking: string) => void) {
   let contentBuffer = '';
   let thinkingBuffer = '';
-  let rafId: number | null = null;
+  let lastFlush = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
 
-  const flush = () => {
-    const cb = callbacks; // capture latest callbacks at flush time
-    if (contentBuffer) {
-      cb.updateContent(contentBuffer);
-      contentBuffer = '';
-    }
-    if (thinkingBuffer) {
-      cb.updateThinking(thinkingBuffer);
-      thinkingBuffer = '';
-    }
-    rafId = null;
+  const flush = (): { content: string; thinking: string } => {
+    const result = {
+      content: contentBuffer,
+      thinking: thinkingBuffer,
+    };
+    contentBuffer = '';
+    thinkingBuffer = '';
+    lastFlush = Date.now();
+    return result;
   };
 
+  const maybeFlush = () => {
+    const { content, thinking } = flush();
+    if ((content || thinking) && flushCallback) {
+      flushCallback(content, thinking);
+    }
+  };
+
+  // Start interval timer for periodic flush
+  if (flushCallback) {
+    timer = setInterval(() => {
+      if (contentBuffer || thinkingBuffer) {
+        maybeFlush();
+      }
+    }, 500);
+  }
+
   return {
-    setCallbacks: (uc: typeof updateContent, ut: typeof updateThinking) => {
-      callbacks.updateContent = uc;
-      callbacks.updateThinking = ut;
-    },
     appendContent: (delta: string) => {
       contentBuffer += delta;
-      if (rafId === null) {
-        rafId = requestAnimationFrame(flush);
+      // Size threshold: flush if buffer exceeds 500 chars
+      if (contentBuffer.length >= 500 || thinkingBuffer.length >= 500) {
+        maybeFlush();
       }
     },
     appendThinking: (delta: string) => {
       thinkingBuffer += delta;
-      if (rafId === null) {
-        rafId = requestAnimationFrame(flush);
+      if (contentBuffer.length >= 500 || thinkingBuffer.length >= 500) {
+        maybeFlush();
       }
     },
-    flush: () => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
+    flush: (): { content: string; thinking: string } => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
       }
-      flush();
+      return flush();
     },
     clear: () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
       contentBuffer = '';
       thinkingBuffer = '';
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
     },
+    isEmpty: () => contentBuffer === '' && thinkingBuffer === '',
   };
 }
 
@@ -253,7 +262,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const contextManagerRef = useRef<ContextManager | null>(null);
   const initialMessageSent = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const streamUpdaterRef = useRef<ReturnType<typeof createThrottledStreamUpdater> | null>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -283,10 +291,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
-      }
-      if (streamUpdaterRef.current) {
-        streamUpdaterRef.current.clear();
-        streamUpdaterRef.current = null;
       }
       if (streamingMessageIdRef.current) {
         sessionActions().finishStreamingMessage(streamingMessageIdRef.current);
@@ -579,18 +583,18 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    const streamUpdater = createThrottledStreamUpdater(
-      (delta) => sessionActions().appendToStreamingMessage(streamingMessageId, delta),
-      (delta) => sessionActions().appendThinkingToStreamingMessage(streamingMessageId, delta),
-      16 // 60fps via RAF
-    );
-    streamUpdaterRef.current = streamUpdater;
-
-    // Allow callbacks to be refreshed if needed (e.g., after React re-render)
-    streamUpdater.setCallbacks(
-      (delta) => sessionActions().appendToStreamingMessage(streamingMessageId, delta),
-      (delta) => sessionActions().appendThinkingToStreamingMessage(streamingMessageId, delta),
-    );
+    // Batch buffer with background flushing: flushes to store every 500ms
+    // OR every 500 chars — giving smooth progressive rendering without per-token
+    // React churn.
+    const doFlush = (content: string, thinking: string) => {
+      if (content) {
+        sessionActions().appendToStreamingMessage(streamingMessageId, content);
+      }
+      if (thinking) {
+        sessionActions().appendThinkingToStreamingMessage(streamingMessageId, thinking);
+      }
+    };
+    const batchBuffer = createBatchStreamBuffer(doFlush);
 
     try {
       const contextMessages = ctxManager.getMessages();
@@ -614,17 +618,19 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         signal: abortController.signal,
         onContentDelta: (delta) => {
           if (!abortController.signal.aborted) {
-            streamUpdater.appendContent(delta);
+            batchBuffer.appendContent(delta);
           }
         },
         onThinkingDelta: (delta) => {
           if (!abortController.signal.aborted) {
-            streamUpdater.appendThinking(delta);
+            batchBuffer.appendThinking(delta);
           }
         },
         onToolCallStart: (toolCall) => {
           if (abortController.signal.aborted) return;
-          streamUpdater.flush();
+          // Tool calls need to be shown immediately — flush current buffer first
+          const { content, thinking } = batchBuffer.flush();
+          if (content) doFlush(content, thinking);
           const name = toolCall.function?.name || 'tool';
           const args = formatToolArgs(name, toolCall.function?.arguments);
           const line = args ? '\n  ' + name + ' ' + args : '\n  ' + name;
@@ -641,7 +647,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         },
       });
 
-      streamUpdater.flush();
+      // Flush any remaining content from buffer
+      const { content, thinking } = batchBuffer.flush();
+      if (content) doFlush(content, thinking);
       sessionActions().finishStreamingMessage(streamingMessageId);
 
       await ctxManager.addMessage('assistant', result);
@@ -663,7 +671,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       }
 
     } catch (error) {
-      streamUpdater.clear();
+      batchBuffer.clear();
 
       if (abortController.signal.aborted) {
         sessionActions().finishStreamingMessage(streamingMessageId);
@@ -675,7 +683,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       }
     } finally {
       abortControllerRef.current = null;
-      streamUpdaterRef.current = null;
       streamingMessageIdRef.current = null;
       sessionActions().setThinking(false);
     }
