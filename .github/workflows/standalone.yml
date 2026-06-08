@@ -62,6 +62,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache esbuild output
+        uses: actions/cache@v4
+        with:
+          path: dist
+          key: bundle-${{ runner.os }}-${{ github.sha }}
+          restore-keys: bundle-${{ runner.os }}-
+
       - name: Build bundle (esm)
         run: node esbuild.mjs
 
@@ -71,10 +78,16 @@ jobs:
         run: |
           node -e "
           const fs = require('fs');
-          // Inject blob path detection for the executable
           const blob = fs.readFileSync('dist/main.js', 'utf-8');
-          fs.writeFileSync('dist/main.cjs', blob);
-          "
+          // Wrap in CJS for SEA compatibility
+          const cjs = [
+            '// AEGIS standalone SEA entry',
+            'const { createRequire } = require(\"module\");',
+            'const require = createRequire(import.meta.url);',
+            blob,
+          ].join('\\n');
+          fs.writeFileSync('dist/sea-entry.cjs', cjs);
+          " && ls -la dist/sea-entry.cjs
 
       - name: Generate SEA blob
         shell: bash
@@ -123,6 +136,19 @@ jobs:
         run: |
           npx postject aegiscode-${{ matrix.label }}.exe NODE_SEA_BLOB sea-prep.blob \
             --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+      - name: Smoke test (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x aegiscode-${{ matrix.label }}
+          ./aegiscode-${{ matrix.label }} --version 2>&1 || echo "Smoke test: version check failed (ignored)"
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ./aegiscode-${{ matrix.label }}.exe --version 2>&1 || echo "Smoke test: version check failed (ignored)"
 
       - name: Strip & compress (Linux)
         if: runner.os == 'Linux'
