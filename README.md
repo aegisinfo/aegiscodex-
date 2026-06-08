@@ -85,6 +85,10 @@ Start a conversation. Commands are prefixed with `/`:
 |---------|-------------|
 | `/model <id>` | Switch model mid-session |
 | `/memory` | View or edit semantic memory |
+| `/memory activate <token>` | Activate memory with a subscription token |
+| `/memory load <url\|path>` | Load memory from cloud or local file |
+| `/memory clear` | Wipe all stored memories |
+| `/memory stats` | Show memory usage statistics |
 | `/council` | Toggle council voting mode |
 | `/sync` | Force cloud sync |
 | `/help` | Show all commands |
@@ -108,6 +112,38 @@ aegis --session mysession # name your session
 aegis --yolo              # auto-approve all tool calls (use with care)
 aegis --approve           # ask before each tool call (default)
 ```
+
+---
+
+## Semantic Memory (Cross-Session)
+
+Semantic memory persists conversation context across sessions — the assistant remembers past discussions and learns from them over time.
+
+### Activation methods
+
+**Method 1 — Online (Stripe subscription)**
+1. Purchase a subscription at the payment link provided to you
+2. You'll receive an activation token
+3. Run within a session:
+   ```
+   /memory activate <token>
+   ```
+4. The token is verified against the AEGIS webhook server
+
+**Method 2 — Offline (env variable)**
+Set `AEGIS_MEMORY_TOKEN` in your `.env` file:
+```bash
+AEGIS_MEMORY_TOKEN=your-token-here
+```
+Memory activates automatically on next start — no `/memory activate` needed.
+
+> **Note:** Memory is independent from your LLM API key. You need one API key (Anthropic, OpenAI, etc.) for the assistant to function, and optionally a memory token to enable cross-session recall.
+
+### Verify status
+```
+/memory stats
+```
+Shows whether memory is active, how many memories are stored, and usage statistics.
 
 ---
 

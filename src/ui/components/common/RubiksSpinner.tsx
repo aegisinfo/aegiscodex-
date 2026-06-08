@@ -1,40 +1,38 @@
 /**
- * RubiksSpinner - 1D Rubik's Cube spinner for /multi (4 sides = 4 agents)
+ * RubiksSpinner - Compact animated spinner for /multi (generating state)
+ * Uses the same dots spinner from cli-spinners as the ordinary Spinner.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Text } from 'ink';
+import spinners from 'cli-spinners';
 
 interface RubiksSpinnerProps {
-  /** Agent label to display next to the cube */
+  /** Agent label to display next to the spinner */
   agent?: string;
 }
 
-const FACES = ['⬜', '🟥', '🟩', '🟦'];
-
-const CUBE_FRAMES = [
-  `[${FACES[0]}][  ][  ][  ]`,
-  `[  ][${FACES[1]}][  ][  ]`,
-  `[  ][  ][${FACES[2]}][  ]`,
-  `[  ][  ][  ][${FACES[3]}]`,
-];
-
 /**
- * A 1D Rubik's Cube spinner: cycles 4 faces representing the 4 agents.
+ * Same rotating dots spinner as the ordinary Spinner from ink-spinner.
+ * Runs through all frames of the 'dots' type at the correct interval.
  */
 export const RubiksSpinner: React.FC<RubiksSpinnerProps> = ({ agent }) => {
   const [frame, setFrame] = useState(0);
+  const spinner = spinners.dots;
 
   useEffect(() => {
     const id = setInterval(() => {
-      setFrame((prev) => (prev + 1) % CUBE_FRAMES.length);
-    }, 250);
+      setFrame((prev) => {
+        const isLastFrame = prev === spinner.frames.length - 1;
+        return isLastFrame ? 0 : prev + 1;
+      });
+    }, spinner.interval);
     return () => clearInterval(id);
   }, []);
 
   return (
     <Text>
-      {' '}{CUBE_FRAMES[frame]}
+      {spinner.frames[frame]}
       {agent ? ` ${agent}` : ''}
     </Text>
   );
