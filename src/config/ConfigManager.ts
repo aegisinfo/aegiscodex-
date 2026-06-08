@@ -324,7 +324,9 @@ export class ConfigManager {
     }
     const models: any[] = (this.config as any).models || [];
     if (currentId && models.length > 0) {
-      const found = models.find((m: any) => m.id === currentId);
+      let found = models.find((m: any) => m.id === currentId);
+      // Fallback: match by model name
+      if (!found) found = models.find((m: any) => m.model === currentId);
       if (found) {
         const result: any = { ...found };
         if (!result.baseURL && result.baseUrl) result.baseURL = result.baseUrl;

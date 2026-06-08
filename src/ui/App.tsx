@@ -39,7 +39,12 @@ function mergeRuntimeConfig(baseConfig: ClawdConfig, props: AppProps): RuntimeCo
   if (props.initialMessage) runtimeConfig.initialMessage = props.initialMessage;
   if (props.resumeSessionId) runtimeConfig.resumeSessionId = props.resumeSessionId;
   if (props.permissionMode) runtimeConfig.defaultPermissionMode = props.permissionMode;
-  if (props.model) runtimeConfig.currentModelId = props.model;
+  if (props.model) {
+    // Try to map model name to model ID first
+    const models = baseConfig.models || [];
+    const matched = models.find((m: any) => m.model === props.model || m.id === props.model);
+    runtimeConfig.currentModelId = matched ? matched.id : props.model;
+  }
 
   return runtimeConfig;
 }

@@ -74,9 +74,15 @@ export const getCurrentModel = () => {
   const config = getConfig();
   if (!config) return undefined;
 
-  // 优先使
+  // 优先使用 currentModelId
   if (config.currentModelId && config.models) {
     const model = config.models.find((m) => m.id === config.currentModelId);
+    if (model) return model;
+  }
+
+  // 回退：按 model 字段匹配（兼容 currentModelId 被设为 model name 的情况）
+  if (config.currentModelId && config.models) {
+    const model = config.models.find((m) => m.model === config.currentModelId);
     if (model) return model;
   }
 
@@ -85,7 +91,7 @@ export const getCurrentModel = () => {
     return config.models[0];
   }
 
-  // 回退
+  // 回退到 default
   return config.default;
 };
 

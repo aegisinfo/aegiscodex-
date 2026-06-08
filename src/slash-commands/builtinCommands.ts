@@ -893,8 +893,8 @@ All agents run concurrently, then results are synthesized.`,
     const model = (currentModel as any)?.model || (currentModel as any)?.id || defaultCfg.model || process.env.OPENAI_MODEL || '';
     const baseURL = (currentModel as any)?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
     let apiKey = (currentModel as any)?.apiKey || defaultCfg.apiKey || '';
+    const bu = baseURL.toLowerCase();
     if (!apiKey) {
-      const bu = baseURL.toLowerCase();
       if (bu.includes('anthropic'))         apiKey = process.env.ANTHROPIC_API_KEY || '';
       else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
       else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
