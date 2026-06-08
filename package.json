@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx src/main.tsx",
-    "build": "node esbuild.mjs",
+    "build": "node esbuild.mjs && npx javascript-obfuscator dist/main.js --output dist/main.js --compact true --control-flow-flattening true --control-flow-flattening-threshold 0.5 --dead-code-injection false --identifier-names-generator mangled --numbers-to-expressions false --rename-globals false --self-defending false --simplify true --string-array-encoding base64 --string-array-threshold 0.5 --transform-object-keys true --unicode-escape-sequence false",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test:prompts": "tsx src/prompts/test.ts",
