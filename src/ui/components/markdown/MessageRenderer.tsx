@@ -25,8 +25,11 @@ interface MessageRendererProps {
   showAllThinking?: boolean
 }
 
-// Custom comparator: only re-render if content/thinking actually changed
-// or if streaming state toggles. Skip intermediate streaming updates for non-streaming messages.
+/**
+ * Custom comparator: prevent re-renders only when nothing has changed.
+ * During streaming, content changes every delta — we MUST re-render to show them.
+ * The old code had `!next.isStreaming` which blocked ALL streaming content updates.
+ */
 const messageRendererComparator = (
   prev: MessageRendererProps,
   next: MessageRendererProps
@@ -36,10 +39,8 @@ const messageRendererComparator = (
   if (prev.showAllThinking !== next.showAllThinking) return false
   if (prev.terminalWidth !== next.terminalWidth) return false
   if (prev.showPrefix !== next.showPrefix) return false
-  // Only compare content when not streaming (streaming changes fast)
-  if (!next.isStreaming && prev.content !== next.content) return false
-  // Always compare content for user messages
-  if (next.role === 'user' && prev.content !== next.content) return false
+  // Always compare content — even during streaming, we need to show deltas
+  if (prev.content !== next.content) return false
   // Compare thinking state
   if (prev.thinking !== next.thinking) return false
   return true

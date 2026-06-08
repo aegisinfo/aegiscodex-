@@ -17,10 +17,15 @@
  * 5. CLI 参数 (--api-key, --base-url, --model)
  */
 
+// RAF polyfill — MUST run before any module that uses requestAnimationFrame
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 16);
+  (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
+}
+
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
 dotenvConfig({ path: resolve(process.cwd(), '.env') });
-// dotenvConfig({ path: resolve(process.env.HOME || '~', '.aegiscode', '.env') }); // removed — use single .env
 import React from 'react';
 import { render } from 'ink';
 import yargs from 'yargs';

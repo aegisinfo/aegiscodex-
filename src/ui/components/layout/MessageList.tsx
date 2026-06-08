@@ -5,7 +5,7 @@
  * to skip intermediate re-renders during streaming.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState, subscribeToMessages } from '../../../store/index.js';
@@ -35,22 +35,26 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     return unsub;
   }, []);
 
+  // Stable callback to prevent re-subscription on every render
+  const handleMessagesChanged = useCallback((newMessages: typeof messages) => {
+    const len = newMessages.length;
+    if (len !== lastLenRef.current) {
+      lastLenRef.current = len;
+      setMessages(newMessages);
+      return;
+    }
+    // Streaming delta - throttle via RAF to avoid per-delta React batching storms
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        // Read fresh state inside RAF callback to avoid stale closures
+        setMessages(getState().session.messages);
+        rafIdRef.current = null;
+      });
+    }
+  }, []);
+
   useEffect(() => {
-    const unsubscribe = subscribeToMessages((newMessages) => {
-      const len = newMessages.length;
-      if (len !== lastLenRef.current) {
-        lastLenRef.current = len;
-        setMessages(newMessages);
-        return;
-      }
-      // Streaming delta - throttle via RAF
-      if (rafIdRef.current === null) {
-        rafIdRef.current = requestAnimationFrame(() => {
-          setMessages(getState().session.messages);
-          rafIdRef.current = null;
-        });
-      }
-    });
+    const unsubscribe = subscribeToMessages(handleMessagesChanged);
 
     return () => {
       unsubscribe();
@@ -59,7 +63,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         rafIdRef.current = null;
       }
     };
-  }, []);
+  }, [handleMessagesChanged]);
 
   return (
     <Box flexDirection="column">

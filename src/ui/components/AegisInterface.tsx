@@ -2,12 +2,6 @@
  * AegisInterface.tsx - Main CLI interface component
  */
 
-// Polyfill requestAnimationFrame for Bun/Node
-if (typeof globalThis.requestAnimationFrame === 'undefined') {
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 16);
-  (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
-}
-
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
@@ -15,30 +9,38 @@ import Spinner from 'ink-spinner';
 // ========== Throttled Stream Updater ==========
 
 /**
- * Creates a RAF-based stream updater for smooth rendering
+ * Creates a RAF-based stream updater for smooth rendering.
+ * Uses ref objects for callbacks to avoid stale closure issues.
  */
 function createThrottledStreamUpdater(
   updateContent: (delta: string) => void,
   updateThinking: (delta: string) => void,
   intervalMs: number = 16 // ~60fps
 ) {
+  // Store callbacks in an object so the RAF flush always calls the latest version
+  const callbacks = { updateContent, updateThinking };
   let contentBuffer = '';
   let thinkingBuffer = '';
   let rafId: number | null = null;
 
   const flush = () => {
+    const cb = callbacks; // capture latest callbacks at flush time
     if (contentBuffer) {
-      updateContent(contentBuffer);
+      cb.updateContent(contentBuffer);
       contentBuffer = '';
     }
     if (thinkingBuffer) {
-      updateThinking(thinkingBuffer);
+      cb.updateThinking(thinkingBuffer);
       thinkingBuffer = '';
     }
     rafId = null;
   };
 
   return {
+    setCallbacks: (uc: typeof updateContent, ut: typeof updateThinking) => {
+      callbacks.updateContent = uc;
+      callbacks.updateThinking = ut;
+    },
     appendContent: (delta: string) => {
       contentBuffer += delta;
       if (rafId === null) {
@@ -583,6 +585,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       16 // 60fps via RAF
     );
     streamUpdaterRef.current = streamUpdater;
+
+    // Allow callbacks to be refreshed if needed (e.g., after React re-render)
+    streamUpdater.setCallbacks(
+      (delta) => sessionActions().appendToStreamingMessage(streamingMessageId, delta),
+      (delta) => sessionActions().appendThinkingToStreamingMessage(streamingMessageId, delta),
+    );
 
     try {
       const contextMessages = ctxManager.getMessages();
