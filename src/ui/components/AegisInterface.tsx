@@ -737,7 +737,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           <Text color="yellow">
             <Spinner type="dots" />
           </Text>
-          <Text color="yellow"> Initializing Agent...</Text>
+          <Text color="yellow"> Initializing...</Text>
         </Box>
       </Box>
     );

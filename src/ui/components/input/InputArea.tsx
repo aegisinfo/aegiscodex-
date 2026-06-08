@@ -7,6 +7,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { RubiksSpinner } from '../common/RubiksSpinner.js';
 import Spinner from 'ink-spinner';
 import { CustomTextInput } from './CustomTextInput.js';
 import { CommandSuggestions } from './CommandSuggestions.js';
@@ -273,6 +274,9 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       return 'Thinking...';
     }, [isProcessing, hasStreamingMessage]);
 
+    // Rubik's cube for /multi (non-streaming thinking), dots for streaming
+    const isMultiMode = isProcessing && !hasStreamingMessage;
+
     return (
       <Box flexDirection="column">
         {/* 命令补全建议 */}
@@ -286,7 +290,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         {thinkingLabel && (
           <Box paddingX={1} marginBottom={0}>
             <Text color={theme.colors.warning}>
-              <Spinner type="dots" />
+              {isMultiMode ? <RubiksSpinner /> : <Spinner type="dots" />}
             </Text>
             <Text color={theme.colors.warning}> {thinkingLabel}</Text>
             {pendingCommands.length > 0 && (

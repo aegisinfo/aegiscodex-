@@ -907,6 +907,11 @@ All agents run concurrently, then results are synthesized.`,
       return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
     }
 
+    // If Anthropic key fails (e.g. zero balance), fall back to the next available key
+    if (bu.includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
+      apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
+    }
+
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
 
     try {
@@ -1000,6 +1005,11 @@ Agents deliberate in parallel, then results are aggregated.`,
 
     if (!apiKey) {
       return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
+    }
+
+    // If Anthropic key fails (e.g. zero balance), fall back to the next available key
+    if (bu.includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
+      apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
     }
 
     const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
