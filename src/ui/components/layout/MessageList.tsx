@@ -74,7 +74,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     scrollToBottom();
-  }, [messages.length, scrollToBottom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
 
   if (messages.length === 0) {
     return <WelcomeMessage terminalWidth={terminalWidth} />;

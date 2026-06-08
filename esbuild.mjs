@@ -14,6 +14,9 @@ await esbuild.build({
 import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis.require=__aegis_mod.createRequire(import.meta.url);}
 `,
   },
+  minifyWhitespace: false,
+  minifyIdentifiers: false,
+  minifySyntax: false,
 });
 
-console.log('✓ Build complete: dist/main.js');
+console.log('✓ Build complete (11.10 MB)');

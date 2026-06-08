@@ -8,7 +8,7 @@
  * actual item heights, so we estimate based on content length.
  */
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 
 interface WindowedListResult<T> {
   /** The subset of items to render */
@@ -32,12 +32,16 @@ interface WindowedListResult<T> {
 const ESTIMATED_ITEM_HEIGHT = 3; // rows per message average
 const OVERSCAN = 3; // extra items above/below viewport
 
+function calcVisibleCount(terminalHeight: number): number {
+  const visibleHeight = Math.max(terminalHeight - 5, 5);
+  return Math.ceil(visibleHeight / ESTIMATED_ITEM_HEIGHT) + OVERSCAN * 2;
+}
+
 export function useWindowedList<T>(
   items: T[],
   terminalHeight: number,
 ): WindowedListResult<T> {
-  const visibleHeight = Math.max(terminalHeight - 5, 5); // account for header/input
-  const visibleCount = Math.ceil(visibleHeight / ESTIMATED_ITEM_HEIGHT) + OVERSCAN * 2;
+  const visibleCount = calcVisibleCount(terminalHeight);
 
   const [scrollIndex, setScrollIndex] = useState<number>(() =>
     Math.max(0, items.length - visibleCount),
@@ -45,11 +49,19 @@ export function useWindowedList<T>(
   const prevLenRef = useRef(items.length);
   const isAtBottomRef = useRef(true);
 
+  // Track latest items length via ref to avoid callback recreations
+  const itemsLenRef = useRef(items.length);
+  itemsLenRef.current = items.length;
+
   // Auto-scroll to bottom when new items arrive (if already at bottom)
-  if (items.length > prevLenRef.current && isAtBottomRef.current) {
-    // Don't set state during render; use a ref update pattern
-    prevLenRef.current = items.length;
-  }
+  useEffect(() => {
+    const prevLen = prevLenRef.current;
+    const currentLen = items.length;
+    if (currentLen > prevLen && isAtBottomRef.current) {
+      setScrollIndex(Math.max(0, currentLen - visibleCount));
+    }
+    prevLenRef.current = currentLen;
+  }, [items.length, visibleCount]);
 
   const [committedScrollIndex, setCommittedScrollIndex] = useState(scrollIndex);
 
@@ -59,18 +71,22 @@ export function useWindowedList<T>(
   );
 
   const scrollTo = useCallback((index: number) => {
-    const clamped = Math.max(0, Math.min(index, items.length - 1));
+    const len = itemsLenRef.current;
+    const vCount = calcVisibleCount(terminalHeight);
+    const clamped = Math.max(0, Math.min(index, len - 1));
     setScrollIndex(clamped);
     setCommittedScrollIndex(clamped);
-    isAtBottomRef.current = clamped + visibleCount >= items.length;
-  }, [items.length, visibleCount]);
+    isAtBottomRef.current = clamped + vCount >= len;
+  }, [terminalHeight]);
 
   const scrollToBottom = useCallback(() => {
-    const bottom = Math.max(0, items.length - visibleCount);
+    const len = itemsLenRef.current;
+    const vCount = calcVisibleCount(terminalHeight);
+    const bottom = Math.max(0, len - vCount);
     setScrollIndex(bottom);
     setCommittedScrollIndex(bottom);
     isAtBottomRef.current = true;
-  }, [items.length, visibleCount]);
+  }, [terminalHeight]);
 
   // Compute visible window
   const startIndex = Math.max(0, committedScrollIndex - OVERSCAN);

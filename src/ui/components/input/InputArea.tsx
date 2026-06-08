@@ -130,9 +130,14 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       setSelectedIndex(0);
       setShowSuggestions(suggestions.length > 0);
     }, [suggestions]);
+    const suggestionsRef = useRef(suggestions);
+    suggestionsRef.current = suggestions;
+    const selectedIndexRef = useRef(selectedIndex);
+    selectedIndexRef.current = selectedIndex;
+
     const handleTabComplete = useCallback(() => {
-      if (suggestions.length > 0 && showSuggestions) {
-        const selected = suggestions[selectedIndex];
+      if (suggestionsLenRef.current > 0 && showSuggestionsRef.current) {
+        const selected = suggestionsRef.current[selectedIndexRef.current];
         if (selected) {
           const newValue = selected.command + ' ';
           handleChange(newValue);
@@ -140,7 +145,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           setShowSuggestions(false);
         }
       }
-    }, [suggestions, selectedIndex, showSuggestions, handleChange, handleChangeCursorPosition]);
+    }, [handleChange, handleChangeCursorPosition]);
     const handleSelectPrev = useCallback(() => {
       if (showSuggestions && suggestions.length > 0) {
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
@@ -168,9 +173,14 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       }
       return {};
     }, []);
+    const showSuggestionsRef = useRef(showSuggestions);
+    showSuggestionsRef.current = showSuggestions;
+    const suggestionsLenRef = useRef(suggestions.length);
+    suggestionsLenRef.current = suggestions.length;
+
     const handleSubmit = useCallback(
       (value: string) => {
-        if (showSuggestions && suggestions.length > 0) {
+        if (showSuggestionsRef.current && suggestionsLenRef.current > 0) {
           handleTabComplete();
           return;
         }
@@ -182,7 +192,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           setShowSuggestions(false);
         }
       },
-      [showSuggestions, suggestions.length, handleTabComplete, clearInput, addToHistory]
+      [handleTabComplete, clearInput, addToHistory]
     );
     const handleArrowUpInternal = useCallback(() => {
       if (handleSelectPrev()) {

@@ -36,7 +36,9 @@ const messageRendererComparator = (
   if (prev.showAllThinking !== next.showAllThinking) return false
   if (prev.terminalWidth !== next.terminalWidth) return false
   if (prev.showPrefix !== next.showPrefix) return false
-  // Only compare content when not streaming (streaming changes fast)
+  // Always compare streaming content (changes fast)
+  if (next.isStreaming && prev.content !== next.content) return false
+  // Only compare content for non-streaming assistant messages when content changed
   if (!next.isStreaming && prev.content !== next.content) return false
   // Always compare content for user messages
   if (next.role === 'user' && prev.content !== next.content) return false
@@ -68,7 +70,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
       } else if (thinking) {
         setLocalExpanded(false)
       }
-    }, [isStreaming, !!thinking])
+    }, [isStreaming, thinking])
 
     const isThinkingExpanded = showAllThinking || localExpanded
 

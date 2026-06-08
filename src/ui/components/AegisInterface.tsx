@@ -471,13 +471,15 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   // ==================== Selector Handlers ====================
   const handleSelectorSelect = useCallback(async (value: string) => {
-    const { handler } = selectorState;
+    const { handler: h } = getState().app.activeModal === 'themeSelector'
+      ? { handler: 'theme' as const }
+      : selectorState;
 
-    if (handler === 'theme') {
+    if (h === 'theme') {
       const { themeManager } = await import('../themes/index.js');
       themeManager.setTheme(value);
       sessionActions().addAssistantMessage('✓  ' + value);
-    } else if (handler === 'model') {
+    } else if (h === 'model') {
       const { configActions } = await import('../../store/index.js');
       configActions().updateConfig({ currentModelId: value });
       sessionActions().addAssistantMessage('✓  ' + value);
@@ -485,7 +487,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
     focusActions.setFocus(FocusId.MAIN_INPUT);
-  }, [selectorState]);
+  }, []);
 
   const handleSelectorCancel = useCallback(() => {
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
