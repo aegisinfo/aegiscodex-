@@ -1,0 +1,179 @@
+name: Build Standalone Binaries
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform (linux-x64, linux-arm64, darwin-x64, darwin-arm64, win-x64)'
+        type: choice
+        options:
+          - linux-x64
+          - linux-arm64
+          - darwin-x64
+          - darwin-arm64
+          - win-x64
+          - all
+        default: all
+permissions:
+  contents: write
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  build:
+    name: '${{ matrix.label }}'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x64
+            arch: x64
+            node: '22'
+            sea_arch: x64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
+            arch: arm64
+            node: '22'
+            sea_arch: arm64
+          - os: macos-latest
+            label: darwin-x64
+            arch: x64
+            node: '22'
+            sea_arch: x64
+          - os: macos-latest
+            label: darwin-arm64
+            arch: arm64
+            node: '22'
+            sea_arch: arm64
+          - os: windows-latest
+            label: win-x64
+            arch: x64
+            node: '22'
+            sea_arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundle (esm)
+        run: node esbuild.mjs
+
+      # Build a CJS entry for SEA (Node Single Executable Application)
+      - name: Prepare SEA entry
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          // Inject blob path detection for the executable
+          const blob = fs.readFileSync('dist/main.js', 'utf-8');
+          fs.writeFileSync('dist/main.cjs', blob);
+          "
+
+      - name: Generate SEA blob
+        shell: bash
+        run: |
+          # Create a standalone config without the external dep issue
+          node --experimental-sea-config sea-config.json
+
+      - name: Copy Node binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          NODE=$(which node)
+          cp "$NODE" aegiscode-${{ matrix.label }}
+          chmod +w aegiscode-${{ matrix.label }}
+
+      - name: Copy Node binary (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          NODE=$(which node)
+          cp "$NODE" aegiscode-${{ matrix.label }}.exe
+          chmod +w aegiscode-${{ matrix.label }}.exe
+
+      - name: Inject SEA blob (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npx postject aegiscode-${{ matrix.label }} NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
+
+      - name: Inject SEA blob (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Codesign first for macOS entitlement
+          codesign --remove-signature aegiscode-${{ matrix.label }}
+          npx postject aegiscode-${{ matrix.label }} NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
+          codesign --sign - aegiscode-${{ matrix.label }}
+
+      - name: Inject SEA blob (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          npx postject aegiscode-${{ matrix.label }}.exe NODE_SEA_BLOB sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+      - name: Strip & compress (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          strip aegiscode-${{ matrix.label }} || true
+          xz -9 -k aegiscode-${{ matrix.label }}
+          gzip -9 -k aegiscode-${{ matrix.label }}
+
+      - name: Compress (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          gzip -9 -k aegiscode-${{ matrix.label }}
+
+      - name: Compress (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          xz -9 -k aegiscode-${{ matrix.label }}.exe || true
+          gzip -9 -k aegiscode-${{ matrix.label }}.exe || true
+          zip aegiscode-${{ matrix.label }}.zip aegiscode-${{ matrix.label }}.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegiscode-${{ matrix.label }}
+          path: |
+            aegiscode-${{ matrix.label }}
+            aegiscode-${{ matrix.label }}.xz
+            aegiscode-${{ matrix.label }}.gz
+            aegiscode-${{ matrix.label }}.exe
+            aegiscode-${{ matrix.label }}.zip
+          if-no-files-found: warn
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: aegiscode-*
+          merge-multiple: true
+          path: binaries
+
+      - name: List binaries
+        run: ls -lh binaries/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: binaries/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
