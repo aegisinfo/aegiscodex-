@@ -7,8 +7,9 @@
 
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
-const _envPath = resolve(process.env.HOME || require('os').homedir(), '.aegiscode', '.env');
+const _envPath = resolve(process.cwd(), '.env');
 dotenvConfig({ path: _envPath });
+console.log(`◇ injected env from ${_envPath}`);
 import React from 'react';
 import { render } from 'ink';
 import yargs from 'yargs';
