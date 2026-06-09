@@ -354,20 +354,20 @@ export const modelCommand: SlashCommand = {
       };
     }
     
-    // Visa lista med tillgängliga modeller
-    const current = models.find((m: any) => m.id === currentModelId);
-    let content = '## Models\n\n';
-    for (const m of models) {
-      const active = m.id === currentModelId ? ' ◀ current' : '';
-      content += `\`/model ${m.id}\` — ${(m as any).label || m.model || m.id}${active}\n`;
-    }
-    if (current) {
-      content += `\nActive: **${(current as any).label || current.model || current.id}**`;
-    }
+    // 无参数时，返回交互式选择器
     return {
       success: true,
-      type: 'info',
-      content,
+      type: 'selector',
+      selector: {
+        title: 'Select model',
+        options: models.map((m: any) => ({
+          value: m.id,
+          label: (m as any).label || m.name || m.model || m.id,
+          description: m.model || m.baseURL || '',
+          isCurrent: m.id === currentModelId,
+        })),
+        handler: 'model',
+      },
     };
   },
 };

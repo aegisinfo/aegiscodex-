@@ -435,6 +435,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         if (found) {
           const displayName = found.model || found.id;
           setCurrentModel(displayName);
+          modelRef.current = displayName;
           
           if (agentRef.current) {
             import('../../agent/Agent.js').then(({ Agent }) => {
