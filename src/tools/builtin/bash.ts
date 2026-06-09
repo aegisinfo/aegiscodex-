@@ -121,7 +121,8 @@ export const bashTool = createTool({
     }
 
     try {
-      // TODO: 后台执行需
+      // TODO: background execution with timeout + output streaming
+      // Need to spawn detached process and poll output
       if (run_in_background) {
         return {
           success: false,

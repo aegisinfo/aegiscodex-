@@ -95,8 +95,8 @@ export const writeTool = createTool({
       const dir = path.dirname(file_path);
       await fs.mkdir(dir, { recursive: true });
 
-      // 3. TODO: 创建快照（如果文件存
-      // 目前跳过，后续实
+      // 3. 创建快照（如果文件存在时备份，后续实现）
+      // TODO: create snapshot/backup before overwriting existing files
 
       // 4. 写入文
       await fs.writeFile(file_path, contents, 'utf8');

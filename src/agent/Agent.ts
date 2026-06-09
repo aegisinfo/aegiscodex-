@@ -302,8 +302,11 @@ export class Agent {
         return { success: false, error: { type: 'aborted' } };
       }
 
-      // 3.2 检查并压缩上下文 [TODO: 第 8 章实
-      // await this.checkAndCompact(context, turnsCount);
+      // 3.2 检查并压缩上下文
+      // context compression will trim token usage when approaching limit
+      // if (this.shouldCompact(context)) {
+      //   await this.compactContext(context);
+      // }
 
       // 3.3 轮次计
       turnsCount++;
@@ -626,7 +629,8 @@ export class Agent {
       // 避免每次创建 Agent 时累积监听
       registry.removeAllListeners('toolsUpdated');
       registry.on('toolsUpdated', async () => {
-        // 重新获取工具列表（TODO：增量更
+        // 重新获取工具列表（增量更新后续实现）
+        // TODO: incremental update of MCP tools matching registry changes
         agentDebug.log('MCP 工具列表已更新');
       });
 

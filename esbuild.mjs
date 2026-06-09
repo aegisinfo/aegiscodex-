@@ -1,4 +1,9 @@
 import * as esbuild from 'esbuild';
+import { argv } from 'node:process';
+
+const dev = argv.includes('--dev');
+const minify = !dev;
+const sourcemap = dev;
 
 await esbuild.build({
   entryPoints: ['src/main.tsx'],
@@ -7,7 +12,8 @@ await esbuild.build({
   platform: 'node',
   target: 'node22',
   format: 'esm',
-  sourcemap: false,
+  sourcemap,
+  minify,
   external: ['sql.js', '@xenova/transformers'],
   banner: {
     js: `#!/usr/bin/env node
@@ -16,4 +22,6 @@ import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis
   },
 });
 
-console.log('✓ Build complete: dist/main.js');
+const mode = dev ? 'dev (with sourcemaps)' : 'production (minified)';
+const size = dev ? '' : ' — run `node dist/main.js` to verify';
+console.log(`✓ Build complete: dist/main.js (${mode})${size}`);

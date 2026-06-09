@@ -161,8 +161,8 @@ export const editTool = createTool({
         };
       }
 
-      // 6. TODO: 创建快
-      // 目前跳过，后续实
+      // 6. 创建快照（备份原始文件，后续实现）
+      // TODO: snapshot original file before editing for undo support
 
       // 7. 执行替
       const newContent = replace_all
