@@ -68,10 +68,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
           startRafLoop();
         } else {
           stopRafLoop();
-          // Final flush: grab latest content
-          const final = getState().session.messages;
-          messagesRef.current = final;
-          setMessages(final);
+          // Final flush: grab latest content from store directly
+          const fresh = getState().session.messages;
+          messagesRef.current = fresh;
+          setMessages([...fresh]);
         }
       }
     });
@@ -86,7 +86,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     if (rafIdRef.current !== null) return;
 
     // Track the last known streaming message content length to detect real changes.
-    // Since we now mutate in-place (no new object refs), we compare content length.
+    // Since we mutate in-place (no new object refs), we compare content length.
     const lastStreamingLen = { content: 0, thinking: 0 };
 
     const poll = () => {
@@ -95,14 +95,14 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         return;
       }
 
-      const msgs = messagesRef.current; // always the latest set
+      // ALWAYS read from store directly — messagesRef is stale during in-place mutation
+      const msgs = getState().session.messages;
       const streamingIdx = msgs.findIndex(m => m.isStreaming);
 
       if (streamingIdx === -1) {
-        // Streaming ended — grab latest from store
-        const fresh = getState().session.messages;
-        messagesRef.current = fresh;
-        setMessages(fresh);
+        // Streaming ended — store the latest
+        messagesRef.current = msgs;
+        setMessages([...msgs]);
         rafIdRef.current = requestAnimationFrame(poll);
         return;
       }
@@ -114,9 +114,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       if (cLen !== lastStreamingLen.content || tLen !== lastStreamingLen.thinking) {
         lastStreamingLen.content = cLen;
         lastStreamingLen.thinking = tLen;
-        // Trigger React re-render by spreading the same array
-        // (React's shallow comparison sees the same data, but MessageRenderer
-        // will compare content props directly — which is correct)
+        messagesRef.current = msgs;
+        // Spread to trigger React re-render (new array reference)
         setMessages([...msgs]);
       }
 

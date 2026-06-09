@@ -165,6 +165,15 @@ function getMemoryConfig(): MemoryConfig {
   } catch { return {}; }
 }
 
+// ── Ollama embedding (fallback for local models) ────────────────────────────
+let ollamaBaseUrl = '';
+
+export function setOllamaBaseUrl(url?: string) {
+  if (url && url.includes('11434')) {
+    ollamaBaseUrl = url.replace(/\/+$/, '');
+  }
+}
+
 // ── Embedding pipeline (singleton) ──────────────────────────────────────────
 let embedPipeline: ((texts: string[]) => Promise<number[][]>) | null = null;
 
@@ -193,7 +202,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
   if (embedPipeline) return embedPipeline;
 
   // 1. Try Ollama first if configured
-  if (process.env.AEGIS_OLLAMA_EMBED_URL || process.env.OLLAMA_HOST) {
+  if (process.env.AEGIS_OLLAMA_EMBED_URL || process.env.OLLAMA_HOST || ollamaBaseUrl) {
     try {
       const testRes = await fetch(OLLAMA_EMBED_URL, {
         method: 'POST',
@@ -201,7 +210,10 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
         body: JSON.stringify({ model: 'nomic-embed-text', input: 'test' }),
       });
       if (testRes.ok) {
-        embedPipeline = ollamaEmbed;
+        embedPipeline = async (texts: string[]) => {
+          const result = await ollamaEmbed(texts);
+          return result ?? texts.map(() => new Array(VECTOR_DIM).fill(0));
+        };
         console.warn('[Memory] Using Ollama embeddings (nomic-embed-text)');
         return embedPipeline;
       }
@@ -354,6 +366,9 @@ export class SharedMemory {
   ): Promise<MemoryEntry | null> {
     await this.ensureReady();
 
+    // Cross-semantic memory kräver prenumeration
+    if (!this.isEnabled()) return null;
+
     const cleaned = stripInvalidChars(content);
     if (isJunk(cleaned)) return null;
 
@@ -418,6 +433,9 @@ export class SharedMemory {
   // ── Search (hybrid: keyword + vector) ───────────────────────────────────
   async search(query: string, limit = 6): Promise<MemoryEntry[]> {
     await this.ensureReady();
+
+    // Cross-semantic memory kräver prenumeration
+    if (!this.isEnabled()) return [];
 
     const q = query.toLowerCase();
     const words = q.split(/\s+/).filter(w =>

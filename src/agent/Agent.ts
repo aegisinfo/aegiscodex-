@@ -36,7 +36,7 @@ import { configManager } from '../config/ConfigManager.js';
 import { McpRegistry } from '../mcp/index.js';
 import { agentDebug } from '../utils/debug.js';
 import { onStop } from '../hooks/index.js';
-import { sharedMemory } from '../memory/SharedMemory.js';
+import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
 
 // ========== 常
@@ -130,6 +130,9 @@ export class Agent {
         baseURL: this.config.baseURL,
         model: this.config.model,
       });
+
+      // Set Ollama base URL for cross-semantic memory embeddings
+      setOllamaBaseUrl(this.config.baseURL);
 
       // 3. 初始化工具系
       this.toolRegistry = createToolRegistry();
