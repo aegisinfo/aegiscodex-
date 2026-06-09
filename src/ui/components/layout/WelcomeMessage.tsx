@@ -5,6 +5,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { themeManager } from '../../themes/index.js';
+import pkg from '../../../../package.json' with { type: 'json' };
 
 interface WelcomeMessageProps {
   terminalWidth: number;
@@ -16,7 +17,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
     <Box flexDirection="column" paddingX={1} paddingY={1}>
       <Box marginBottom={1}>
         <Text color={theme.colors.primary} bold>{'\u250C\u2500\u2500'} AEGISCode {'\u25C6'}</Text>
-        <Text color={theme.colors.text.muted} dimColor> v{process.env.npm_package_version || '0.1.0'}</Text>
+        <Text color={theme.colors.text.muted} dimColor> v{pkg.version}</Text>
       </Box>
       <Box marginLeft={1} marginBottom={1}>
         <Text color={theme.colors.text.secondary}>AI-powered terminal coding assistant</Text>

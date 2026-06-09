@@ -53,8 +53,8 @@ async function runTests() {
   const BadComponent = () => { throw new Error('test error'); };
   try {
     const { unmount } = render(
-      React.createElement(ErrorBoundary, { fallback: React.createElement('div', null, 'fallback') },
-        React.createElement(BadComponent),
+      React.createElement(ErrorBoundary,
+        { fallback: React.createElement('div', null, 'fallback'), children: React.createElement(BadComponent) },
       ),
     );
     pass('catches rendering errors');
@@ -85,7 +85,7 @@ async function runTests() {
       id: 'test-1',
       role: 'user',
       content: 'Hello world',
-      createdAt: Date.now(),
+      timestamp: Date.now(),
     });
 
     const { unmount, rerender } = render(
@@ -119,7 +119,7 @@ async function runTests() {
   console.log('\nStore Integration:');
 
   // 6. Messages have expected shape
-  const msg = { id: 'test-2', role: 'assistant', content: 'test', createdAt: Date.now() };
+  const msg = { id: 'test-2', role: 'assistant' as const, content: 'test', timestamp: Date.now() };
   getState().session.messages.push(msg);
   const messages = getState().session.messages;
   if (messages.length > 0 && messages[0].id && messages[0].role && messages[0].content) {
@@ -134,7 +134,7 @@ async function runTests() {
     id: streamId,
     role: 'assistant',
     content: '',
-    createdAt: Date.now(),
+    timestamp: Date.now(),
     isStreaming: true,
   });
 

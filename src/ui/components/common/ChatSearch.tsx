@@ -33,7 +33,7 @@ export const ChatSearch: React.FC<ChatSearchProps> = ({
 
   const messages = useMemo(
     () => vanillaStore.getState().session.messages,
-    // We need fresh messages each time search is active; re-compute on submit
+    [],
   );
 
   const matchIndices = useMemo(() => {

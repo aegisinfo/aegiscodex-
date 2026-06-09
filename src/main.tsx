@@ -118,25 +118,22 @@ async function main(): Promise<void> {
   const cli = yargs(hideBin(process.argv))
     .scriptName(cliConfig.scriptName)
     .usage(cliConfig.usage)
-    .version(cliConfig.version)
-
-    // 3. 注册全局选
+    // 注册全局选
     .options(globalOptions)
 
-    // 4. 注册中间
+    // 注册中间
     .middleware(middlewareChain)
 
-    // 5. 示
+    // 示
     .example('$0', 'Start interactive mode')
     .example('$0 "帮我分析这个项目"', 'Start with an initial message')
     .example('$0 --model gpt-4', 'Use a specific model')
     .example('$0 --debug', 'Enable debug mode')
     .example('$0 --init', 'Create default config file')
 
-    // 6. 帮助和版
+    // 帮助
     .help()
     .alias('h', 'help')
-    .alias('v', 'version')
 
     // 7. 错误处
     .fail((msg, err, yargsInstance) => {

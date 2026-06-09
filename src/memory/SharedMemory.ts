@@ -212,7 +212,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
       if (testRes.ok) {
         embedPipeline = async (texts: string[]) => {
           const result = await ollamaEmbed(texts);
-          return result ?? texts.map(() => new Array(VECTOR_DIM).fill(0));
+          return result ?? texts.map(() => new Array(ACTUAL_VECTOR_DIM).fill(0));
         };
         console.warn('[Memory] Using Ollama embeddings (nomic-embed-text)');
         return embedPipeline;

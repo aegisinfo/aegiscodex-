@@ -148,6 +148,7 @@ import { ContextManager, TokenCounter } from '../../context/index.js';
 import { MessageRenderer } from './markdown/MessageRenderer.js';
 import { InputArea } from './input/InputArea.js';
 import { ChatStatusBar } from './layout/ChatStatusBar.js';
+import { WelcomeMessage } from './layout/WelcomeMessage.js';
 import { MessageList } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
@@ -800,19 +801,14 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     );
   }
 
+  const messageCount = getState().session.messages.length;
+
   return (
     <Box flexDirection="column" width="100%">
-      <Box flexDirection="column" marginBottom={1}>
-        <Box>
-          <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
-          <Text bold color={theme.colors.primary}> aegis</Text>
-          <Text color={theme.colors.text.secondary}>code </Text>
-          <Text color={theme.colors.text.muted}>{'\u2500'} </Text>
-          <Text color={theme.colors.text.muted} dimColor>v{process.env.npm_package_version || '0.1.0'}</Text>
-          {debug && <Text color={theme.colors.warning}> [debug]</Text>}
-        </Box>
-        <Text color={theme.colors.text.muted} dimColor>{'\u2502'}  AEGIS AI Agent</Text>
-      </Box>
+
+      {messageCount === 0 && (
+        <WelcomeMessage terminalWidth={terminalWidth - 2} />
+      )}
 
       <Box flexDirection="column" marginBottom={1}>
         <MessageList terminalWidth={terminalWidth - 2} />

@@ -908,7 +908,7 @@ All agents run concurrently, then results are synthesized.`,
     }
 
     // If Anthropic key fails (e.g. zero balance), fall back to the next available key
-    if (bu.includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
+    if (baseURL.toLowerCase().includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
       apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
     }
 
@@ -1008,7 +1008,7 @@ Agents deliberate in parallel, then results are aggregated.`,
     }
 
     // If Anthropic key fails (e.g. zero balance), fall back to the next available key
-    if (bu.includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
+    if (baseURL.toLowerCase().includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
       apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
     }
 

@@ -38,6 +38,7 @@ import { agentDebug } from '../utils/debug.js';
 import { onStop } from '../hooks/index.js';
 import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
+import { TokenCounter } from '../context/TokenCounter.js';
 
 // ========== 常
 
@@ -236,8 +237,15 @@ export class Agent {
       : this.systemPrompt;
     messages.push({ role: 'system', content: fullSystem });
     
-    // 添加历史消
-    messages.push(...context.messages);
+    // 添加历史消息（带 Token 上下文窗口截断）
+    const maxTokens = this.config.maxContextTokens || 200000;
+    const systemTokens = TokenCounter.countTokens([messages[0]], this.config.model || 'gpt-4o');
+    const maxHistoryTokens = Math.min(maxTokens * 0.85, maxTokens - systemTokens - 5000); // 保留 15% 给 system+user+response
+    const truncatedMessages = TokenCounter.truncateMessages(context.messages, this.config.model || 'gpt-4o', maxHistoryTokens);
+    if (context.messages.length > truncatedMessages.length) {
+      console.log(`[Agent] Context window: truncated ${context.messages.length} → ${truncatedMessages.length} messages (kept ${maxHistoryTokens.toLocaleString()} tokens)`);
+    }
+    messages.push(...truncatedMessages);
     
     // 添加当前用户消
     // Append language hint to user message
