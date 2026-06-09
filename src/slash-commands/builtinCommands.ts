@@ -1111,7 +1111,7 @@ const memoryCommand: SlashCommand = {
       }
 
       // Verify token against the Stripe webhook server
-      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegis-stripe-webhook.up.railway.app/verify';
+      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegisintel.up.railway.app/api/verify-token';
       try {
         const res = await fetch(verifyUrl, {
           method: 'POST',

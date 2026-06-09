@@ -21,9 +21,12 @@ const SESSION_FILE   = path.join(MEMORY_DIR, 'last-session.txt');
 
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
+const OLLAMA_EMBED_URL  = process.env.AEGIS_OLLAMA_EMBED_URL || 'http://localhost:11434/api/embed';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const VECTOR_DIM       = 384;  // all-MiniLM-L6-v2 output dimension
+const VECTOR_DIM_XENOVA = 384;  // all-MiniLM-L6-v2 output dimension
+const VECTOR_DIM_OLLAMA = 768;  // nomic-embed-text output dimension
+let ACTUAL_VECTOR_DIM   = VECTOR_DIM_XENOVA;  // auto-detected at runtime
 const MAX_ENTRIES      = 5000;
 const MAX_CONTENT_LEN  = 1000;
 
@@ -165,9 +168,49 @@ function getMemoryConfig(): MemoryConfig {
 // ── Embedding pipeline (singleton) ──────────────────────────────────────────
 let embedPipeline: ((texts: string[]) => Promise<number[][]>) | null = null;
 
+// Ollama embedding via its embed API (returns 768-dim for nomic-embed-text, 384 for all-minilm)
+async function ollamaEmbed(texts: string[]): Promise<number[][]> {
+  try {
+    const res = await fetch(OLLAMA_EMBED_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'nomic-embed-text', input: texts.length === 1 ? texts[0] : texts }),
+    });
+    if (!res.ok) throw new Error(`Ollama embed HTTP ${res.status}`);
+    const data = await res.json() as any;
+    // Ollama returns { embeddings: number[][] } or { embedding: number[] } for single input
+    if (data.embeddings) return data.embeddings as number[][];
+    if (data.embedding) return [data.embedding as number[]];
+    throw new Error('Unexpected Ollama response format');
+  } catch (e) {
+    console.warn('[Memory] Ollama embed failed:', e);
+    throw e;
+  }
+}
+
 async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>) | null> {
   if (!EMBEDDINGS_ENABLED) return null;
   if (embedPipeline) return embedPipeline;
+
+  // 1. Try Ollama first if configured
+  if (process.env.AEGIS_OLLAMA_EMBED_URL || process.env.OLLAMA_HOST) {
+    try {
+      const testRes = await fetch(OLLAMA_EMBED_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'nomic-embed-text', input: 'test' }),
+      });
+      if (testRes.ok) {
+        embedPipeline = ollamaEmbed;
+        console.warn('[Memory] Using Ollama embeddings (nomic-embed-text)');
+        return embedPipeline;
+      }
+    } catch {
+      console.warn('[Memory] Ollama not available, falling back to Xenova');
+    }
+  }
+
+  // 2. Fallback to Xenova transformers (local)
   try {
     const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     embedPipeline = async (texts: string[]) => {
@@ -176,6 +219,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
       );
       return results.map(r => Array.from(r.data as Float32Array));
     };
+    console.warn('[Memory] Using Xenova local embeddings (all-MiniLM-L6-v2)');
     return embedPipeline;
   } catch (e) {
     console.warn('[Memory] Embedding model unavailable, falling back to keyword search');
@@ -411,7 +455,7 @@ export class SharedMemory {
           const top50 = keywordScored.slice(0, 50);
           const vectorScored = top50.map(({ entry, score }) => {
             let vecSim = 0;
-            if (entry.embedding && entry.embedding.length === VECTOR_DIM) {
+            if (entry.embedding && entry.embedding.length > 0) {
               vecSim = cosineSimilarity(queryVec, entry.embedding);
             }
             // Hybrid score: 40% keyword, 60% vector (if embedding available)
@@ -532,27 +576,33 @@ export class SharedMemory {
   // ── buildContext ─────────────────────────────────────────────────────────
   async buildContext(query: string, maxEntries = 4, currentSession?: string): Promise<string> {
     await this.ensureReady();
-    if (!this.isEnabled()) return '';
 
-    const relevant  = await this.search(query, Math.min(4, maxEntries));
-    const recent    = this.recent(Math.min(2, maxEntries));
-    const summaryRows = this.db.exec(
-      `SELECT * FROM memories WHERE summary = 1 ORDER BY timestamp DESC LIMIT 3`
-    );
-    const summaries = this.rowsToEntries(summaryRows);
-
+    const subscribed = this.isEnabled();
     const seen = new Set<string>();
     const combined: MemoryEntry[] = [];
 
-    for (const e of summaries) {
-      if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
+    if (subscribed) {
+      // Prenumerant: full cross-session memory med sökning, summaries, senaste
+      if (!subscribed) return '';
+      const relevant  = await this.search(query, Math.min(4, maxEntries));
+      const recent    = this.recent(Math.min(2, maxEntries));
+      const summaryRows = this.db.exec(
+        `SELECT * FROM memories WHERE summary = 1 ORDER BY timestamp DESC LIMIT 3`
+      );
+      const summaries = this.rowsToEntries(summaryRows);
+
+      for (const e of summaries) {
+        if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
+      }
+      for (const e of relevant) {
+        if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
+      }
+      for (const e of recent) {
+        if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
+      }
     }
-    for (const e of relevant) {
-      if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
-    }
-    for (const e of recent) {
-      if (!seen.has(e.id)) { seen.add(e.id); combined.push(e); }
-    }
+
+    // Alla får alltid minnen från aktuell session (även utan prenumeration)
     if (currentSession) {
       const sessionRows = this.db.exec(
         `SELECT * FROM memories WHERE session = ? AND summary = 0 ORDER BY timestamp DESC LIMIT 4`,
@@ -621,11 +671,12 @@ export class SharedMemory {
         tokenCount: obj.token_count,
         embedding:  null,
       };
-      // Deserialize embedding blob if present
+      // Deserialize embedding blob if present — auto-detect dimension from byte length
       if (obj.embedding instanceof Uint8Array || obj.embedding instanceof Buffer) {
         const buf = obj.embedding as Buffer;
-        if (buf.length === VECTOR_DIM * 4) {
-          entry.embedding = Array.from(new Float32Array(buf.buffer, buf.byteOffset, VECTOR_DIM));
+        const dim = buf.length / 4;
+        if (Number.isInteger(dim) && (dim === VECTOR_DIM_XENOVA || dim === VECTOR_DIM_OLLAMA)) {
+          entry.embedding = Array.from(new Float32Array(buf.buffer, buf.byteOffset, dim));
         }
       }
       return entry;
@@ -683,7 +734,7 @@ export class SharedMemory {
       if (existingIds.has(e.id)) continue;
 
       let embeddingBuf: Buffer | null = null;
-      if (e.embedding && e.embedding.length === VECTOR_DIM) {
+      if (e.embedding && e.embedding.length > 0) {
         embeddingBuf = Buffer.from(new Float32Array(e.embedding).buffer);
       }
 

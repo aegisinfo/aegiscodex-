@@ -39,8 +39,6 @@ npm install
 npm run build
 ```
 
-> 💡 Using Node.js? Replace `bun` with `npm` — e.g. `npm install`, `npm run build`.
-
 ---
 
 ## Configuration
@@ -56,7 +54,7 @@ Edit `.env` with your API keys. See `.env.example` for all supported variables.
 ### 2. Initialize config (optional)
 
 ```bash
-bun run start --init
+npm run start -- --init
 ```
 
 This creates `~/.aegiscode/config.json` with default settings. Edit it directly to fine-tune.
@@ -151,13 +149,13 @@ Shows whether memory is active, how many memories are stored, and usage statisti
 
 ```bash
 # Start dev server with hot reload
-bun run dev
+npm run dev
 
 # Build production bundle
-bun run build
+npm run build
 
 # Run tests
-bun test
+npm test
 ```
 
 ### Project structure
