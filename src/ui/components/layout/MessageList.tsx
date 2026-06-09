@@ -1,13 +1,16 @@
 /**
- * MessageList - RAF-driven polling renderer
+ * MessageList - RAF-driven polling renderer with zero store delta updates
  *
  * Does NOT subscribe to per-delta store updates. Instead, uses a RAF loop
  * that polls the store directly and only calls setMessages when content
  * actually changed (by reference of the relevant streaming message).
  *
- * This avoids cascading re-renders from per-delta zustand subscription
- * callbacks (which fire on every tiny content append because the messages
- * array is always a new reference).
+ * During streaming, content deltas go to an external mutable buffer
+ * (streaming-buffer.ts) instead of the zustand store. This means NO
+ * store subscriber gets notified during streaming — zero cascade re-renders.
+ *
+ * The RAF loop reads BOTH the store and the streaming buffer, merging
+ * them for display. This eliminates terminal flickering entirely.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -15,6 +18,10 @@ import { Box } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
+import {
+  getStreamingContent,
+  isActiveStreamingMessage,
+} from '../../../store/streaming-buffer.js';
 
 interface MessageListProps {
   terminalWidth: number;
@@ -30,7 +37,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   const isStreamingRef = useRef(false);
   const lastLenRef = useRef(messages.length);
 
-  // showAllThinking from store subscription
+  // showAllThinking from store subscription (only changes on user toggle)
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
   useEffect(() => {
     const unsub = vanillaStore.subscribe((state) => {
@@ -40,62 +47,23 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     return unsub;
   }, []);
 
-  // Lightweight subscription: only detect START/END of streaming and message count changes.
-  // Uses a direct equality check with messagesRef to avoid firing on every delta
-  // (zustand creates new arrays on appendToStreamingMessage, but the RAF poll handles
-  // those — we only need to know when streaming state transitions happen).
-  useEffect(() => {
-    let prevHasStreaming = false;
-
-    const unsub = vanillaStore.subscribe((state) => {
-      const msgs = state.session.messages;
-      const len = msgs.length;
-
-      // New message was added (user/assistant) — update immediately
-      if (len !== lastLenRef.current) {
-        lastLenRef.current = len;
-        messagesRef.current = msgs;
-        setMessages(msgs);
-        return;
-      }
-
-      // Check if streaming just started or stopped
-      const hasStreaming = msgs.some(m => m.isStreaming);
-      if (hasStreaming !== prevHasStreaming) {
-        prevHasStreaming = hasStreaming;
-        isStreamingRef.current = hasStreaming;
-        if (hasStreaming) {
-          startRafLoop();
-        } else {
-          stopRafLoop();
-          // Final flush: grab latest content from store directly
-          const fresh = getState().session.messages;
-          messagesRef.current = fresh;
-          setMessages([...fresh]);
-        }
-      }
-    });
-
-    return () => {
-      unsub();
-      stopRafLoop();
-    };
-  }, []);
-
   const startRafLoop = useCallback(() => {
     if (rafIdRef.current !== null) return;
 
-    // Track the last known streaming message content length to detect real changes.
-    // Since we mutate in-place (no new object refs), we compare content length.
-    const lastStreamingLen = { content: 0, thinking: 0 };
+    // Track the last consumed buffer length so we don't re-append old content
+    const lastConsumedLen = { content: 0, thinking: 0 };
 
     const poll = () => {
-      if (!isStreamingRef.current) {
+      // Re-check streaming state from the actual store each poll
+      const currentMsgs = getState().session.messages;
+      const stillStreaming = currentMsgs.some(m => m.isStreaming);
+      if (!stillStreaming) {
+        isStreamingRef.current = false;
         rafIdRef.current = null;
         return;
       }
 
-      // ALWAYS read from store directly — messagesRef is stale during in-place mutation
+      // Read from store AND merge with streaming buffer
       const msgs = getState().session.messages;
       const streamingIdx = msgs.findIndex(m => m.isStreaming);
 
@@ -107,16 +75,31 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         return;
       }
 
-      const streaming = msgs[streamingIdx];
-      const cLen = streaming.content.length;
-      const tLen = (streaming.thinking || '').length;
+      // Merge: only append NEW buffer content (since last poll)
+      const buf = getStreamingContent();
+      let mergedMsgs = msgs;
+      if (buf) {
+        const newContent = buf.content.slice(lastConsumedLen.content);
+        const newThinking = buf.thinking.slice(lastConsumedLen.thinking);
 
-      if (cLen !== lastStreamingLen.content || tLen !== lastStreamingLen.thinking) {
-        lastStreamingLen.content = cLen;
-        lastStreamingLen.thinking = tLen;
-        messagesRef.current = msgs;
-        // Spread to trigger React re-render (new array reference)
-        setMessages([...msgs]);
+        if (newContent || newThinking) {
+          lastConsumedLen.content = buf.content.length;
+          lastConsumedLen.thinking = buf.thinking.length;
+
+          mergedMsgs = msgs.map((msg, i) => {
+            if (i === streamingIdx) {
+              return {
+                ...msg,
+                content: msg.content + newContent,
+                thinking: (msg.thinking || '') + newThinking,
+              };
+            }
+            return msg;
+          });
+
+          messagesRef.current = mergedMsgs;
+          setMessages([...mergedMsgs]);
+        }
       }
 
       rafIdRef.current = requestAnimationFrame(poll);
@@ -131,6 +114,47 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       rafIdRef.current = null;
     }
   }, []);
+
+  // Lightweight subscription: only detect START/END of streaming and message count changes.
+  // During streaming, content deltas go to the streaming buffer — not the store — so
+  // this subscription only fires when streaming starts, stops, or a new message is added.
+  useEffect(() => {
+    let prevHasStreaming = false;
+
+    const unsub = vanillaStore.subscribe((state) => {
+      const msgs = state.session.messages;
+      const len = msgs.length;
+
+      // New message was added (user/assistant) — update immediately
+      if (len !== lastLenRef.current) {
+        lastLenRef.current = len;
+        messagesRef.current = msgs;
+        setMessages([...msgs]);
+        return;
+      }
+
+      // Check if streaming just started or stopped
+      const hasStreaming = msgs.some(m => m.isStreaming);
+      if (hasStreaming !== prevHasStreaming) {
+        prevHasStreaming = hasStreaming;
+        isStreamingRef.current = hasStreaming;
+        if (hasStreaming) {
+          startRafLoop();
+        } else {
+          stopRafLoop();
+          // Final flush: grab latest content from the store
+          const fresh = getState().session.messages;
+          messagesRef.current = fresh;
+          setMessages([...fresh]);
+        }
+      }
+    });
+
+    return () => {
+      unsub();
+      stopRafLoop();
+    };
+  }, [startRafLoop, stopRafLoop]);
 
   // Cleanup on unmount
   useEffect(() => {

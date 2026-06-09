@@ -4,6 +4,7 @@
 
 import type { StateCreator } from 'zustand';
 import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage } from '../types.js';
+import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer } from '../streaming-buffer.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -91,65 +92,97 @@ export const createSessionSlice: StateCreator<
           error: null,
         },
       }));
+      // Initialize the streaming buffer for this message
+      initStreamingBuffer(id);
       return id;
     },
 
     /**
-     * Mutate streaming message content in-place to avoid creating new arrays
-     * on every delta. The RAF-based MessageList uses ref comparison, so we
-     * must mutate the message object directly. The store is still notified
-     * via set() to trigger the subscription, but the message reference stays
-     * the same — allowing the RAF loop to skip redundant updates.
+     * Append content delta WITHOUT calling set() on the store.
+     *
+     * Instead of notifying all store subscribers on every delta (which causes
+     * cascading React re-renders and terminal flickering), we write directly
+     * to an external mutable buffer. The RAF-driven MessageList reads from
+     * this buffer directly, bypassing the store entirely.
+     *
+     * The store is only updated when streaming starts/finishes or when a
+     * forced flush is needed (tool calls, explicit flushes).
      */
-    appendToStreamingMessage: (id: string, contentDelta: string) => {
-      const state = get();
-      const messages = state.session.messages;
-      const idx = messages.findIndex(m => m.id === id);
-      if (idx !== -1) {
-        const msg = messages[idx];
-        const prevLen = msg.content.length;
-        // Mutate in-place for RAF ref tracking
-        msg.content += contentDelta;
-        // Notify store subscribers (the subscription fires but RAF detects
-        // the same ref and skips re-render if content didn't change enough)
-        set((state) => ({
-          session: {
-            ...state.session,
-            messages: state.session.messages,
-          },
-        }));
-      }
+    appendToStreamingMessage: (_id: string, contentDelta: string) => {
+      appendToBuffer(contentDelta);
     },
 
     /**
      * 
      */
-    appendThinkingToStreamingMessage: (id: string, thinkingDelta: string) => {
-      const state = get();
-      const messages = state.session.messages;
-      const idx = messages.findIndex(m => m.id === id);
-      if (idx !== -1 && thinkingDelta) {
-        const msg = messages[idx];
-        msg.thinking = (msg.thinking || '') + thinkingDelta;
-        set((state) => ({
-          session: {
-            ...state.session,
-            messages: state.session.messages,
-          },
-        }));
+    appendThinkingToStreamingMessage: (_id: string, thinkingDelta: string) => {
+      if (thinkingDelta) {
+        appendThinkingToBuffer(thinkingDelta);
       }
     },
 
     /**
-     * 
+     * Force-flush the streaming buffer to the store.
+     * This syncs the mutable buffer content to the actual message object
+     * and notifies store subscribers, then clears the buffer.
+     * Used by tool call handlers to show content before a tool invocation.
      */
-    finishStreamingMessage: (id: string) => {
+    flushStreamBuffer: (id: string) => {
+      const bufferContent = peekBuffer();
+      if (!bufferContent.content && !bufferContent.thinking) return;
+      clearBuffer();
+
       set((state) => ({
         session: {
           ...state.session,
           messages: state.session.messages.map(msg =>
             msg.id === id
-              ? { ...msg, isStreaming: false }
+              ? {
+                  ...msg,
+                  content: msg.content + bufferContent.content,
+                  thinking: (msg.thinking || '') + bufferContent.thinking,
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
+    /**
+     * Write directly to the store message, bypassing the streaming buffer.
+     * Used for tool call events that must appear immediately.
+     */
+    forceAppendToMessage: (id: string, contentDelta: string) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === id
+              ? { ...msg, content: msg.content + contentDelta }
+              : msg
+          ),
+        },
+      }));
+    },
+
+    /**
+     * Finalize streaming: sync remaining buffer content to the store
+     * and mark message as no longer streaming.
+     */
+    finishStreamingMessage: (id: string) => {
+      const bufferContent = peekBuffer();
+      clearBuffer();
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === id
+              ? {
+                  ...msg,
+                  content: msg.content + bufferContent.content,
+                  thinking: (msg.thinking || '') + bufferContent.thinking,
+                  isStreaming: false,
+                }
               : msg
           ),
         },

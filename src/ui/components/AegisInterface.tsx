@@ -501,10 +501,14 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
    */
   const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
     const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
+    const { vanillaStore } = await import('../../store/vanilla.js');
+    const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
 
     if (isSlashCommand(value)) {
-      sessionActions().addUserMessage(value);
-      sessionActions().setThinking(true);
+      // Use batch buffer to prevent cascading re-renders from multiple store updates.
+      // All mutations are applied as a single set() call via flushBatchWithStore().
+      startBatch();
+      batchAddUserMessage(value);
 
       try {
         const result = await executeSlashCommand(value, {
@@ -516,7 +520,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         });
 
         if (result.type === 'selector' && result.selector) {
-          sessionActions().setThinking(false);
+          cancelBatch();
           setSelectorState({
             isVisible: true,
             title: result.selector.title,
@@ -528,24 +532,26 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         }
 
         if (result.sendToAgent && result.content) {
-          sessionActions().setThinking(false);
+          batchSetThinking(false);
+          flushBatchWithStore(vanillaStore);
           await processCommand(result.content, { silent: true });
           return;
         }
 
         if (result.content) {
-          sessionActions().addAssistantMessage(result.content);
+          batchAddAssistantMessage(result.content);
         } else if (result.message) {
-          sessionActions().addAssistantMessage(result.message);
+          batchAddAssistantMessage(result.message);
         } else if (result.error) {
-          sessionActions().addAssistantMessage('error: ' + result.error);
+          batchAddAssistantMessage('error: ' + result.error);
         }
       } catch (error) {
-        sessionActions().addAssistantMessage(
+        batchAddAssistantMessage(
           'error: ' + (error instanceof Error ? error.message : String(error))
         );
       } finally {
-        sessionActions().setThinking(false);
+        batchSetThinking(false);
+        flushBatchWithStore(vanillaStore);
       }
       return;
     }
@@ -585,9 +591,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Batch buffer with background flushing: flushes to store every 500ms
-    // OR every 500 chars — giving smooth progressive rendering without per-token
-    // React churn.
+    // Batch buffer writes ONLY to the mutable streaming buffer.
+    // The RAF loop in MessageList reads from this buffer directly.
+    // NO store updates happen during streaming — zero React re-renders.
     const doFlush = (content: string, thinking: string) => {
       if (content) {
         sessionActions().appendToStreamingMessage(streamingMessageId, content);
@@ -595,6 +601,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       if (thinking) {
         sessionActions().appendThinkingToStreamingMessage(streamingMessageId, thinking);
       }
+      // NOTE: No flushStreamBuffer call here — the RAF loop reads the buffer directly.
+      // The store is only synced when streaming finishes.
     };
     const batchBuffer = createBatchStreamBuffer(doFlush);
 
@@ -631,27 +639,24 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         onToolCallStart: (toolCall) => {
           if (abortController.signal.aborted) return;
           // Tool calls need to be shown immediately — flush current buffer first
-          const { content, thinking } = batchBuffer.flush();
-          if (content) doFlush(content, thinking);
+          sessionActions().flushStreamBuffer(streamingMessageId);
           const name = toolCall.function?.name || 'tool';
           const args = formatToolArgs(name, toolCall.function?.arguments);
           const line = args ? '\n  ' + name + ' ' + args : '\n  ' + name;
-          sessionActions().appendToStreamingMessage(streamingMessageId, line);
+          sessionActions().forceAppendToMessage(streamingMessageId, line);
         },
         onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
           if (abortController.signal.aborted) return;
           const err = formatToolResult(toolResult);
           const suffix = toolResult.success ? ' \u2713' : ' \u2717 ' + err;
-          sessionActions().appendToStreamingMessage(
+          sessionActions().forceAppendToMessage(
             streamingMessageId,
             suffix + '\n'
           );
         },
       });
 
-      // Flush any remaining content from buffer
-      const { content, thinking } = batchBuffer.flush();
-      if (content) doFlush(content, thinking);
+      // Flush any remaining content from buffer — finishStreamingMessage handles this
       sessionActions().finishStreamingMessage(streamingMessageId);
 
       await ctxManager.addMessage('assistant', result);
@@ -679,7 +684,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         sessionActions().finishStreamingMessage(streamingMessageId);
       } else {
         const errorContent = 'Error: ' + (error as Error).message;
-        sessionActions().appendToStreamingMessage(streamingMessageId, errorContent);
+        sessionActions().forceAppendToMessage(streamingMessageId, errorContent);
         sessionActions().finishStreamingMessage(streamingMessageId);
         await ctxManager.addMessage('assistant', errorContent);
       }

@@ -44,6 +44,10 @@ export interface SessionActions {
   startStreamingMessage: () => string;
   appendToStreamingMessage: (id: string, contentDelta: string) => void;
   appendThinkingToStreamingMessage: (id: string, thinkingDelta: string) => void;
+  /** Force-flush streaming buffer content to store (for tool calls, final flush) */
+  flushStreamBuffer: (id: string) => void;
+  /** Write directly to store message, bypassing buffer (for tool calls) */
+  forceAppendToMessage: (id: string, contentDelta: string) => void;
   finishStreamingMessage: (id: string) => void;
   setThinking: (isThinking: boolean) => void;
   setCompacting: (isCompacting: boolean) => void;

@@ -709,24 +709,137 @@ export const hooksCommand: SlashCommand = {
 };
 
 /**
- * /copy - 复制代码块到剪贴板
+ * Helper: copy text to clipboard
+ */
+async function copyToClipboard(text: string): Promise<void> {
+  const { execSync } = await import('child_process');
+  const platform = process.platform;
+  if (platform === 'darwin') {
+    execSync('pbcopy', { input: text });
+  } else if (platform === 'linux') {
+    try {
+      execSync('xclip -selection clipboard', { input: text });
+    } catch {
+      execSync('xsel --clipboard --input', { input: text });
+    }
+  } else if (platform === 'win32') {
+    execSync('clip', { input: text });
+  } else {
+    throw new Error(`unsupported platform: ${platform}`);
+  }
+}
+
+/**
+ * /copy - 复制代码块或文本到剪贴板
+ *
+ * /copy                    — kopiera senaste kodblocket
+ * /copy N                  — kopiera kodblock N från slutet
+ * /copy list               — lista alla kodblock
+ * /copy last               — kopiera senaste assistent-svaret (plain text)
+ * /copy raw <N|last>       — som ovan, men skriv ut i terminalen för manuell kopiering
  */
 export const copyCommand: SlashCommand = {
   name: 'copy',
   aliases: ['cp'],
-  description: 'Copy code block to clipboard',
+  description: 'Copy code block or text to clipboard — /copy | /copy N | /copy last | /copy list',
   category: 'general',
-  usage: '/copy [n | list]',
-  examples: ['/copy', '/copy 2', '/copy list'],
-  fullDescription: 'Copy a code block to clipboard. /copy copies the last block. /copy N copies the Nth from end (1=last). /copy list shows all blocks.',
+  usage: '/copy [n | last | list | raw]',
+  examples: ['/copy', '/copy 2', '/copy last', '/copy list', '/copy raw'],
+  fullDescription: `Copy code blocks or assistant responses to clipboard.
+
+/copy         — copy the last code block to clipboard
+/copy N       — copy code block N from end (1=last)
+/copy last    — copy the last assistant response as plain text (markdown stripped)
+/copy list    — show all code blocks with index
+/copy raw     — print the last assistant response as plain text in terminal for manual copy
+/copy raw N   — print assistant response N from end as plain text`,
 
   async handler(args: string): Promise<SlashCommandResult> {
     const state = getState();
     const messages = state.session.messages;
 
-    // Extract all code blocks from messages
     const { parseMarkdown } = await import('../ui/components/markdown/parser.js');
 
+    const trimmedArgs = args.trim().toLowerCase();
+
+    // === /copy raw — skriv ut plain text direkt till stdout (förbi Ink) ===
+    if (trimmedArgs === 'raw' || trimmedArgs.startsWith('raw ')) {
+      const parts = trimmedArgs.split(' ');
+      let n = 1;
+      if (parts.length > 1 && parts[1]) {
+        const parsed = parseInt(parts[1], 10);
+        if (!isNaN(parsed) && parsed > 0) n = parsed;
+      }
+      const assistantMsgs = messages.filter(m => m.role === 'assistant');
+      if (assistantMsgs.length === 0) {
+        return { success: false, type: 'error', error: 'no assistant messages' };
+      }
+      const idx = assistantMsgs.length - n;
+      if (idx < 0) {
+        return { success: false, type: 'error', error: `only ${assistantMsgs.length} assistant messages` };
+      }
+      const target = assistantMsgs[idx];
+
+      // Strip markdown: return only the text content
+      const { stripMarkdown } = await import('../ui/components/markdown/parser.js');
+      const blocks = parseMarkdown(target.content);
+      const textParts = blocks.map(b => {
+        if (b.type === 'empty') return '';
+        if (b.type === 'code') return b.content;
+        if (b.type === 'heading') return b.content;
+        if (b.type === 'list') return `${b.marker || '•'} ${b.content}`;
+        return b.content;
+      }).filter(Boolean);
+      const plainText = textParts.map(t => stripMarkdown(t)).join('\n\n');
+
+      // Write directly to stdout to bypass Ink rendering
+      const separator = '─'.repeat(60);
+      process.stdout.write(`\n${separator}\n`);
+      process.stdout.write(`/copy raw — assistant message #${n} (pure text, can copy below)\n`);
+      process.stdout.write(`${separator}\n\n`);
+      process.stdout.write(plainText);
+      process.stdout.write(`\n\n${separator}\n\n`);
+
+      return { success: true, type: 'silent' };
+    }
+
+    // === /copy last — kopiera senaste assistent-svaret som plain text ===
+    if (trimmedArgs === 'last') {
+      const assistantMsgs = messages.filter(m => m.role === 'assistant');
+      if (assistantMsgs.length === 0) {
+        return { success: false, type: 'error', error: 'no assistant messages' };
+      }
+      const target = assistantMsgs[assistantMsgs.length - 1];
+
+      // Extract text content (strip markdown)
+      const { stripMarkdown } = await import('../ui/components/markdown/parser.js');
+      const blocks = parseMarkdown(target.content);
+      const textParts = blocks.map(b => {
+        if (b.type === 'empty') return '';
+        if (b.type === 'code') return b.content;
+        return b.content;
+      }).filter(Boolean);
+      const plainText = textParts.map(t => stripMarkdown(t)).join('\n\n');
+
+      try {
+        await copyToClipboard(plainText);
+        const lines = plainText.split('\n').length;
+        const preview = plainText.slice(0, 60);
+        return {
+          success: true,
+          type: 'success',
+          message: `copied assistant reply (${lines}L) · ${preview}${preview.length >= 60 ? '...' : ''}`,
+        };
+      } catch (err) {
+        return {
+          success: false,
+          type: 'error',
+          error: `clipboard: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
+    // === Extract all code blocks from messages ===
     const codeBlocks: Array<{ content: string; language?: string; filePath?: string }> = [];
 
     for (const msg of messages) {
@@ -751,20 +864,18 @@ export const copyCommand: SlashCommand = {
       };
     }
 
-    const trimmedArgs = args.trim().toLowerCase();
-
     // /copy list - show all blocks
     if (trimmedArgs === 'list' || trimmedArgs === 'ls') {
       let content = `${codeBlocks.length} code blocks (newest first)\n\n`;
       for (let i = codeBlocks.length - 1; i >= 0; i--) {
-        const n = codeBlocks.length - i; // n from end
+        const n = codeBlocks.length - i;
         const b = codeBlocks[i];
         const label = b.filePath || b.language || 'code';
         const lines = b.content.split('\n').length;
         const preview = b.content.split('\n')[0].slice(0, 50);
         content += `  ${n}. ${label} (${lines}L) ${preview}${preview.length >= 50 ? '...' : ''}\n`;
       }
-      content += `\nuse /copy N to copy`;
+      content += `\nuse /copy N to copy a block · /copy last for assistant reply`;
       return { success: true, type: 'info', content };
     }
 
@@ -779,7 +890,7 @@ export const copyCommand: SlashCommand = {
         return {
           success: false,
           type: 'error',
-          error: `invalid: ${trimmedArgs}. use /copy [N] or /copy list`,
+          error: `invalid: ${trimmedArgs}. use /copy [N], /copy last, /copy list, or /copy raw`,
         };
       }
       targetIndex = codeBlocks.length - n;
@@ -796,22 +907,7 @@ export const copyCommand: SlashCommand = {
 
     // Copy to clipboard
     try {
-      const { execSync } = await import('child_process');
-      const platform = process.platform;
-
-      if (platform === 'darwin') {
-        execSync('pbcopy', { input: target.content });
-      } else if (platform === 'linux') {
-        try {
-          execSync('xclip -selection clipboard', { input: target.content });
-        } catch {
-          execSync('xsel --clipboard --input', { input: target.content });
-        }
-      } else if (platform === 'win32') {
-        execSync('clip', { input: target.content });
-      } else {
-        throw new Error(`unsupported platform: ${platform}`);
-      }
+      await copyToClipboard(target.content);
     } catch (err) {
       return {
         success: false,
