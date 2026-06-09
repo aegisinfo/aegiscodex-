@@ -802,11 +802,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   }
 
   const messageCount = getState().session.messages.length;
+  const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
   return (
     <Box flexDirection="column" width="100%">
 
-      {messageCount === 0 && (
+      {messageCount === 0 && !hasPendingInitialMessage && (
         <WelcomeMessage terminalWidth={terminalWidth - 2} />
       )}
 

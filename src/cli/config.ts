@@ -27,7 +27,7 @@ function readVersionSync(): string {
     try {
       const content = fs.readFileSync(pkgPath, 'utf-8');
       const pkg = JSON.parse(content) as { name?: string; version?: string };
-      if (pkg.version && (pkg.name === 'aegis' || pkg.name === 'aegis-cli')) {
+      if (pkg.version && (pkg.name === 'aegis' || pkg.name === 'aegis-cli' || pkg.name === 'aegiscode')) {
         return pkg.version;
       }
     } catch {
