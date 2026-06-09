@@ -10,6 +10,7 @@ import { Box, Text, useInput } from 'ink';
 import { RubiksSpinner } from '../common/RubiksSpinner.js';
 import Spinner from 'ink-spinner';
 import { CustomTextInput } from './CustomTextInput.js';
+import { CommandSuggestions } from './CommandSuggestions.js';
 
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
@@ -129,6 +130,15 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       setCursorPosition(newPos);
     }, []);
     
+    // 计算是否显示命令建议
+    const showSuggestions = input.startsWith('/') && input.length > 0 && !isProcessing;
+
+    // 选择建议回
+    const handleSelectSuggestion = useCallback((newValue: string) => {
+      handleChange(newValue);
+      handleChangeCursorPosition(newValue.length);
+    }, [handleChange, handleChangeCursorPosition]);
+
     // 清空输
     const clearInput = useCallback(() => {
       setInput('');
@@ -179,13 +189,11 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       }
     }, [handleChange, handleChangeCursorPosition, getNextCommand]);
     
-    // 处理 Tab 
-    useInput((char, key) => {
-      // Imperative focus check — avoids stale React closure
+    // 处理 Tab — 由 CommandSuggestions 接管
+    useInput((_char, key) => {
       if (focusManager.getCurrentFocus() !== FocusId.MAIN_INPUT) return;
-      if (key.tab) {
-        // Tab - 不做任何事
-      }
+      // Tab is handled by CommandSuggestions; just swallow it here
+      // to prevent default browser-like behavior
     });
 
     // 计算 thinking 状态文
@@ -200,6 +208,16 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <Box flexDirection="column">
+        {/* 命令建议下拉框 - 在输入框上方显示 */}
+        {showSuggestions && (
+          <CommandSuggestions
+            input={input}
+            cursorPosition={cursorPosition}
+            onSelectSuggestion={handleSelectSuggestion}
+            visible={showSuggestions}
+          />
+        )}
+
         {/* 思考/生成状态指示器 - 紧贴输入框上方 */}
         {thinkingLabel && (
           <Box paddingX={1} marginBottom={0}>

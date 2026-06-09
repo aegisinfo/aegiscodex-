@@ -107,6 +107,7 @@ export const createSessionSlice: StateCreator<
       const idx = messages.findIndex(m => m.id === id);
       if (idx !== -1) {
         const msg = messages[idx];
+        const prevLen = msg.content.length;
         // Mutate in-place for RAF ref tracking
         msg.content += contentDelta;
         // Notify store subscribers (the subscription fires but RAF detects

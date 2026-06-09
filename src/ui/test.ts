@@ -5,6 +5,10 @@
  * and other UI components.
  *
  * Run with: tsx src/ui/test.ts
+ *
+ * Rendering debugger:
+ *   tsx src/ui/test.ts --debug-rendering    Enable render debugger during tests
+ *   tsx src/ui/test.ts --render-report      Run tests then print render report
  */
 
 import React from 'react';
@@ -15,6 +19,7 @@ import { WelcomeMessage } from './components/layout/WelcomeMessage.js';
 import { MessageSeparator } from './components/layout/MessageSeparator.js';
 import { ChatStatusBar } from './components/layout/ChatStatusBar.js';
 import { vanillaStore, getState } from '../store/index.js';
+import { startRenderDebugger, stopRenderDebugger, getRenderReport } from './render-debugger.js';
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -31,6 +36,12 @@ function fail(msg: string, error?: any) {
 
 async function runTests() {
   console.log('\nUI Component Tests\n');
+
+  // Auto-start render debugger if --debug-rendering flag is set
+  const enableDebug = process.argv.includes('--debug-rendering');
+  if (enableDebug) {
+    startRenderDebugger({ reportInterval: 5000, verbose: false });
+  }
 
   // ===== ErrorBoundary =====
   console.log('ErrorBoundary:');
@@ -157,6 +168,15 @@ async function runTests() {
   // ===== Summary =====
   console.log(`\n${'='.repeat(40)}`);
   console.log(`Tests: ${testsPassed} passed, ${testsFailed} failed`);
+
+  // Print render report if debug was enabled or --render-report flag set
+  if (enableDebug || process.argv.includes('--render-report')) {
+    console.log(getRenderReport());
+  }
+
+  if (enableDebug) {
+    stopRenderDebugger();
+  }
 
   if (testsFailed > 0) {
     process.exit(1);

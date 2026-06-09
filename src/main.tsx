@@ -42,6 +42,9 @@ import type { CliArguments } from './cli/types.js';
 import type { VersionCheckResult } from './services/VersionChecker.js';
 import * as path from 'node:path';
 
+// Rendering debugger (auto-starts with --debug-rendering flag)
+const ENABLE_RENDER_DEBUG = process.argv.includes('--debug-rendering');
+
 // ========== 全局状
 let isDebugMode = false;
 let versionCheckPromise: Promise<VersionCheckResult | null> | undefined;
@@ -261,6 +264,12 @@ async function main(): Promise<void> {
         // Ink rendering — with fallback for non-TTY environments
         const isTTY = process.stdin.isTTY === true && process.stdout.isTTY === true;
         if (isDebugMode) console.log('[DEBUG] TTY:', isTTY, '(stdin:', process.stdin.isTTY, 'stdout:', process.stdout.isTTY + ')');
+
+        // Auto-start rendering debugger if --debug-rendering is set
+        if (ENABLE_RENDER_DEBUG) {
+          const { startRenderDebugger } = await import('./ui/render-debugger.js');
+          startRenderDebugger({ reportInterval: 5000, verbose: false });
+        }
 
         // Create a proper stdin for Ink (mock if needed to prevent raw mode errors)
         let renderStdin = process.stdin;
