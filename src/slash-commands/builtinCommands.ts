@@ -1110,12 +1110,15 @@ const memoryCommand: SlashCommand = {
         return { success: false, type: 'error', error: 'Invalid token format — must be a valid signed JWT from Stripe checkout' };
       }
 
-      // Verify token against the Stripe webhook server
-      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegisintel.up.railway.app/api/verify-token';
+      // Verify token against aegiscloud.org
+      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/verify-token';
+      const apiKey = cfg?.aegiscloud?.api_key || process.env.AEGISCLOUD_API_KEY || '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['X-API-Key'] = apiKey;
       try {
         const res = await fetch(verifyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ token }),
         });
         const result = await res.json();

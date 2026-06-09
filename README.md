@@ -87,6 +87,7 @@ Start a conversation. Commands are prefixed with `/`:
 | `/memory load <url\|path>` | Load memory from cloud or local file |
 | `/memory clear` | Wipe all stored memories |
 | `/memory stats` | Show memory usage statistics |
+| `/cloud key <api_key>` | Set your aegiscloud.org API key for online verification |
 | `/council` | Toggle council voting mode |
 | `/sync` | Force cloud sync |
 | `/help` | Show all commands |
@@ -120,20 +121,26 @@ Semantic memory persists conversation context across sessions — the assistant 
 ### Activation methods
 
 **Method 1 — Online (Stripe subscription)**
-1. Purchase a subscription at the payment link provided to you
+1. Purchase a subscription at the [payment link](https://buy.stripe.com/14A4gB4J53vxcaV74S9R601)
 2. You'll receive an activation token
 3. Run within a session:
    ```
    /memory activate <token>
    ```
-4. The token is verified against the AEGIS webhook server
+4. The token is verified against `aegiscloud.org/api/verify-token` using your API key
+
+> **Prerequisite:** Before activating online, set your aegiscloud.org API key:
+> ```
+> /cloud key <your_api_key>
+> ```
+> This sends an `X-API-Key` header with the verification request. Alternatively, set `AEGISCLOUD_API_KEY` in your `.env`.
 
 **Method 2 — Offline (env variable)**
 Set `AEGIS_MEMORY_TOKEN` in your `.env` file:
 ```bash
 AEGIS_MEMORY_TOKEN=your-token-here
 ```
-Memory activates automatically on next start — no `/memory activate` needed.
+Memory activates automatically on next start — no `/memory activate` needed. Falls back to offline check if the online server is unreachable.
 
 > **Note:** Memory is independent from your LLM API key. You need one API key (Anthropic, OpenAI, etc.) for the assistant to function, and optionally a memory token to enable cross-session recall.
 
@@ -142,6 +149,25 @@ Memory activates automatically on next start — no `/memory activate` needed.
 /memory stats
 ```
 Shows whether memory is active, how many memories are stored, and usage statistics.
+
+---
+
+## Cloud Sync
+
+AEGIS Code supports optional cloud sync via [aegiscloud.org](https://aegiscloud.org).
+
+```bash
+# Set your cloud API key
+/cloud key <api_key>
+
+# Force sync
+/sync
+
+# Load memory from cloud
+/memory load cloud://<memory-id>
+```
+
+The sync server is at `aegiscloud.org`. Set `AEGISCLOUD_API_KEY` in `.env` or use `/cloud key` at runtime.
 
 ---
 
