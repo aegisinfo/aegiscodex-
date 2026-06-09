@@ -4,7 +4,7 @@
 
 import type { StateCreator } from 'zustand';
 import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage } from '../types.js';
-import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer } from '../streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, resetConsumerPosition } from '../streaming-buffer.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -146,6 +146,9 @@ export const createSessionSlice: StateCreator<
           ),
         },
       }));
+      // Reset RAF consumer position so the MessageList RAF loop doesn't
+      // re-append old buffer content that was just flushed to the store.
+      resetConsumerPosition();
     },
 
     /**

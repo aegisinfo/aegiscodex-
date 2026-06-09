@@ -20,6 +20,7 @@ import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 import {
   getStreamingContent,
+  getConsumerPosition,
   isActiveStreamingMessage,
 } from '../../../store/streaming-buffer.js';
 
@@ -50,8 +51,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   const startRafLoop = useCallback(() => {
     if (rafIdRef.current !== null) return;
 
-    // Track the last consumed buffer length so we don't re-append old content
-    const lastConsumedLen = { content: 0, thinking: 0 };
+    // Track the last consumed buffer length so we don't re-append old content.
+    // Start from the global consumer position (may be non-zero after flushStreamBuffer).
+    const pos = getConsumerPosition();
+    const lastConsumedLen = { content: pos.content, thinking: pos.thinking };
 
     const poll = () => {
       // Re-check streaming state from the actual store each poll

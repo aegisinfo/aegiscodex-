@@ -76,6 +76,10 @@ export function clearBuffer(): void {
   streamingState.thinking = '';
 }
 
+// Global consumer position — tracks how much of the buffer the RAF loop has consumed.
+// This prevents the RAF loop from re-inserting old content that was flushed to the store.
+let consumerPosition = { content: 0, thinking: 0 };
+
 /**
  * Check if buffer has content.
  */
@@ -90,6 +94,25 @@ export function peekBuffer(): { content: string; thinking: string } {
   return {
     content: streamingState.content,
     thinking: streamingState.thinking,
+  };
+}
+
+/**
+ * Get the consumer position (used by RAF loop to track consumed content).
+ */
+export function getConsumerPosition(): { content: number; thinking: number } {
+  return { ...consumerPosition };
+}
+
+/**
+ * Reset the consumer position to the current buffer length.
+ * Called after flushStreamBuffer to prevent the RAF loop from
+ * re-inserting content that was just flushed to the store.
+ */
+export function resetConsumerPosition(): void {
+  consumerPosition = {
+    content: streamingState.content.length,
+    thinking: streamingState.thinking.length,
   };
 }
 
