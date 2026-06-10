@@ -34,15 +34,15 @@
     "terminal",
     "developer-tools"
   ],
-  "author": "kkkhs",
+  "author": "Niklas Borneklint",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kkkhs/ClawdCode.git"
+    "url": "git+https://github.com/aegisinfo/aegiscode.git"
   },
-  "homepage": "https://github.com/kkkhs/ClawdCode#readme",
+  "homepage": "https://github.com/aegisinfo/aegiscode#readme",
   "bugs": {
-    "url": "https://github.com/kkkhs/ClawdCode/issues"
+    "url": "https://github.com/aegisinfo/aegiscode/issues"
   },
   "files": [
     "dist",
