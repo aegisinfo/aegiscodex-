@@ -59,14 +59,21 @@ async function isOllamaResponding(baseURL: string): Promise<boolean> {
 }
 
 function isBinaryInstalled(): boolean {
-  try {
-    execSync('which ollama', { stdio: 'ignore' });
-    return true;
-  } catch {
-    try { execSync('test -x /usr/local/bin/ollama', { stdio: 'ignore' }); return true; } catch {}
-    try { execSync('test -x /usr/bin/ollama', { stdio: 'ignore' }); return true; } catch {}
-    return false;
+  // Try PATH lookup first
+  try { execSync('which ollama', { stdio: 'ignore' }); return true; } catch {}
+  // Try ollama --version (works even if not on PATH in current shell)
+  try { execSync('ollama --version', { stdio: 'ignore' }); return true; } catch {}
+  // Common install locations
+  const paths = [
+    '/usr/local/bin/ollama',
+    '/usr/bin/ollama',
+    `${process.env.HOME}/.local/bin/ollama`,
+    `${process.env.HOME}/bin/ollama`,
+  ];
+  for (const p of paths) {
+    try { execSync(`test -x "${p}"`, { stdio: 'ignore' }); return true; } catch {}
   }
+  return false;
 }
 
 // ── Tool-support check ────────────────────────────────────────────────────────
@@ -97,6 +104,12 @@ async function modelSupportsTools(baseURL: string, model: string): Promise<boole
 // ── Install ───────────────────────────────────────────────────────────────────
 
 async function installOllama(): Promise<boolean> {
+  // Guard: never re-install if already present
+  if (isBinaryInstalled()) {
+    log('Ollama is already installed.');
+    return true;
+  }
+
   if (platform() === 'win32') {
     log('Auto-install not supported on Windows. Download from https://ollama.com/download');
     return false;
