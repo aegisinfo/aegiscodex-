@@ -273,11 +273,11 @@ runtime: ${process.version} · ${process.platform} ${process.arch}
 export const modelCommand: SlashCommand = {
   name: 'model',
   aliases: ['m'],
-  description: 'Show or switch model — /model claude|deepseek|groq|ollama',
+  description: 'Show, switch, add or remove models',
   category: 'config',
-  usage: '/model [model-id]',
-  examples: ['/model', '/model gpt-4', '/model claude-3-5-sonnet'],
-  fullDescription: 'Show current model info or switch to a specified model. Without args, opens interactive selector.',
+  usage: '/model [id] | /model add <id> <name> <model> <baseURL> <apiKey> | /model remove <id> | /model list',
+  examples: ['/model', '/model claude-sonnet-4', '/model add mygpt gpt-4o gpt-4o https://api.openai.com/v1 sk-...', '/model remove mygpt'],
+  fullDescription: 'Manage models. No args = interactive selector. add/remove = manage config.',
 
   async handler(args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
     const state = getState();
@@ -285,87 +285,110 @@ export const modelCommand: SlashCommand = {
     const models = config?.models || [];
     const currentModelId = config?.currentModelId;
     const defaultModel = config?.default;
-    
+
+    const parts = args.trim().split(/\s+/);
+    const subcommand = parts[0]?.toLowerCase();
+
+    // ── /model add <id> <name> <model> <baseURL> <apiKey> ──
+    if (subcommand === 'add') {
+      const [, id, name, model, baseURL, apiKey] = parts;
+      if (!id || !model || !baseURL) {
+        return {
+          success: false,
+          type: 'error',
+          content: 'usage: /model add <id> <name> <model> <baseURL> <apiKey>\nexample: /model add mygpt "GPT-4o" gpt-4o https://api.openai.com/v1 sk-...',
+        };
+      }
+      if (models.find(m => m.id === id)) {
+        return { success: false, type: 'error', content: `model id \`${id}\` already exists. remove it first.` };
+      }
+      const newModel = { id, name: name || id, model, baseURL, apiKey: apiKey || '', provider: 'openai-compatible' as const };
+      const updatedModels = [...models, newModel];
+      const { configActions } = await import('../store/index.js');
+      configActions().updateConfig({ models: updatedModels });
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+        const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.models = updatedModels;
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      } catch { /* non-fatal */ }
+      return { success: true, type: 'success', message: `added model \`${id}\` (${model})` };
+    }
+
+    // ── /model remove <id> ──
+    if (subcommand === 'remove' || subcommand === 'rm') {
+      const id = parts[1];
+      if (!id) return { success: false, type: 'error', content: 'usage: /model remove <id>' };
+      if (!models.find(m => m.id === id)) {
+        return { success: false, type: 'error', content: `model \`${id}\` not found` };
+      }
+      const updatedModels = models.filter(m => m.id !== id);
+      const { configActions } = await import('../store/index.js');
+      configActions().updateConfig({ models: updatedModels });
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+        const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.models = updatedModels;
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      } catch { /* non-fatal */ }
+      return { success: true, type: 'success', message: `removed model \`${id}\`` };
+    }
+
+    // ── /model list ──
+    if (subcommand === 'list') {
+      if (models.length === 0) return { success: true, type: 'info', content: 'no models configured.' };
+      const lines = models.map(m =>
+        `${m.id === currentModelId ? '▶' : ' '} \`${m.id}\` ${m.name || ''} (${m.model || ''})`
+      );
+      return { success: true, type: 'info', content: '## models\n\n' + lines.join('\n') };
+    }
+
+    // ── /model <id> — switch ──
     const trimmedArgs = args.trim();
-    
-    // 如果指定了模型名称，直接切
-    if (trimmedArgs) {
-      // 按 id 或 model 名称查
+    if (trimmedArgs && subcommand !== 'add' && subcommand !== 'remove' && subcommand !== 'list') {
       const targetModel = models.find(
         m => m.id === trimmedArgs || m.model === trimmedArgs || m.name === trimmedArgs
       );
-
-      // Fallback: match against default.model
-      const fallbackModel = !targetModel && defaultModel?.model === trimmedArgs
-        ? { id: trimmedArgs, model: defaultModel.model, name: defaultModel.model, apiKey: defaultModel.apiKey, baseURL: defaultModel.baseURL }
-        : null;
-
-      const resolved = targetModel || fallbackModel;
-      
-      if (resolved) {
-        // Update store
+      if (targetModel) {
         const { configActions } = await import('../store/index.js');
-        configActions().updateConfig({ currentModelId: resolved.id });
-
-        // Persist to config.json on disk
+        configActions().updateConfig({ currentModelId: targetModel.id });
         try {
-          const fs   = await import('fs');
+          const fs = await import('fs');
           const path = await import('path');
-          const os   = await import('os');
+          const os = await import('os');
           const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
           const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-          cfg.currentModelId = resolved.id;
-          // Also update default so next startup picks up correct key
+          cfg.currentModelId = targetModel.id;
           cfg.default = {
             ...cfg.default,
-            model:   resolved.model || resolved.id,
-            baseURL: resolved.baseURL || (resolved as any).baseUrl || cfg.default?.baseURL,
-            apiKey:  resolved.apiKey  || cfg.default?.apiKey,
+            model: targetModel.model || targetModel.id,
+            baseURL: targetModel.baseURL || (targetModel as any).baseUrl || cfg.default?.baseURL,
+            apiKey: targetModel.apiKey || cfg.default?.apiKey,
           };
           fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
         } catch { /* non-fatal */ }
-
-        return {
-          success: true,
-          type: 'success',
-          message: `model -> ${(resolved as any).label || resolved.name || resolved.model || resolved.id}`,
-        };
+        return { success: true, type: 'success', message: `model -> ${(targetModel as any).label || targetModel.name || targetModel.model || targetModel.id}` };
       }
-      
-      // 未找到，显示可用模
       let errorContent = `unknown model: \`${trimmedArgs}\`\n\n`;
-      const defaultInfo = defaultModel?.model ? `(use default: \`${defaultModel.model}\` — set via \`config.default.model\`)` : '';
       if (models.length > 0) {
-        errorContent += `available:\n`;
-        for (const m of models) {
-          errorContent += `- \`${m.id || m.model}\` ${m.name || m.model || ''}\n`;
-        }
-        if (defaultModel?.model && !models.some(m => m.model === defaultModel.model || m.id === defaultModel.model)) {
-          errorContent += `- \`${defaultModel.model}\` (default)\n`;
-        }
+        errorContent += `available:\n` + models.map(m => `- \`${m.id}\` ${m.name || m.model || ''}`).join('\n');
       } else {
-        errorContent += `no models configured. add models to config or use \`config.default.model\`.${defaultInfo}`;
+        errorContent += 'no models configured. use /model add to add one.';
       }
-      
-      return {
-        success: false,
-        type: 'error',
-        content: errorContent,
-      };
+      return { success: false, type: 'error', content: errorContent };
     }
-    
-    // 无参数时，返回选择器配置或显示当前信
+
+    // ── no args — interactive selector ──
     if (models.length === 0) {
-      // 没有配置多模型，显示默认模型信
       const modelInfo = defaultModel?.model || currentModelId || 'unknown';
-      return {
-        success: true,
-        type: 'info',
-        content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. add models to ~/.aegis/config.json.`,
-      };
+      return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
     }
-    
-    // 无参数时，返回交互式选择器
     return {
       success: true,
       type: 'selector',
@@ -382,6 +405,7 @@ export const modelCommand: SlashCommand = {
     };
   },
 };
+
 
 /**
  * /theme - 切换主题

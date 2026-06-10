@@ -346,12 +346,81 @@ export const DEFAULT_PERMISSIONS: PermissionConfig = {
 /**
  * 
  */
+export const DEFAULT_MODELS = [
+  {
+    id: 'claude-sonnet-4',
+    name: 'Claude Sonnet 4',
+    provider: 'anthropic' as const,
+    model: 'claude-sonnet-4-20250514',
+    baseURL: 'https://api.anthropic.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'claude-opus-4',
+    name: 'Claude Opus 4',
+    provider: 'anthropic' as const,
+    model: 'claude-opus-4-20250514',
+    baseURL: 'https://api.anthropic.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'claude-haiku-4',
+    name: 'Claude Haiku 4',
+    provider: 'anthropic' as const,
+    model: 'claude-haiku-4-5-20251001',
+    baseURL: 'https://api.anthropic.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'deepseek-chat',
+    name: 'DeepSeek Chat',
+    provider: 'openai-compatible' as const,
+    model: 'deepseek-chat',
+    baseURL: 'https://api.deepseek.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'deepseek-reasoner',
+    name: 'DeepSeek Reasoner',
+    provider: 'openai-compatible' as const,
+    model: 'deepseek-reasoner',
+    baseURL: 'https://api.deepseek.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'groq-llama',
+    name: 'Groq Llama 3.3 70B',
+    provider: 'openai-compatible' as const,
+    model: 'llama-3.3-70b-versatile',
+    baseURL: 'https://api.groq.com/openai/v1',
+    apiKey: '',
+  },
+  {
+    id: 'groq-deepseek',
+    name: 'Groq DeepSeek R1',
+    provider: 'openai-compatible' as const,
+    model: 'deepseek-r1-distill-llama-70b',
+    baseURL: 'https://api.groq.com/openai/v1',
+    apiKey: '',
+  },
+  {
+    id: 'ollama-local',
+    name: 'Ollama (local)',
+    provider: 'openai-compatible' as const,
+    model: 'llama3',
+    baseURL: 'http://localhost:11434/v1',
+    apiKey: 'ollama',
+  },
+];
+
 export const DEFAULT_CONFIG: ClawdConfig = {
   default: {
     model: 'claude-sonnet-4-20250514',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
   },
+  models: DEFAULT_MODELS,
+  currentModelId: 'claude-sonnet-4',
   temperature: 0.7,
   maxContextTokens: 200000,
   maxOutputTokens: 16384,

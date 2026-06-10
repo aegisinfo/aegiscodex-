@@ -1,225 +1,197 @@
-# ⬡ AEGIS Code
+# AEGISCode
 
-En terminalbaserad AI-kodningsassistent med stöd för flera modeller, semantiskt minne, multi-agent-orkestrering, MCP, hooks och molnsynk.
+**AI-powered terminal coding assistant** — BYOK, multi-model, built for developers who prefer to own their tools.
 
-**BYOK (Bring Your Own Key)** — du behöver dina egna API-nycklar.
-
----
-
-## Funktioner
-
-- **Multi-Model Chat** — Anthropic, DeepSeek, Groq, OpenAI, Ollama (växla mitt i session)
-- **Ink-baserat UI** — React-rendrerad terminal med syntaxhighlighting, teman och interaktiva väljare
-- **Semantiskt Minne** — beständig kontext över sessioner (kräver token)
-- **Council Voting** — 3 modellers majoritetsbeslut med `/council`
-- **Multi-Agent-Orkestrering** — `/multi` för att delegera till 4 specialiserade agenter (arkitekt, implementerare, granskare, felsökare)
-- **Research Council** — `/research` för att utforska frågor ur 4 perspektiv (analytiker, arkitekt, etiker, pragmatiker)
-- **Tool Execution Pipeline** — stages för discovery, behörighet, hooks, bekräftelse, exekvering, post-hooks och formattering
-- **Hooks System** — PreToolUse, PostToolUse med mera, konfigurerbara per event
-- **Skills System** — ladda SKILL.md-filer från användare/projekt/inbyggda källor
-- **MCP Server Support** — utöka kapaciteten via Model Context Protocol
-- **Molnsynk** — opt-in-synkronisering via aegiscloud.org
-- **Teman** — default, light, dark, ocean, forest, sunset
-- **Kompaktering** — automatisk och manuell kontextkompaktering för att spara tokens
-- **Kommando** — `/copy`, `/compact`, `/thinking`, `/status`, `/skills`, `/hooks`, `/yolo`, `/model`, `/theme`, `/memory`, `/cloud`, `/billing` med flera
+```
+╭── AEGISCode ◆ v1.8.0
+  AI-powered terminal coding assistant
+```
 
 ---
 
-## Krav
-
-| Körning | Status |
-|---------|--------|
-| **Bun** | ✅ Rekommenderas (snabbare installation & exekvering) |
-| Node.js v22+ | ✅ Stöds |
-
-- Minst **en API-nyckel** (Anthropic, OpenAI, DeepSeek, Groq eller lokal Ollama)
-
----
-
-## Snabbinstallation
+## Install
 
 ```bash
-git clone https://github.com/aegisinfo/aegiscode.git
+npm install -g aegis-cli
+```
+
+Or run directly from the repo:
+
+```bash
+git clone https://github.com/aegisinfo/aegiscode
 cd aegiscode
-npm install
-npm run build
+npm install && npm run build
+npm link
 ```
 
 ---
 
-## Konfiguration
-
-### 1. Skapa miljöfil
+## Quick start
 
 ```bash
-cp .env.example .env
-```
-
-Redigera `.env` med dina API-nycklar. Se `.env.example` för alla variabler.
-
-### 2. Initiera config (valfritt)
-
-```bash
-npm run start -- --init
-```
-
-Skapar `~/.aegiscode/config.json` med standardinställningar. Redigera direkt för finjustering.
-
-### 3. Konfigurationsprioritet
-
-1. Standardvärden
-2. Användarkonfig (`~/.aegiscode/config.json`)
-3. Projektkonfig (`./.aegiscode/config.json`)
-4. Miljövariabler (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`)
-5. CLI-argument (`--api-key`, `--base-url`, `--model`)
-
----
-
-## Användning
-
-### Interaktivt läge (standard)
-
-```bash
-aegis
-```
-
-Starta en konversation. Kommandon prefixas med `/`:
-
-| Kommando | Beskrivning |
-|----------|-------------|
-| `/model <id>` | Byt modell mitt i session |
-| `/theme [namn]` | Byt tema |
-| `/memory` | Visa eller redigera semantiskt minne |
-| `/memory activate <token>` | Aktivera minne med prenumerations-token |
-| `/memory load <url\|path>` | Ladda minne från moln eller lokal fil |
-| `/memory clear` | Rensa alla minnen |
-| `/memory stats` | Visa minnesstatistik |
-| `/council <fråga>` | Skicka fråga till 3 modeller för omröstning |
-| `/multi <uppgift>` | Orkestrera 4 specialiserade agenter |
-| `/research <fråga>` | Forskningsråd med 4 perspektiv |
-| `/cloud key <api_key>` | Sätt din aegiscloud.org API-nyckel |
-| `/cloud sync on\|off` | Aktivera/inaktivera molnsynk |
-| `/skills [namn\|refresh]` | Hantera skills |
-| `/hooks [status\|list]` | Hantera hooks |
-| `/compact` | Tvinga kontextkompaktering |
-| `/copy [N\|last\|list\|raw]` | Kopiera kodblock eller assistantsvar |
-| `/thinking` | Expandera/dölj tankeblock |
-| `/yolo [on\|off]` | Aktivera/inaktivera YOLO-läge |
-| `/status` | Visa sessionsstatus |
-| `/help` | Visa alla kommandon |
-
-### Engångsfrågor
-
-```bash
-aegis "förklara visitor-mönstret i Go"
-```
-
-### Sessionshantering
-
-```bash
-aegis --continue            # återuppta senaste sessionen
-aegis --session mittnamn    # namnge din session
-```
-
-### Säkerhetslägen
-
-```bash
-aegis --yolo                # auto-godkänn alla verktygsanrop (använd med försiktighet)
-aegis --approve             # fråga före varje verktygsanrop (standard)
-```
-
-### Debug-läge
-
-```bash
-aegis --debug
+aegis                        # interactive mode
+aegis "refactor this file"   # start with a message
+aegis --model deepseek-chat  # use a specific model
+aegis --continue             # resume last session
+aegis --resume <session-id>  # resume specific session
 ```
 
 ---
 
-## Projektstruktur
+## Configuration
 
-```
-aegiscode/
-├── src/
-│   ├── agent/              # Agent- och orkestreringslogik
-│   │   └── orchestrator/   # CouncilAgent, OrchestratorAgent
-│   ├── cli/                # CLI-konfiguration, yargs, middleware
-│   ├── config/             # ConfigManager, konfigurationshantering
-│   ├── context/            # ContextManager, kompaktering, storage
-│   │   └── storage/        # CacheStore, JSONLStore, MemoryStore, PersistentStore
-│   ├── hooks/              # HookExecutor, HookManager, Matcher
-│   ├── mcp/                # MCP-klient, registry, health monitor
-│   ├── memory/             # SharedMemory, AgentMemoryBus, DriveSync
-│   ├── prompts/            # Promptbyggare, planner, standardprompts
-│   ├── services/           # ChatService, CloudSync, VersionChecker
-│   ├── skills/             # SkillLoader, SkillRegistry
-│   ├── slash-commands/     # Inbyggda kommandon och custom command-system
-│   │   └── custom/         # CustomCommandExecutor, loader, registry
-│   ├── store/              # Zustand store (app, config, session, focus, command slices)
-│   ├── tools/              # Verktygssystem
-│   │   ├── builtin/        # Inbyggda verktyg: bash, read, write, edit, grep, glob, skill
-│   │   ├── execution/      # ExecutionPipeline med stages
-│   │   └── validation/     # PermissionChecker, SensitiveFileDetector
-│   ├── ui/                 # Ink-baserat React UI
-│   │   ├── components/     # Markdown-rendering, layout, dialoger, input
-│   │   ├── themes/         # Teman (default, dark, light, ocean, forest, sunset)
-│   │   ├── focus/          # FocusManager för tangentbordsnavigation
-│   │   └── hooks/          # React hooks (commandHistory, confirmation, inputBuffer m.fl.)
-│   └── utils/              # Debug, environment
-├── dist/                   # Byggd utdata (gitignorerad)
-├── hooks/                  # Anpassade hook-skript
-└── static/                 # Statiska resurser
-```
-
----
-
-## Tool Execution Pipeline
-
-Varje verktygsanrop passerar genom en pipeline med 7 stages:
-
-1. **Discovery** — hitta tillgängliga verktyg
-2. **Permission** — kontrollera om verktyget är tillåtet
-3. **Hook** — kör PreToolUse-hooks
-4. **Confirmation** — begär användarens godkännande (om inte YOLO)
-5. **Execution** — exekvera verktyget
-6. **PostHook** — kör PostToolUse-hooks
-7. **Formatting** — formattera resultatet för modellen
-
----
-
-## Utveckling
+Config lives at `~/.aegiscode/config.json`. Create it with:
 
 ```bash
-# Starta utvecklingsserver med hot reload
-npm run dev
+aegis --init
+```
 
-# Bygg produktionsbundle
-npm run build
+Minimal example:
 
-# Typkontroll
-npm run typecheck
+```json
+{
+  "currentModelId": "claude-sonnet-4",
+  "models": [
+    {
+      "id": "claude-sonnet-4",
+      "name": "Claude Sonnet 4",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "baseURL": "https://api.anthropic.com/v1",
+      "apiKey": "sk-ant-..."
+    }
+  ]
+}
+```
 
-# Kör tester
-npm run test:prompts
-npm run test:tools
-npm run test:pipeline
-npm run test:context
-npm run test:mcp
-npm run test:store
+API keys go in the model entry, not in `.bashrc` or environment variables — this prevents silent key conflicts across projects.
+
+---
+
+## Built-in models
+
+AEGISCode ships with pre-configured entries for the following providers. Add your API key to activate them:
+
+| ID | Model | Provider |
+|----|-------|----------|
+| `claude-sonnet-4` | claude-sonnet-4-20250514 | Anthropic |
+| `claude-opus-4` | claude-opus-4-20250514 | Anthropic |
+| `claude-haiku-4` | claude-haiku-4-5-20251001 | Anthropic |
+| `deepseek-chat` | deepseek-chat | DeepSeek |
+| `deepseek-reasoner` | deepseek-reasoner | DeepSeek |
+| `groq-llama` | llama-3.3-70b-versatile | Groq |
+| `groq-deepseek` | deepseek-r1-distill-llama-70b | Groq |
+| `ollama-local` | llama3 | Ollama (local) |
+
+Any OpenAI-compatible API can be added as a custom model.
+
+---
+
+## Commands
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/help` | `/?` `/h` | Show all commands |
+| `/model` | `/m` | Interactive model switcher |
+| `/model <id>` | | Switch to model by ID |
+| `/model list` | | List all configured models |
+| `/model add <id> <name> <model> <baseURL> <apiKey>` | | Add a custom model |
+| `/model remove <id>` | | Remove a model |
+| `/clear` | `/cls` | Clear chat history |
+| `/compact` | | Compress context to save tokens |
+| `/status` | `/st` | Show session info and token usage |
+| `/theme` | `/t` | Switch UI theme |
+| `/thinking` | | Toggle thinking blocks |
+| `/copy` | `/cp` | Copy last code block to clipboard |
+| `/copy N` | | Copy Nth code block |
+| `/yolo` | | Toggle auto-approve for all tool calls |
+| `/multi <task>` | | Run task across multiple agents |
+| `/council <question>` | | Multi-model majority vote |
+| `/research <question>` | | Multi-agent research |
+| `/memory` | | Manage semantic memory |
+| `/skills` | `/sk` | List loaded skills |
+| `/hooks` | | View and manage hooks |
+| `/version` | `/v` | Show version info |
+
+### Adding a custom model
+
+```
+/model add openrouter-mixtral "Mixtral 8x7B" mistralai/mixtral-8x7b-instruct https://openrouter.ai/api/v1 sk-or-...
+```
+
+Changes are saved to `config.json` immediately.
+
+---
+
+## Tools
+
+AEGISCode can read, write, and execute files in your project. Tool permissions are configured per-project in `config.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(git *)", "Bash(ls *)"],
+    "ask":   ["Bash(curl *)", "Bash(rm -r *)"],
+    "deny":  ["Bash(sudo *)", "Read(.env)"]
+  }
+}
+```
+
+Permission modes:
+
+| Mode | Behavior |
+|------|----------|
+| `default` | Read auto, write requires confirmation |
+| `autoEdit` | Read + write auto, execute requires confirmation |
+| `yolo` | Everything auto-approved |
+| `plan` | Read only, everything else blocked |
+
+---
+
+## Memory
+
+Persistent cross-session memory requires an active subscription (€2/month via aegiscloud.org). Activate with a memory token:
+
+```
+/memory activate <token>
+/memory stats
+/memory clear
 ```
 
 ---
 
-## Dokumentation
+## Sessions
 
-Full dokumentation, API-referens och guider på [aegiscloud.org](https://aegiscloud.org)
+Sessions are stored locally as JSONL files. Resume a previous session:
+
+```bash
+aegis --continue              # resume most recent
+aegis --resume <session-id>   # resume by ID
+```
 
 ---
 
-## Licens
+## MCP
 
-MIT — se [LICENSE](LICENSE)
+AEGISCode supports MCP (Model Context Protocol) servers. Configure in `config.json`:
+
+```json
+{
+  "mcpEnabled": true,
+  "mcpServers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@my/mcp-server"]
+    }
+  }
+}
+```
 
 ---
 
-*Byggt med ❤️ av AEGIS-teamet*
+## Built by
+
+**Niklas Borneklint** — [aegiscloud.org](https://aegiscloud.org) · [@aegisinfo](https://github.com/aegisinfo)
+
+Part of the AEGIS ecosystem.
