@@ -1,36 +1,42 @@
-# AEGIS Code — Multi-Model AI Coding Agent
+# ⬡ AEGIS Code
 
-A terminal-based AI coding assistant with multi-model support, semantic memory, council voting, MCP, hooks, and cloud sync.
+En terminalbaserad AI-kodningsassistent med stöd för flera modeller, semantiskt minne, multi-agent-orkestrering, MCP, hooks och molnsynk.
 
-**BYOK (Bring Your Own Key)** — requires your own API keys.
-
----
-
-## Features
-
-- **Multi-Model Chat** — Anthropic, DeepSeek, Groq, OpenAI, Ollama (switch mid-session)
-- **Semantic Memory** — persistent context across sessions
-- **Council Voting** — 3 agents deliberate for better decisions
-- **Multi-Agent Orchestration** — delegate tasks to specialized agents
-- **MCP Server Support** — extend capabilities via the Model Context Protocol
-- **Hooks System** — PreToolUse, PostToolUse, and more
-- **Cloud Sync** — opt-in sync across devices
-- **Themes** — default, light, dark, ocean, forest, sunset
+**BYOK (Bring Your Own Key)** — du behöver dina egna API-nycklar.
 
 ---
 
-## Requirements
+## Funktioner
 
-| Runtime | Status |
+- **Multi-Model Chat** — Anthropic, DeepSeek, Groq, OpenAI, Ollama (växla mitt i session)
+- **Ink-baserat UI** — React-rendrerad terminal med syntaxhighlighting, teman och interaktiva väljare
+- **Semantiskt Minne** — beständig kontext över sessioner (kräver token)
+- **Council Voting** — 3 modellers majoritetsbeslut med `/council`
+- **Multi-Agent-Orkestrering** — `/multi` för att delegera till 4 specialiserade agenter (arkitekt, implementerare, granskare, felsökare)
+- **Research Council** — `/research` för att utforska frågor ur 4 perspektiv (analytiker, arkitekt, etiker, pragmatiker)
+- **Tool Execution Pipeline** — stages för discovery, behörighet, hooks, bekräftelse, exekvering, post-hooks och formattering
+- **Hooks System** — PreToolUse, PostToolUse med mera, konfigurerbara per event
+- **Skills System** — ladda SKILL.md-filer från användare/projekt/inbyggda källor
+- **MCP Server Support** — utöka kapaciteten via Model Context Protocol
+- **Molnsynk** — opt-in-synkronisering via aegiscloud.org
+- **Teman** — default, light, dark, ocean, forest, sunset
+- **Kompaktering** — automatisk och manuell kontextkompaktering för att spara tokens
+- **Kommando** — `/copy`, `/compact`, `/thinking`, `/status`, `/skills`, `/hooks`, `/yolo`, `/model`, `/theme`, `/memory`, `/cloud`, `/billing` med flera
+
+---
+
+## Krav
+
+| Körning | Status |
 |---------|--------|
-| **Bun** | ✅ Recommended (faster installs & execution) |
-| Node.js v22+ | ✅ Supported |
+| **Bun** | ✅ Rekommenderas (snabbare installation & exekvering) |
+| Node.js v22+ | ✅ Stöds |
 
-- At least **one API key** (Anthropic, OpenAI, DeepSeek, Groq, or local Ollama)
+- Minst **en API-nyckel** (Anthropic, OpenAI, DeepSeek, Groq eller lokal Ollama)
 
 ---
 
-## Quick Install
+## Snabbinstallation
 
 ```bash
 git clone https://github.com/aegisinfo/aegiscode.git
@@ -41,176 +47,179 @@ npm run build
 
 ---
 
-## Configuration
+## Konfiguration
 
-### 1. Create environment file
+### 1. Skapa miljöfil
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your API keys. See `.env.example` for all supported variables.
+Redigera `.env` med dina API-nycklar. Se `.env.example` för alla variabler.
 
-### 2. Initialize config (optional)
+### 2. Initiera config (valfritt)
 
 ```bash
 npm run start -- --init
 ```
 
-This creates `~/.aegiscode/config.json` with default settings. Edit it directly to fine-tune.
+Skapar `~/.aegiscode/config.json` med standardinställningar. Redigera direkt för finjustering.
 
-### 3. Runtime config overrides
+### 3. Konfigurationsprioritet
 
-Set environment variables to override config values at runtime:
-
-```bash
-AEGIS_MODEL=claude AEGIS_THEME=ocean aegis
-```
+1. Standardvärden
+2. Användarkonfig (`~/.aegiscode/config.json`)
+3. Projektkonfig (`./.aegiscode/config.json`)
+4. Miljövariabler (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`)
+5. CLI-argument (`--api-key`, `--base-url`, `--model`)
 
 ---
 
-## Usage
+## Användning
 
-### Interactive mode (default)
+### Interaktivt läge (standard)
 
 ```bash
 aegis
 ```
 
-Start a conversation. Commands are prefixed with `/`:
+Starta en konversation. Kommandon prefixas med `/`:
 
-| Command | Description |
-|---------|-------------|
-| `/model <id>` | Switch model mid-session |
-| `/memory` | View or edit semantic memory |
-| `/memory activate <token>` | Activate memory with a subscription token |
-| `/memory load <url\|path>` | Load memory from cloud or local file |
-| `/memory clear` | Wipe all stored memories |
-| `/memory stats` | Show memory usage statistics |
-| `/cloud key <api_key>` | Set your aegiscloud.org API key for online verification |
-| `/council` | Toggle council voting mode |
-| `/sync` | Force cloud sync |
-| `/help` | Show all commands |
+| Kommando | Beskrivning |
+|----------|-------------|
+| `/model <id>` | Byt modell mitt i session |
+| `/theme [namn]` | Byt tema |
+| `/memory` | Visa eller redigera semantiskt minne |
+| `/memory activate <token>` | Aktivera minne med prenumerations-token |
+| `/memory load <url\|path>` | Ladda minne från moln eller lokal fil |
+| `/memory clear` | Rensa alla minnen |
+| `/memory stats` | Visa minnesstatistik |
+| `/council <fråga>` | Skicka fråga till 3 modeller för omröstning |
+| `/multi <uppgift>` | Orkestrera 4 specialiserade agenter |
+| `/research <fråga>` | Forskningsråd med 4 perspektiv |
+| `/cloud key <api_key>` | Sätt din aegiscloud.org API-nyckel |
+| `/cloud sync on\|off` | Aktivera/inaktivera molnsynk |
+| `/skills [namn\|refresh]` | Hantera skills |
+| `/hooks [status\|list]` | Hantera hooks |
+| `/compact` | Tvinga kontextkompaktering |
+| `/copy [N\|last\|list\|raw]` | Kopiera kodblock eller assistantsvar |
+| `/thinking` | Expandera/dölj tankeblock |
+| `/yolo [on\|off]` | Aktivera/inaktivera YOLO-läge |
+| `/status` | Visa sessionsstatus |
+| `/help` | Visa alla kommandon |
 
-### One-shot queries
+### Engångsfrågor
 
 ```bash
-aegis "explain the visitor pattern in Go"
+aegis "förklara visitor-mönstret i Go"
 ```
 
-### Session management
+### Sessionshantering
 
 ```bash
-aegis --continue          # resume last session
-aegis --session mysession # name your session
+aegis --continue            # återuppta senaste sessionen
+aegis --session mittnamn    # namnge din session
 ```
 
-### Tool approval
+### Säkerhetslägen
 
 ```bash
-aegis --yolo              # auto-approve all tool calls (use with care)
-aegis --approve           # ask before each tool call (default)
+aegis --yolo                # auto-godkänn alla verktygsanrop (använd med försiktighet)
+aegis --approve             # fråga före varje verktygsanrop (standard)
+```
+
+### Debug-läge
+
+```bash
+aegis --debug
 ```
 
 ---
 
-## Semantic Memory (Cross-Session)
-
-Semantic memory persists conversation context across sessions — the assistant remembers past discussions and learns from them over time.
-
-### Activation methods
-
-**Method 1 — Online (Stripe subscription)**
-1. Purchase a subscription at the [payment link](https://buy.stripe.com/14A4gB4J53vxcaV74S9R601)
-2. You'll receive an activation token
-3. Run within a session:
-   ```
-   /memory activate <token>
-   ```
-4. The token is verified against `aegiscloud.org/api/verify-token` using your API key
-
-> **Prerequisite:** Before activating online, set your aegiscloud.org API key:
-> ```
-> /cloud key <your_api_key>
-> ```
-> This sends an `X-API-Key` header with the verification request. Alternatively, set `AEGISCLOUD_API_KEY` in your `.env`.
-
-**Method 2 — Offline (env variable)**
-Set `AEGIS_MEMORY_TOKEN` in your `.env` file:
-```bash
-AEGIS_MEMORY_TOKEN=your-token-here
-```
-Memory activates automatically on next start — no `/memory activate` needed. Falls back to offline check if the online server is unreachable.
-
-> **Note:** Memory is independent from your LLM API key. You need one API key (Anthropic, OpenAI, etc.) for the assistant to function, and optionally a memory token to enable cross-session recall.
-
-### Verify status
-```
-/memory stats
-```
-Shows whether memory is active, how many memories are stored, and usage statistics.
-
----
-
-## Cloud Sync
-
-AEGIS Code supports optional cloud sync via [aegiscloud.org](https://aegiscloud.org).
-
-```bash
-# Set your cloud API key
-/cloud key <api_key>
-
-# Force sync
-/sync
-
-# Load memory from cloud
-/memory load cloud://<memory-id>
-```
-
-The sync server is at `aegiscloud.org`. Set `AEGISCLOUD_API_KEY` in `.env` or use `/cloud key` at runtime.
-
----
-
-## Development
-
-```bash
-# Start dev server with hot reload
-npm run dev
-
-# Build production bundle
-npm run build
-
-# Run tests
-npm test
-```
-
-### Project structure
+## Projektstruktur
 
 ```
 aegiscode/
-├── src/              # Source code
-│   ├── commands/     # Command handlers
-│   ├── models/       # Model adapters
-│   ├── tools/        # Tool implementations
-│   ├── memory/       # Semantic memory engine
-│   └── utils/        # Shared utilities
-├── dist/             # Built output (gitignored)
-├── hooks/            # Custom hook scripts
-└── config/           # Default config templates
+├── src/
+│   ├── agent/              # Agent- och orkestreringslogik
+│   │   └── orchestrator/   # CouncilAgent, OrchestratorAgent
+│   ├── cli/                # CLI-konfiguration, yargs, middleware
+│   ├── config/             # ConfigManager, konfigurationshantering
+│   ├── context/            # ContextManager, kompaktering, storage
+│   │   └── storage/        # CacheStore, JSONLStore, MemoryStore, PersistentStore
+│   ├── hooks/              # HookExecutor, HookManager, Matcher
+│   ├── mcp/                # MCP-klient, registry, health monitor
+│   ├── memory/             # SharedMemory, AgentMemoryBus, DriveSync
+│   ├── prompts/            # Promptbyggare, planner, standardprompts
+│   ├── services/           # ChatService, CloudSync, VersionChecker
+│   ├── skills/             # SkillLoader, SkillRegistry
+│   ├── slash-commands/     # Inbyggda kommandon och custom command-system
+│   │   └── custom/         # CustomCommandExecutor, loader, registry
+│   ├── store/              # Zustand store (app, config, session, focus, command slices)
+│   ├── tools/              # Verktygssystem
+│   │   ├── builtin/        # Inbyggda verktyg: bash, read, write, edit, grep, glob, skill
+│   │   ├── execution/      # ExecutionPipeline med stages
+│   │   └── validation/     # PermissionChecker, SensitiveFileDetector
+│   ├── ui/                 # Ink-baserat React UI
+│   │   ├── components/     # Markdown-rendering, layout, dialoger, input
+│   │   ├── themes/         # Teman (default, dark, light, ocean, forest, sunset)
+│   │   ├── focus/          # FocusManager för tangentbordsnavigation
+│   │   └── hooks/          # React hooks (commandHistory, confirmation, inputBuffer m.fl.)
+│   └── utils/              # Debug, environment
+├── dist/                   # Byggd utdata (gitignorerad)
+├── hooks/                  # Anpassade hook-skript
+└── static/                 # Statiska resurser
 ```
 
 ---
 
-## Documentation
+## Tool Execution Pipeline
 
-Full documentation, API reference, and guides at [aegiscloud.org](https://aegiscloud.org)
+Varje verktygsanrop passerar genom en pipeline med 7 stages:
+
+1. **Discovery** — hitta tillgängliga verktyg
+2. **Permission** — kontrollera om verktyget är tillåtet
+3. **Hook** — kör PreToolUse-hooks
+4. **Confirmation** — begär användarens godkännande (om inte YOLO)
+5. **Execution** — exekvera verktyget
+6. **PostHook** — kör PostToolUse-hooks
+7. **Formatting** — formattera resultatet för modellen
 
 ---
 
-## License
+## Utveckling
 
-MIT — see [LICENSE](LICENSE)
+```bash
+# Starta utvecklingsserver med hot reload
+npm run dev
+
+# Bygg produktionsbundle
+npm run build
+
+# Typkontroll
+npm run typecheck
+
+# Kör tester
+npm run test:prompts
+npm run test:tools
+npm run test:pipeline
+npm run test:context
+npm run test:mcp
+npm run test:store
+```
 
 ---
 
-*Built with ❤️ by the AEGIS team*
+## Dokumentation
+
+Full dokumentation, API-referens och guider på [aegiscloud.org](https://aegiscloud.org)
+
+---
+
+## Licens
+
+MIT — se [LICENSE](LICENSE)
+
+---
+
+*Byggt med ❤️ av AEGIS-teamet*

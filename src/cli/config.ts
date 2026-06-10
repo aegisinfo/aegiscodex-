@@ -165,6 +165,12 @@ export const globalOptions = {
     describe: 'Color theme for the UI (overrides saved preference)',
     group: 'UI Options:',
   },
+  'plain': {
+    type: 'boolean',
+    describe: 'Plain text mode (disable Ink rendering, for non-TTY terminals)',
+    default: false,
+    group: 'UI Options:',
+  },
 
   // ========== Config Options ==========
   init: {

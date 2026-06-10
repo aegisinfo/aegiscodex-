@@ -6,80 +6,6 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 
-// ========== Batch Stream Buffer ==========
-
-/**
- * Creates a batch stream buffer that accumulates all output locally
- * and only flushes to the store ONCE when the stream is complete.
- * This eliminates all intermediate re-renders during streaming,
- * solving the flickering/repaint problem entirely.
- */
-function createBatchStreamBuffer(flushCallback?: (content: string, thinking: string) => void) {
-  let contentBuffer = '';
-  let thinkingBuffer = '';
-  let lastFlush = 0;
-  let timer: ReturnType<typeof setInterval> | null = null;
-
-  const flush = (): { content: string; thinking: string } => {
-    const result = {
-      content: contentBuffer,
-      thinking: thinkingBuffer,
-    };
-    contentBuffer = '';
-    thinkingBuffer = '';
-    lastFlush = Date.now();
-    return result;
-  };
-
-  const maybeFlush = () => {
-    const { content, thinking } = flush();
-    if ((content || thinking) && flushCallback) {
-      flushCallback(content, thinking);
-    }
-  };
-
-  // Start interval timer for periodic flush
-  if (flushCallback) {
-    timer = setInterval(() => {
-      if (contentBuffer || thinkingBuffer) {
-        maybeFlush();
-      }
-    }, 500);
-  }
-
-  return {
-    appendContent: (delta: string) => {
-      contentBuffer += delta;
-      // Size threshold: flush if buffer exceeds 500 chars
-      if (contentBuffer.length >= 500 || thinkingBuffer.length >= 500) {
-        maybeFlush();
-      }
-    },
-    appendThinking: (delta: string) => {
-      thinkingBuffer += delta;
-      if (contentBuffer.length >= 500 || thinkingBuffer.length >= 500) {
-        maybeFlush();
-      }
-    },
-    flush: (): { content: string; thinking: string } => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-      return flush();
-    },
-    clear: () => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-      contentBuffer = '';
-      thinkingBuffer = '';
-    },
-    isEmpty: () => contentBuffer === '' && thinkingBuffer === '',
-  };
-}
-
 import { Agent } from '../../agent/Agent.js';
 import type { Message, ChatContext, ToolCall, ToolResult } from '../../agent/types.js';
 
@@ -594,21 +520,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Batch buffer writes ONLY to the mutable streaming buffer.
-    // The RAF loop in MessageList reads from this buffer directly.
-    // NO store updates happen during streaming — zero React re-renders.
-    const doFlush = (content: string, thinking: string) => {
-      if (content) {
-        sessionActions().appendToStreamingMessage(streamingMessageId, content);
-      }
-      if (thinking) {
-        sessionActions().appendThinkingToStreamingMessage(streamingMessageId, thinking);
-      }
-      // NOTE: No flushStreamBuffer call here — the RAF loop reads the buffer directly.
-      // The store is only synced when streaming finishes.
-    };
-    const batchBuffer = createBatchStreamBuffer(doFlush);
-
     try {
       const contextMessages = ctxManager.getMessages();
       const modelName = modelRef.current || 'claude-sonnet-4-20250514';
@@ -632,13 +543,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         onContentDelta: (delta) => {
           if (!abortController.signal.aborted) {
             appendToBuffer(delta);
-            batchBuffer.appendContent(delta);
           }
         },
         onThinkingDelta: (delta) => {
           if (!abortController.signal.aborted) {
             appendThinkingToBuffer(delta);
-            batchBuffer.appendThinking(delta);
           }
         },
         onToolCallStart: (toolCall) => {
@@ -683,8 +592,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       }
 
     } catch (error) {
-      batchBuffer.clear();
-
       if (abortController.signal.aborted) {
         sessionActions().finishStreamingMessage(streamingMessageId);
       } else {

@@ -102,8 +102,8 @@ export const createSessionSlice: StateCreator<
      *
      * Instead of notifying all store subscribers on every delta (which causes
      * cascading React re-renders and terminal flickering), we write directly
-     * to an external mutable buffer. The RAF-driven MessageList reads from
-     * this buffer directly, bypassing the store entirely.
+     * to an external mutable buffer. The MessageList RAF/throttled loop reads
+     * from this buffer directly, bypassing the store entirely.
      *
      * The store is only updated when streaming starts/finishes or when a
      * forced flush is needed (tool calls, explicit flushes).
@@ -113,7 +113,9 @@ export const createSessionSlice: StateCreator<
     },
 
     /**
-     * 
+     * Append thinking delta WITHOUT calling set() on the store.
+     * Same reasoning as appendToStreamingMessage — writes go only to the
+     * mutable streaming buffer, not to the store.
      */
     appendThinkingToStreamingMessage: (_id: string, thinkingDelta: string) => {
       if (thinkingDelta) {

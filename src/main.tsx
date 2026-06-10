@@ -261,6 +261,24 @@ async function main(): Promise<void> {
           console.log('[DEBUG] Theme:', themeManager.getCurrentThemeName());
         }
 
+        // Check for --plain flag (plain text mode, no Ink)
+        const isPlain = args.plain === true;
+        if (isDebugMode) console.log('[DEBUG] Plain mode:', isPlain);
+
+        if (isPlain) {
+          // Plain text mode — just relay input/output
+          if (initialMessage) {
+            console.log(initialMessage);
+          }
+          const { createInterface } = await import('node:readline');
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          rl.on('line', (line) => {
+            if (line.trim()) console.log(line);
+          });
+          rl.on('close', () => process.exit(0));
+          return;
+        }
+
         // Ink rendering — with fallback for non-TTY environments
         const isTTY = process.stdin.isTTY === true && process.stdout.isTTY === true;
         if (isDebugMode) console.log('[DEBUG] TTY:', isTTY, '(stdin:', process.stdin.isTTY, 'stdout:', process.stdout.isTTY + ')');
@@ -271,8 +289,16 @@ async function main(): Promise<void> {
           startRenderDebugger({ reportInterval: 5000, verbose: false });
         }
 
-        // Create a proper stdin for Ink (mock if needed to prevent raw mode errors)
+        // Create proper stdin/stdout for Ink (mock if needed to prevent raw mode errors)
         let renderStdin = process.stdin;
+        let renderStdout = process.stdout;
+
+        // Force isTTY on stdout so Ink renders properly in all terminal environments
+        if (!process.stdout.isTTY) {
+          (process.stdout as any).isTTY = true;
+          if (isDebugMode) console.log('[DEBUG] Forcing isTTY=true on stdout');
+        }
+
         if (!isTTY) {
           const { PassThrough } = await import('node:stream');
           const mockStdin = new PassThrough();

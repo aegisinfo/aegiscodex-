@@ -294,11 +294,18 @@ export const modelCommand: SlashCommand = {
       const targetModel = models.find(
         m => m.id === trimmedArgs || m.model === trimmedArgs || m.name === trimmedArgs
       );
+
+      // Fallback: match against default.model
+      const fallbackModel = !targetModel && defaultModel?.model === trimmedArgs
+        ? { id: trimmedArgs, model: defaultModel.model, name: defaultModel.model, apiKey: defaultModel.apiKey, baseURL: defaultModel.baseURL }
+        : null;
+
+      const resolved = targetModel || fallbackModel;
       
-      if (targetModel) {
+      if (resolved) {
         // Update store
         const { configActions } = await import('../store/index.js');
-        configActions().updateConfig({ currentModelId: targetModel.id });
+        configActions().updateConfig({ currentModelId: resolved.id });
 
         // Persist to config.json on disk
         try {
@@ -307,13 +314,13 @@ export const modelCommand: SlashCommand = {
           const os   = await import('os');
           const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
           const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-          cfg.currentModelId = targetModel.id;
+          cfg.currentModelId = resolved.id;
           // Also update default so next startup picks up correct key
           cfg.default = {
             ...cfg.default,
-            model:   targetModel.model || targetModel.id,
-            baseURL: targetModel.baseURL || (targetModel as any).baseUrl || cfg.default?.baseURL,
-            apiKey:  targetModel.apiKey  || cfg.default?.apiKey,
+            model:   resolved.model || resolved.id,
+            baseURL: resolved.baseURL || (resolved as any).baseUrl || cfg.default?.baseURL,
+            apiKey:  resolved.apiKey  || cfg.default?.apiKey,
           };
           fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
         } catch { /* non-fatal */ }
@@ -321,19 +328,23 @@ export const modelCommand: SlashCommand = {
         return {
           success: true,
           type: 'success',
-          message: `model -> ${(targetModel as any).label || targetModel.name || targetModel.model || targetModel.id}`,
+          message: `model -> ${(resolved as any).label || resolved.name || resolved.model || resolved.id}`,
         };
       }
       
       // 未找到，显示可用模
       let errorContent = `unknown model: \`${trimmedArgs}\`\n\n`;
+      const defaultInfo = defaultModel?.model ? `(use default: \`${defaultModel.model}\` — set via \`config.default.model\`)` : '';
       if (models.length > 0) {
         errorContent += `available:\n`;
         for (const m of models) {
           errorContent += `- \`${m.id || m.model}\` ${m.name || m.model || ''}\n`;
         }
+        if (defaultModel?.model && !models.some(m => m.model === defaultModel.model || m.id === defaultModel.model)) {
+          errorContent += `- \`${defaultModel.model}\` (default)\n`;
+        }
       } else {
-        errorContent += 'no models configured. add models to config.';
+        errorContent += `no models configured. add models to config or use \`config.default.model\`.${defaultInfo}`;
       }
       
       return {

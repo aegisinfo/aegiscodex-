@@ -43,6 +43,7 @@ export interface CliArguments extends Arguments {
 
   // UI 选
   theme?: ThemeName;
+  plain?: boolean;
 
   // 命令相
   init?: boolean;
