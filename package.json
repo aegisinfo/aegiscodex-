@@ -5,6 +5,7 @@
   "type": "module",
   "main": "dist/main.js",
   "bin": {
+    "aegis": "./dist/main.js",
     "aegis-cli": "./dist/main.js"
   },
   "scripts": {

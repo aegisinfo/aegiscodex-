@@ -11,17 +11,39 @@
 
 ## Install
 
+> Requires **Node.js >= 22**. Install via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`
+
+**From npm:**
+
 ```bash
 npm install -g aegis-cli
 ```
 
-Or run directly from the repo:
+**From source (recommended — no sudo needed):**
 
 ```bash
 git clone https://github.com/aegisinfo/aegiscode
 cd aegiscode
-npm install && npm run build
-npm link
+bash install.sh
+```
+
+`install.sh` builds the project and creates an `aegis` wrapper in `~/.local/bin` — no global npm permissions required.
+
+---
+
+## First run
+
+On startup you may see two harmless messages:
+
+- `[DEP0040] DeprecationWarning: The punycode module is deprecated` — a Node.js internal warning, not from this project
+- `[AEGIS] WARNING: Using Anthropic endpoint!` — informational only, confirms which API is active
+
+Add your API keys to `.env` in the project root (or `~/.aegiscode/.env`) before starting:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+DEEPSEEK_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
 ```
 
 ---
