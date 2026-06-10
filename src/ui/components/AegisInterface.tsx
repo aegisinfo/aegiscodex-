@@ -141,6 +141,9 @@ import {
   subscribe,
 } from '../../store/index.js';
 
+// Streaming buffer — direct writes to mutable buffer (no store re-renders)
+import { appendToBuffer, appendThinkingToBuffer } from '../../store/streaming-buffer.js';
+
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
 
@@ -628,11 +631,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         signal: abortController.signal,
         onContentDelta: (delta) => {
           if (!abortController.signal.aborted) {
+            appendToBuffer(delta);
             batchBuffer.appendContent(delta);
           }
         },
         onThinkingDelta: (delta) => {
           if (!abortController.signal.aborted) {
+            appendThinkingToBuffer(delta);
             batchBuffer.appendThinking(delta);
           }
         },
