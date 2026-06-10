@@ -9,6 +9,7 @@ import path from 'path';
 import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
+import { createSnapshot } from './snapshot.js';
 
 // ========== Schema 定
 
@@ -95,8 +96,9 @@ export const writeTool = createTool({
       const dir = path.dirname(file_path);
       await fs.mkdir(dir, { recursive: true });
 
-      // 3. 创建快照（如果文件存在时备份，后续实现）
-      // TODO: create snapshot/backup before overwriting existing files
+      // 3. 快照原始文件（如果已存在）
+      let snapshotPath: string | null = null;
+      try { await fs.access(file_path); snapshotPath = await createSnapshot(file_path); } catch { /* new file */ }
 
       // 4. 写入文
       await fs.writeFile(file_path, contents, 'utf8');
@@ -113,6 +115,7 @@ export const writeTool = createTool({
           file_path,
           lines,
           bytes,
+          snapshot: snapshotPath,
         },
       };
     } catch (error) {

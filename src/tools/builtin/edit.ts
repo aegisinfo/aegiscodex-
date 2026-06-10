@@ -9,6 +9,7 @@ import path from 'path';
 import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
+import { createSnapshot } from './snapshot.js';
 
 // ========== Schema 定
 
@@ -161,8 +162,8 @@ export const editTool = createTool({
         };
       }
 
-      // 6. 创建快照（备份原始文件，后续实现）
-      // TODO: snapshot original file before editing for undo support
+      // 6. 快照原始文件（支持 undo）
+      const snapshotPath = await createSnapshot(file_path);
 
       // 7. 执行替
       const newContent = replace_all
@@ -182,8 +183,9 @@ export const editTool = createTool({
         metadata: {
           file_path,
           replacements,
-          old_string_preview: old_string.length > 50 
-            ? old_string.substring(0, 50) + '...' 
+          snapshot: snapshotPath,
+          old_string_preview: old_string.length > 50
+            ? old_string.substring(0, 50) + '...'
             : old_string,
         },
       };

@@ -4,11 +4,16 @@
  * 
  */
 
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import { createWriteStream, mkdirSync } from 'fs';
+import path from 'path';
+import os from 'os';
 import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
+
+const BG_JOBS_DIR = path.join(os.homedir(), '.aegiscode', 'bg');
 
 const execAsync = promisify(exec);
 
@@ -121,17 +126,32 @@ export const bashTool = createTool({
     }
 
     try {
-      // TODO: background execution with timeout + output streaming
-      // Need to spawn detached process and poll output
       if (run_in_background) {
+        const jobId = `bg-${Date.now()}`;
+        const logPath = path.join(BG_JOBS_DIR, `${jobId}.log`);
+        mkdirSync(BG_JOBS_DIR, { recursive: true });
+
+        const logStream = createWriteStream(logPath, { flags: 'a' });
+        logStream.write(`[${new Date().toISOString()}] $ ${command}\n\n`);
+
+        const child = spawn(command, [], {
+          shell: '/bin/bash',
+          cwd: working_directory || context?.cwd || process.cwd(),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        child.stdout!.on('data', (chunk: Buffer) => logStream.write(chunk));
+        child.stderr!.on('data', (chunk: Buffer) => logStream.write(chunk));
+        child.on('close', (code: number | null) => {
+          logStream.write(`\n[${new Date().toISOString()}] exited with code ${code}\n`);
+          logStream.end();
+        });
+
         return {
-          success: false,
-          llmContent: 'Background execution is not yet implemented. Please run the command synchronously or use a shorter timeout.',
-          displayContent: `⚠️ 后台执行暂未实现`,
-          error: {
-            type: ToolErrorType.EXECUTION_ERROR,
-            message: 'Background execution not implemented',
-          },
+          success: true,
+          llmContent: `Background process started.\nJob ID: ${jobId}\nPID: ${child.pid}\nLog file: ${logPath}\n\nMonitor with: tail -f ${logPath}\nCheck output: cat ${logPath}`,
+          displayContent: `▶ bg: ${description || command.substring(0, 50)} (PID ${child.pid})`,
+          metadata: { jobId, pid: child.pid, logPath, command },
         };
       }
 

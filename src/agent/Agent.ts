@@ -629,9 +629,27 @@ export class Agent {
       // 避免每次创建 Agent 时累积监听
       registry.removeAllListeners('toolsUpdated');
       registry.on('toolsUpdated', async () => {
-        // 重新获取工具列表（增量更新后续实现）
-        // TODO: incremental update of MCP tools matching registry changes
-        agentDebug.log('MCP 工具列表已更新');
+        try {
+          const currentNames = new Set(this.toolRegistry.getMcpTools().map(t => t.name));
+          const freshTools = await registry.getAvailableTools();
+          const freshNames = new Set(freshTools.map(t => t.name));
+
+          // Remove tools that disappeared
+          for (const name of currentNames) {
+            if (!freshNames.has(name)) this.toolRegistry.unregisterMcpTool(name);
+          }
+
+          // Register tools that are new
+          for (const tool of freshTools) {
+            if (!currentNames.has(tool.name)) {
+              try { this.toolRegistry.registerMcpTool(tool); } catch { /* already registered */ }
+            }
+          }
+
+          agentDebug.log(`MCP hot-reload: ${this.toolRegistry.mcpSize} tools active`);
+        } catch (err) {
+          agentDebug.warn('MCP hot-reload failed:', (err as Error).message);
+        }
       });
 
     } catch (error) {
