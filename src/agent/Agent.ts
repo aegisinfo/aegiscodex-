@@ -38,6 +38,7 @@ import { agentDebug } from '../utils/debug.js';
 import { onStop } from '../hooks/index.js';
 import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
+import { ensureOllama } from '../services/OllamaInstaller.js';
 import { TokenCounter } from '../context/TokenCounter.js';
 
 // ========== 常
@@ -134,6 +135,9 @@ export class Agent {
 
       // Set Ollama base URL for cross-semantic memory embeddings
       setOllamaBaseUrl(this.config.baseURL);
+
+      // Auto-install / start Ollama if this is a local Ollama model
+      await ensureOllama(this.config.baseURL, this.config.model);
 
       // 3. 初始化工具系
       this.toolRegistry = createToolRegistry();
