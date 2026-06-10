@@ -51,11 +51,11 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: amd64
-Maintainer: kkkhs <kkkhs@users.noreply.github.com>
+Maintainer: Niklas Borneklint <nborneklint@gmail.com>
 Description: AEGIS CLI - An AI-powered coding assistant
  A CLI Coding Agent inspired by Claude Code that can read,
  write, and execute code to help with software engineering tasks.
-Homepage: https://github.com/kkkhs/ClawdCode
+Homepage: https://github.com/aegisinfo/aegiscode
 EOF
 
 # Install the binary
