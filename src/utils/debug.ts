@@ -6,12 +6,12 @@
 
 /** 设置全局 debug 状态（由 main.tsx parseDebugEarly 调用） */
 export function setGlobalDebug(enabled: boolean): void {
-  (globalThis as any).__CLAWDCODE_DEBUG__ = enabled;
+  (globalThis as any).__AEGIS_DEBUG__ = enabled;
 }
 
 /** 获取全局 debug 状态 */
 export function isDebugEnabled(): boolean {
-  return (globalThis as any).__CLAWDCODE_DEBUG__ === true;
+  return (globalThis as any).__AEGIS_DEBUG__ === true;
 }
 
 /**

@@ -63,7 +63,7 @@ export interface BuildSystemPromptResult {
 // ========== 常
 
 /** 项目配置文件名 */
-const PROJECT_CONFIG_FILENAME = 'CLAWDCODE.md';
+const PROJECT_CONFIG_FILENAME = 'AEGIS.md';
 
 // ========== 辅助函
 

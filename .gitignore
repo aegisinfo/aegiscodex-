@@ -16,3 +16,6 @@ aegiscode-linux
 aegiscode.exe
 aegiscode-macos
 sea-prep.blob
+sea-entry.cjs
+bun.lock
+dist/main.js
