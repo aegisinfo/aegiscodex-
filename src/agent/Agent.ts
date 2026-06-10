@@ -136,8 +136,18 @@ export class Agent {
       // Set Ollama base URL for cross-semantic memory embeddings
       setOllamaBaseUrl(this.config.baseURL);
 
-      // Auto-install / start Ollama if this is a local Ollama model
-      await ensureOllama(this.config.baseURL, this.config.model);
+      // Auto-install / start Ollama; may return a different model if the
+      // requested one doesn't support tools (e.g. bare "llama3" → "llama3.2")
+      const resolvedModel = await ensureOllama(this.config.baseURL, this.config.model);
+      if (resolvedModel && resolvedModel !== this.config.model) {
+        this.config.model = resolvedModel;
+        // Rebuild chat service with the corrected model
+        this.chatService = createChatService({
+          apiKey: this.config.apiKey,
+          baseURL: this.config.baseURL,
+          model: this.config.model,
+        });
+      }
 
       // 3. 初始化工具系
       this.toolRegistry = createToolRegistry();

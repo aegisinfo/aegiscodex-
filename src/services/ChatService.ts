@@ -176,7 +176,20 @@ export class OpenAIChatService implements IChatService {
         return this.chat(messages, tools, signal, streamCallbacks);
       }
 
-      if (error instanceof OpenAI.APIError) throw new Error(`LLM API Error: ${error.message}`);
+      if (error instanceof OpenAI.APIError) {
+        const isOllama = (this.client as any).baseURL?.includes('11434');
+        if (isOllama && error.status === 400 && error.message.includes('does not support tools')) {
+          throw new Error(
+            `Model "${this.model}" does not support tools.\n\n` +
+            `Switch to a tool-capable model:\n` +
+            `  aegis --model llama3.2\n` +
+            `  aegis --model mistral-nemo\n` +
+            `  aegis --model qwen2.5-coder\n\n` +
+            `Or run: ollama pull llama3.2`
+          );
+        }
+        throw new Error(`LLM API Error: ${error.message}`);
+      }
       throw error;
     }
   }

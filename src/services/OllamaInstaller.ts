@@ -1,12 +1,13 @@
 /**
- * OllamaInstaller — auto-install and start Ollama when an Ollama model is selected.
+ * OllamaInstaller — auto-install, start, and validate Ollama when a local
+ * Ollama model is selected.
  *
  * Flow:
- *  1. Detect if the configured baseURL points to a local Ollama instance
- *  2. Check if Ollama is already responding
- *  3. If not: check if the binary exists → start it
- *  4. If binary missing: run the platform install script, then start
- *  5. Pull a default model if none are available
+ *  1. Detect if baseURL points to a local Ollama instance
+ *  2. Ensure server is running (install if missing)
+ *  3. Ensure the requested model is pulled
+ *  4. Check that the model supports tools — auto-swap to llama3.2 if not
+ *  5. Return the final model name to use (may differ from the input)
  */
 
 import { execSync, spawn } from 'child_process';
@@ -14,10 +15,25 @@ import { platform } from 'os';
 
 const POLL_INTERVAL_MS = 600;
 const START_TIMEOUT_MS = 15_000;
+const TOOLS_CAPABLE_FALLBACK = 'llama3.2';
+
+// Models confirmed to NOT support tools in Ollama.
+// llama3.1 / llama3.2 / llama3.3 DO support tools; bare "llama3" does not.
+const TOOL_INCAPABLE_PATTERNS = [
+  /^llama3$/,
+  /^llama3:latest$/,
+  /^llama2(:|$)/,
+  /^codellama(:|$)/,
+  /^phi[23](:|$)/,
+  /^gemma(:|$)/,
+  /^gemma2(:|$)/,
+  /^orca-mini(:|$)/,
+  /^vicuna(:|$)/,
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function isLocalOllamaUrl(baseURL?: string): boolean {
+export function isLocalOllamaUrl(baseURL?: string): boolean {
   if (!baseURL) return false;
   return (
     baseURL.includes('localhost:11434') ||
@@ -32,10 +48,9 @@ function log(msg: string): void {
 
 async function isOllamaResponding(baseURL: string): Promise<boolean> {
   try {
-    const url = baseURL.replace(/\/+$/, '') + '/api/tags';
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2000);
-    const res = await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/tags', { signal: ctrl.signal });
     clearTimeout(timer);
     return res.ok;
   } catch {
@@ -48,47 +63,55 @@ function isBinaryInstalled(): boolean {
     execSync('which ollama', { stdio: 'ignore' });
     return true;
   } catch {
-    // also try common paths
     try { execSync('test -x /usr/local/bin/ollama', { stdio: 'ignore' }); return true; } catch {}
     try { execSync('test -x /usr/bin/ollama', { stdio: 'ignore' }); return true; } catch {}
     return false;
   }
 }
 
+// ── Tool-support check ────────────────────────────────────────────────────────
+
+async function modelSupportsTools(baseURL: string, model: string): Promise<boolean> {
+  // 1. Try the Ollama /api/show capabilities field (Ollama ≥ 0.3.3)
+  try {
+    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/show', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: model }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { capabilities?: string[] };
+      if (Array.isArray(data.capabilities)) {
+        return data.capabilities.includes('tools');
+      }
+    }
+  } catch {
+    // fall through to name heuristic
+  }
+
+  // 2. Name-based heuristic for older Ollama versions
+  const tag = model.toLowerCase().replace(/^registry\.ollama\.ai\/library\//, '');
+  return !TOOL_INCAPABLE_PATTERNS.some(re => re.test(tag));
+}
+
 // ── Install ───────────────────────────────────────────────────────────────────
 
 async function installOllama(): Promise<boolean> {
-  const os = platform();
-
-  if (os === 'win32') {
+  if (platform() === 'win32') {
     log('Auto-install not supported on Windows. Download from https://ollama.com/download');
     return false;
   }
 
   log('Installing Ollama...');
-
   return new Promise((resolve) => {
-    // Official install script works for Linux + macOS
-    const child = spawn(
-      'sh',
-      ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'],
-      { stdio: ['ignore', 'inherit', 'inherit'] }
-    );
-
+    const child = spawn('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
+      stdio: ['ignore', 'inherit', 'inherit'],
+    });
     child.on('close', (code) => {
-      if (code === 0) {
-        log('Ollama installed successfully.');
-        resolve(true);
-      } else {
-        log(`Install script exited with code ${code}. Try manually: curl -fsSL https://ollama.com/install.sh | sh`);
-        resolve(false);
-      }
+      if (code === 0) { log('Ollama installed successfully.'); resolve(true); }
+      else { log(`Install failed (exit ${code}). Try: curl -fsSL https://ollama.com/install.sh | sh`); resolve(false); }
     });
-
-    child.on('error', (err) => {
-      log(`Install failed: ${err.message}`);
-      resolve(false);
-    });
+    child.on('error', (err) => { log(`Install error: ${err.message}`); resolve(false); });
   });
 }
 
@@ -96,13 +119,8 @@ async function installOllama(): Promise<boolean> {
 
 async function startOllamaServer(): Promise<boolean> {
   log('Starting Ollama server...');
+  spawn('ollama', ['serve'], { stdio: 'ignore', detached: true }).unref();
 
-  spawn('ollama', ['serve'], {
-    stdio: 'ignore',
-    detached: true,
-  }).unref();
-
-  // Poll until it responds or timeout
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
@@ -111,8 +129,7 @@ async function startOllamaServer(): Promise<boolean> {
       return true;
     }
   }
-
-  log('Ollama server did not respond in time. Check: ollama serve');
+  log('Ollama server did not respond in time. Try: ollama serve');
   return false;
 }
 
@@ -120,8 +137,7 @@ async function startOllamaServer(): Promise<boolean> {
 
 async function getInstalledModels(baseURL: string): Promise<string[]> {
   try {
-    const url = baseURL.replace(/\/+$/, '') + '/api/tags';
-    const res = await fetch(url);
+    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/tags');
     if (!res.ok) return [];
     const data = await res.json() as { models?: { name: string }[] };
     return (data.models || []).map(m => m.name);
@@ -131,17 +147,13 @@ async function getInstalledModels(baseURL: string): Promise<string[]> {
 }
 
 async function pullModel(modelName: string): Promise<void> {
-  // Strip any path prefix that looks like an Ollama model tag
-  const tag = modelName.split('/').pop() || modelName;
+  const tag = modelName.replace(/^registry\.ollama\.ai\/library\//, '').split('/').pop() || modelName;
   log(`Pulling model "${tag}" (this may take a few minutes)...`);
-
   await new Promise<void>((resolve) => {
-    const child = spawn('ollama', ['pull', tag], {
-      stdio: ['ignore', 'inherit', 'inherit'],
-    });
+    const child = spawn('ollama', ['pull', tag], { stdio: ['ignore', 'inherit', 'inherit'] });
     child.on('close', (code) => {
       if (code === 0) log(`Model "${tag}" ready.`);
-      else log(`Pull exited with code ${code} — you can run: ollama pull ${tag}`);
+      else log(`Pull exited ${code} — run manually: ollama pull ${tag}`);
       resolve();
     });
     child.on('error', () => resolve());
@@ -152,44 +164,58 @@ async function pullModel(modelName: string): Promise<void> {
 
 /**
  * Called by Agent.initialize() before the first API request.
- * No-ops immediately if the baseURL is not a local Ollama endpoint.
+ *
+ * Returns the model name that should actually be used — this may differ from
+ * the `model` argument when the requested model does not support tools and
+ * has been swapped for a capable alternative.
+ *
+ * Returns undefined if baseURL is not a local Ollama endpoint (no-op).
  */
-export async function ensureOllama(baseURL?: string, model?: string): Promise<void> {
-  if (!isLocalOllamaUrl(baseURL)) return;
+export async function ensureOllama(baseURL?: string, model?: string): Promise<string | undefined> {
+  if (!isLocalOllamaUrl(baseURL)) return undefined;
 
   const base = baseURL!.replace(/\/+$/, '') || 'http://localhost:11434';
 
-  // Already up — nothing to do
-  if (await isOllamaResponding(base)) {
-    const models = await getInstalledModels(base);
-    if (models.length === 0 && model) {
-      await pullModel(model);
+  // ── Ensure server is up ───────────────────────────────────────────────────
+  if (!await isOllamaResponding(base)) {
+    if (isBinaryInstalled()) {
+      log('Ollama is installed but not running.');
+      if (!await startOllamaServer()) return model;
+    } else {
+      log('Ollama not found.');
+      if (!await installOllama()) return model;
+      if (!await startOllamaServer()) return model;
     }
-    return;
   }
 
-  // Binary present but server not running
-  if (isBinaryInstalled()) {
-    log('Ollama is installed but not running.');
-    const started = await startOllamaServer();
-    if (!started) return;
-  } else {
-    // Need to install from scratch
-    log('Ollama not found.');
-    const installed = await installOllama();
-    if (!installed) return;
-    const started = await startOllamaServer();
-    if (!started) return;
-  }
+  // ── Ensure model is pulled ────────────────────────────────────────────────
+  const installedModels = await getInstalledModels(base);
+  const requestedTag = (model || '').replace(/^registry\.ollama\.ai\/library\//, '');
 
-  // Ensure the requested model exists
-  const models = await getInstalledModels(base);
-  if (models.length === 0) {
-    const target = model || 'llama3.2';
+  if (installedModels.length === 0) {
+    const target = requestedTag || TOOLS_CAPABLE_FALLBACK;
     await pullModel(target);
-  } else if (model) {
-    const tag = model.split('/').pop() || model;
-    const exists = models.some(m => m === tag || m.startsWith(tag + ':'));
-    if (!exists) await pullModel(model);
+  } else if (requestedTag) {
+    const bare = requestedTag.split(':')[0];
+    const exists = installedModels.some(m => m === requestedTag || m.startsWith(bare + ':') || m === bare);
+    if (!exists) await pullModel(requestedTag);
   }
+
+  // ── Check tool support ────────────────────────────────────────────────────
+  const effectiveModel = requestedTag || TOOLS_CAPABLE_FALLBACK;
+  const supportsTools = await modelSupportsTools(base, effectiveModel);
+
+  if (!supportsTools) {
+    log(`"${effectiveModel}" does not support tools. Switching to ${TOOLS_CAPABLE_FALLBACK}.`);
+
+    // Pull the fallback if needed
+    const bare = TOOLS_CAPABLE_FALLBACK.split(':')[0];
+    const freshModels = await getInstalledModels(base);
+    const fallbackExists = freshModels.some(m => m === TOOLS_CAPABLE_FALLBACK || m.startsWith(bare + ':') || m === bare);
+    if (!fallbackExists) await pullModel(TOOLS_CAPABLE_FALLBACK);
+
+    return TOOLS_CAPABLE_FALLBACK;
+  }
+
+  return effectiveModel || model;
 }
