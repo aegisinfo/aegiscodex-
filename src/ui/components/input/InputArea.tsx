@@ -5,8 +5,25 @@
  * 
  */
 
-import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
+
+// Ink-nib glyph that pulses between filled/hollow when AI is working
+const InkNib: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
+  const NIB_FRAMES = ['◆', '◈', '◇', '◈'] as const;
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    if (!isProcessing) { setFrame(0); return; }
+    const id = setInterval(() => setFrame(f => (f + 1) % NIB_FRAMES.length), 220);
+    return () => clearInterval(id);
+  }, [isProcessing]);
+  return (
+    <Text color={isProcessing ? color : idleColor} bold>
+      {isProcessing ? NIB_FRAMES[frame] : '◆'}
+    </Text>
+  );
+});
+InkNib.displayName = 'InkNib';
 import { RubiksSpinner } from '../common/RubiksSpinner.js';
 import Spinner from 'ink-spinner';
 import { CustomTextInput } from './CustomTextInput.js';
@@ -260,11 +277,13 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           borderStyle="round"
           borderColor={isProcessing ? theme.colors.warning : theme.colors.border.light}
         >
-          {/* 提示符 */}
+          {/* Prompt glyph — ink nib: pulses while AI works */}
           <Box marginRight={1}>
-            <Text color={theme.colors.success} bold>
-              {isProcessing ? '⏳' : '>'}
-            </Text>
+            <InkNib
+              isProcessing={isProcessing}
+              color={theme.colors.warning}
+              idleColor={theme.colors.primary}
+            />
           </Box>
 
           {/* 输入框 - 始终启用，支持命令队列 */}
