@@ -39,11 +39,6 @@ bash install.sh
 
 ## First run
 
-On startup you may see two harmless messages:
-
-- `[DEP0040] DeprecationWarning: The punycode module is deprecated` — a Node.js internal warning, not from this project
-- `[AEGIS] WARNING: Using Anthropic endpoint!` — informational only, confirms which API is active
-
 Add your API keys to `.env` in the project root (or `~/.aegiscode/.env`) before starting:
 
 ```env
