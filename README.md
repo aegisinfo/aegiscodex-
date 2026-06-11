@@ -1,6 +1,11 @@
 # AEGISCode
 
-**AI-powered terminal coding assistant** — BYOK, multi-model, built for developers who prefer to own their tools.
+**aegiscode remembers your project between sessions — so you never have to re-explain your stack, decisions, or context.**
+
+Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Ollama. BYOK — your keys, your cost.
+
+> **Semantic memory** — €2/month. The AI remembers you across every session.  
+> Activate with `/memory activate <token>` after subscribing at [aegiscloud.org](https://aegiscloud.org).
 
 ```
 ╭── AEGISCode ◆ v1.8.0
