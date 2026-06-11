@@ -6,7 +6,7 @@
  * re-rendering every message when the global toggle changes.
  */
 
-import React, { useMemo, useState, useEffect, memo } from 'react'
+import React, { useMemo, useState, useEffect, useRef, memo } from 'react'
 import { Box, Text } from 'ink'
 import stringWidth from 'string-width'
 import { parseMarkdown } from './parser.js'
@@ -56,8 +56,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     isStreaming,
     showAllThinking = false,
   }) => {
-    // Track streaming state in ref to avoid re-renders of non-streaming messages
-    // when a different message is streaming
     const theme = themeManager.getTheme()
     const roleStyle = themeManager.getRoleStyle(role)
 
@@ -73,7 +71,35 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     const isThinkingExpanded = showAllThinking || localExpanded
 
-    const blocks = useMemo(() => parseMarkdown(content), [content])
+    // Incremental markdown parse cache — avoids re-parsing stable content
+    // during streaming by detecting append-only growth and reusing blocks.
+    const parseCacheRef = useRef<{ content: string; blocks: ParsedBlock[] }>({ content: '', blocks: [] });
+
+    const blocks = useMemo(() => {
+      const cache = parseCacheRef.current;
+      if (content === cache.content) return cache.blocks;
+
+      // Incremental: content only grew (append-only streaming delta)
+      if (content.startsWith(cache.content) && cache.content.length > 0) {
+        const delta = content.slice(cache.content.length);
+        const deltaFirstLine = delta.split('\n')[0];
+        // Fast path: delta is pure text (no block-starting patterns like ```, #, -, >, |)
+        if (!/^```|^#{1,6}\s|^[-*+]\s|^\d+\.\s|^>\s|^\s*$|^\|/.test(deltaFirstLine)) {
+          const newBlocks = cache.blocks.slice();
+          const lastBlock = newBlocks[newBlocks.length - 1];
+          if (lastBlock && lastBlock.type === 'text') {
+            newBlocks[newBlocks.length - 1] = { ...lastBlock, content: lastBlock.content + delta };
+            parseCacheRef.current = { content, blocks: newBlocks };
+            return newBlocks;
+          }
+        }
+      }
+
+      // Full re-parse for structural changes or first render
+      const parsed = parseMarkdown(content);
+      parseCacheRef.current = { content, blocks: parsed };
+      return parsed;
+    }, [content])
 
     const thinkingBlocks = useMemo(
       () => (thinking ? parseMarkdown(thinking) : []),
@@ -174,14 +200,27 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
 MessageRenderer.displayName = 'MessageRenderer'
 
-// ===== Streaming Cursor Component =====
+// ===== Streaming Cursor Component (animated) =====
+
+const CURSOR_FRAMES = ['▌', '▋', '▊', '▉', '█', '▉', '▊', '▋']
+const CURSOR_INTERVAL = 120 // ms per frame — smooth 8-frame cycle
 
 const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
   ({ prefixOffset }) => {
     const theme = themeManager.getTheme()
+    const [frame, setFrame] = useState(0)
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setFrame(f => (f + 1) % CURSOR_FRAMES.length)
+      }, CURSOR_INTERVAL)
+      return () => clearInterval(interval)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     return (
       <Box marginLeft={prefixOffset}>
-        <Text color={theme.colors.primary}>▌</Text>
+        <Text color={theme.colors.primary}>{CURSOR_FRAMES[frame]}</Text>
       </Box>
     )
   }

@@ -256,8 +256,9 @@ export function parseMarkdown(content: string): ParsedBlock[] {
     blocks.push({ type: 'text', content: line });
   }
 
-  // 处理未结束的代码
-  if (inCodeBlock && codeBlockContent.length > 0) {
+  // 处理未结束的代码块（渐进式渲染 — 立即显示空的代码块容器）
+  // 移除 && codeBlockContent.length > 0 条件，使得在 ``` 打开后立即渲染代码块
+  if (inCodeBlock) {
     blocks.push({
       type: 'code',
       content: codeBlockContent.join('\n'),
