@@ -412,6 +412,14 @@ export const DEFAULT_MODELS = [
     apiKey: '',
   },
   {
+    id: 'openai-gpt-5.5',
+    name: 'GPT-5.5',
+    provider: 'openai-compatible' as const,
+    model: 'gpt-5.5',
+    baseURL: 'https://api.openai.com/v1',
+    apiKey: '',
+  },
+  {
     id: 'openai-gpt-4o',
     name: 'GPT-4o',
     provider: 'openai-compatible' as const,

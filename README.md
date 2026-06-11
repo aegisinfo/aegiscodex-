@@ -103,6 +103,7 @@ aegiscode ships with pre-configured entries for the following providers. Add you
 | `claude-sonnet-4` | claude-sonnet-4-6 | Anthropic |
 | `claude-opus-4` | claude-opus-4-8 | Anthropic |
 | `claude-haiku-4` | claude-haiku-4-5-20251001 | Anthropic |
+| `openai-gpt-5.5` | gpt-5.5 | OpenAI |
 | `openai-gpt-4o` | gpt-4o | OpenAI |
 | `openai-o3` | o3 | OpenAI |
 | `deepseek-chat` | deepseek-chat | DeepSeek |
