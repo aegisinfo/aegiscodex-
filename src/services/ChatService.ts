@@ -12,6 +12,14 @@ import type {
   StreamCallbacks,
 } from '../agent/types.js';
 
+// For local Ollama models, only include tools when the query looks like a coding task.
+// This avoids sending 350+ tokens of tool schemas on every conversational message,
+// which would add 25-30s of prefill time on CPU.
+function ollamaQueryNeedsTools(messages: Message[]): boolean {
+  const last = messages.filter(m => m.role === 'user').at(-1)?.content ?? '';
+  return /\b(read|edit|write|create|delete|run|execute|bash|file|folder|dir|list|search|grep|find|install|build|test|fix|debug|refactor|rename|move|copy|open|show|cat|ls|pwd|cd|git|npm|pip|python|node)\b/i.test(last);
+}
+
 export interface ChatServiceConfig {
   apiKey: string;
   baseURL?: string;
@@ -83,14 +91,14 @@ export class OpenAIChatService implements IChatService {
         stream: true,
       };
 
-      if (tools && tools.length > 0 && !isGroq) {
-        requestParams.tools = tools.map(tool => ({
+      const includeTools = tools && tools.length > 0 && !isGroq &&
+        (!isOllama || ollamaQueryNeedsTools(messages));
+
+      if (includeTools) {
+        requestParams.tools = tools!.map(tool => ({
           type: 'function' as const,
           function: tool.function,
         }));
-        if (isOllama) {
-          requestParams.tool_choice = 'auto';
-        }
       }
 
       const stream = await this.client.chat.completions.create(

@@ -24,6 +24,8 @@ import type {
 import { createChatService } from '../services/ChatService.js';
 import { buildSystemPrompt } from '../prompts/builder.js';
 import { createPlanModeReminder } from '../prompts/plan.js';
+import { LOCAL_SYSTEM_PROMPT } from '../prompts/default.js';
+import { isLocalOllamaUrl } from '../services/OllamaInstaller.js';
 import {
   ExecutionPipeline,
   ToolRegistry,
@@ -119,12 +121,16 @@ export class Agent {
 
     try {
       // 1. 构建系统提示词（使用四层架
-      const promptResult = await buildSystemPrompt({
-        projectPath: process.cwd(),
-        replaceDefault: this.config.systemPrompt,
-        includeEnvironment: true,
-      });
-      this.systemPrompt = promptResult.prompt;
+      if (isLocalOllamaUrl(this.config.baseURL)) {
+        this.systemPrompt = LOCAL_SYSTEM_PROMPT;
+      } else {
+        const promptResult = await buildSystemPrompt({
+          projectPath: process.cwd(),
+          replaceDefault: this.config.systemPrompt,
+          includeEnvironment: true,
+        });
+        this.systemPrompt = promptResult.prompt;
+      }
 
       // 2. 创
       this.chatService = createChatService({
