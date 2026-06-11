@@ -42,6 +42,11 @@ export function isLocalOllamaUrl(baseURL?: string): boolean {
   );
 }
 
+// Strip /v1 (OpenAI-compat path) to get the Ollama server root for management APIs
+function ollamaRoot(baseURL: string): string {
+  return baseURL.replace(/\/v1\/?$/, '').replace(/\/+$/, '');
+}
+
 function log(msg: string): void {
   process.stderr.write(`\x1b[38;2;83;74;183m[Ollama]\x1b[0m ${msg}\n`);
 }
@@ -50,7 +55,7 @@ async function isOllamaResponding(baseURL: string): Promise<boolean> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 2000);
-    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/tags', { signal: ctrl.signal });
+    const res = await fetch(ollamaRoot(baseURL) + '/api/tags', { signal: ctrl.signal });
     clearTimeout(timer);
     return res.ok;
   } catch {
@@ -81,7 +86,7 @@ function isBinaryInstalled(): boolean {
 async function modelSupportsTools(baseURL: string, model: string): Promise<boolean> {
   // 1. Try the Ollama /api/show capabilities field (Ollama ≥ 0.3.3)
   try {
-    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/show', {
+    const res = await fetch(ollamaRoot(baseURL) + '/api/show', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: model }),
@@ -150,7 +155,7 @@ async function startOllamaServer(): Promise<boolean> {
 
 async function getInstalledModels(baseURL: string): Promise<string[]> {
   try {
-    const res = await fetch(baseURL.replace(/\/+$/, '') + '/api/tags');
+    const res = await fetch(ollamaRoot(baseURL) + '/api/tags');
     if (!res.ok) return [];
     const data = await res.json() as { models?: { name: string }[] };
     return (data.models || []).map(m => m.name);
@@ -187,7 +192,7 @@ async function pullModel(modelName: string): Promise<void> {
 export async function ensureOllama(baseURL?: string, model?: string): Promise<string | undefined> {
   if (!isLocalOllamaUrl(baseURL)) return undefined;
 
-  const base = baseURL!.replace(/\/+$/, '') || 'http://localhost:11434';
+  const base = ollamaRoot(baseURL!) || 'http://localhost:11434';
 
   // ── Ensure server is up ───────────────────────────────────────────────────
   if (!await isOllamaResponding(base)) {

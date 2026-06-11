@@ -407,7 +407,7 @@ export const DEFAULT_MODELS = [
     id: 'ollama-local',
     name: 'Ollama (local)',
     provider: 'openai-compatible' as const,
-    model: 'llama3',
+    model: 'llama3.2',
     baseURL: 'http://localhost:11434/v1',
     apiKey: 'ollama',
   },
