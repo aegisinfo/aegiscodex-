@@ -6,13 +6,10 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
+import { useShallow } from 'zustand/react/shallow';
 import { themeManager } from '../../themes/index.js';
 import {
-  useSessionId,
-  useTokenUsage,
-  useMessageCount,
-  usePendingCommands,
-  getState,
+  useClawdStore,
 } from '../../../store/index.js';
 
 interface ChatStatusBarProps {
@@ -43,14 +40,19 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   isVisible = true,
 }) => {
   const theme = themeManager.getTheme();
-  
-  // 自己订阅需要的状
-  const sessionId = useSessionId();
-  const tokenUsage = useTokenUsage();
-  const messageCount = useMessageCount();
-  const queuedCommands = usePendingCommands().length;
-  const themeName = theme.name;
   const displayModel = model;
+
+  // Single store subscription with shallow comparison — avoids cascading
+  // re-renders when unrelated store slices change (e.g. isThinking during streaming).
+  // The 4 individual selectors were causing 4 separate subscriptions.
+  const { sessionId, tokenUsage, messageCount, queuedCommands } = useClawdStore(
+    useShallow((state) => ({
+      sessionId: state.session.sessionId,
+      tokenUsage: state.session.tokenUsage,
+      messageCount: state.session.messages.length,
+      queuedCommands: state.command.pendingCommands.length,
+    }))
+  );
 
   if (!isVisible) {
     return null;

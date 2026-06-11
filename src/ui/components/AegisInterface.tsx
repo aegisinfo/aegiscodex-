@@ -445,10 +445,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
 
     if (isSlashCommand(value)) {
-      // Use batch buffer to prevent cascading re-renders from multiple store updates.
-      // All mutations are applied as a single set() call via flushBatchWithStore().
+      // Phase 1: flush user message + thinking=true immediately so the UI
+      // shows feedback (spinner) during long-running commands like /multi.
       startBatch();
       batchAddUserMessage(value);
+      batchSetThinking(true);
+      flushBatchWithStore(vanillaStore);
 
       try {
         const result = await executeSlashCommand(value, {
@@ -460,7 +462,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         });
 
         if (result.type === 'selector' && result.selector) {
-          cancelBatch();
+          sessionActions().setThinking(false);
           setSelectorState({
             isVisible: true,
             title: result.selector.title,
@@ -472,12 +474,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         }
 
         if (result.sendToAgent && result.content) {
-          batchSetThinking(false);
-          flushBatchWithStore(vanillaStore);
+          sessionActions().setThinking(false);
           await processCommand(result.content, { silent: true });
           return;
         }
 
+        // Phase 2: batch the command result and flush it
+        startBatch();
         if (result.content) {
           batchAddAssistantMessage(result.content);
         } else if (result.message) {
@@ -486,6 +489,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           batchAddAssistantMessage('error: ' + result.error);
         }
       } catch (error) {
+        startBatch();
         batchAddAssistantMessage(
           'error: ' + (error instanceof Error ? error.message : String(error))
         );

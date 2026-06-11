@@ -360,7 +360,6 @@ function analyzeRenderEvents(): {
   result.storms.forEach(s => stormSet.add(s));
   result.storms = Array.from(stormSet);
   result.cascades = result.cascades.slice(0, 20)
-  result.cascades = result.cascades.slice(0, 20)
 
   return result
 }

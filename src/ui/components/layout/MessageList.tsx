@@ -129,7 +129,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         for (let i = 0; i < newMessages.length; i++) {
           const a = prevMessages[i];
           const b = newMessages[i];
-          if (a.id !== b.id || a.isStreaming !== b.isStreaming || a.content !== b.content || a.thinking !== b.thinking) {
+          if (a.id !== b.id || a.isStreaming !== b.isStreaming || a.content !== b.content || a.thinking !== b.thinking || a.contentBlocks !== b.contentBlocks) {
             messagesChanged = true;
             break;
           }

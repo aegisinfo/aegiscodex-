@@ -121,9 +121,12 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     const filteredBlocks = useMemo(() => {
       return blocks.filter((block, index) => {
         if (block.type !== 'empty') return true
-        if (index > 0 && blocks[index - 1].type === 'empty') return false
-        // Keep first non-empty block (don't filter first text)
-        return false
+        // Filter out leading empty blocks
+        if (index === 0) return false
+        // Deduplicate consecutive empty blocks (keep one for paragraph spacing)
+        if (blocks[index - 1].type === 'empty') return false
+        // Keep a single empty block between non-empty blocks for spacing
+        return true
       })
     }, [blocks])
 
