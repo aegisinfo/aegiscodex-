@@ -1,14 +1,26 @@
 /**
- * MessageList - RAF-throttled store subscriber.
+ * MessageList - renders messages with RAF-throttled streaming content.
  *
- * During streaming, content deltas go ONLY to the mutable streaming buffer
- * (see sessionSlice.ts). This component uses a requestAnimationFrame loop
- * to periodically sync buffer content into the store and trigger Ink
- * re-renders at a capped rate (~30fps), avoiding cascading re-renders
- * on every individual token delta.
+ * KEY DESIGN: Streaming content NEVER goes through the zustand store.
+ * The store holds committed (non-streaming) messages + the message stub
+ * from startStreamingMessage (with isStreaming flag). Content deltas are
+ * appended to the mutable streaming buffer (streaming-buffer.ts).
  *
- * For non-streaming updates (new messages, tool calls), the store
- * subscription handles them immediately.
+ * The RAF loop polls the buffer for new content and triggers a LOCAL
+ * re-render (via streamingVersion counter) without touching the store.
+ * During render, we merge store message content with live buffer content
+ * for the active streaming message.
+ *
+ * Why bypass the store for streaming?
+ *   vanillaStore.setState() triggers the store subscription, which calls
+ *   setMessages([...state.session.messages]) — a NEW ARRAY EVERY TIME.
+ *   This forces Ink to reconcile the entire tree and repaint the terminal,
+   *   causing a visible "blink" at every RAF tick (~20fps).
+ *
+ *   By reading the buffer directly in render and using local state for
+ *   re-render signalling, we eliminate store→subscription→re-render
+ *   cascades. Only MessageList re-renders, and React.memo on MessageRenderer
+ *   prevents re-processing unchanged messages.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -16,18 +28,20 @@ import { Box } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent, getConsumerPosition, resetConsumerPosition, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
-import type { SessionMessage } from '../../../store/types.js';
+import { getStreamingContent, resetConsumerPosition, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
 
 interface MessageListProps {
   terminalWidth: number;
 }
 
-const RAF_INTERVAL_MS = 50; // ~20fps — balances responsiveness and render cost
+const RAF_INTERVAL_MS = 120; // ~8fps — fewer repaints = less blink; still responsive for terminal
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
+  // Local counter bumped by the RAF loop when buffer content grows.
+  // Triggers a re-render that reads fresh content from the buffer directly.
+  const [streamingVersion, setStreamingVersion] = useState(0);
 
   // Track last-seen content & thinking length per streaming message to avoid dupes
   // Separate tracking is needed because thinking often arrives ahead of content (DeepSeek, etc.)
@@ -38,9 +52,11 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     let lastRafTime = 0;
 
     /**
-     * RAF loop: during active streaming, poll the buffer and sync to store.
-     * This is the ONLY place buffer content gets applied to the store.
-     * Individual token deltas (appendToStreamingMessage) write only to the buffer.
+     * RAF loop: poll the mutable streaming buffer for new content.
+     * When content is found, bump streamingVersion to trigger a local
+     * re-render. NEVER writes to the zustand store — the store is only
+     * updated when streaming starts/finishes or on explicit flushes
+     * (flushStreamBuffer, finishStreamingMessage).
      */
     const pollBuffer = (now: number) => {
       if (now - lastRafTime < RAF_INTERVAL_MS) {
@@ -54,32 +70,21 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       const streamingMsg = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
 
       if (buffer && streamingMsg) {
-        const lastPos = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
-        const newContent = buffer.content.slice(lastPos.content);
-        const newThinking = buffer.thinking.slice(lastPos.thinking);
+        const lastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+        const hasNewContent = buffer.content.length > lastLen.content;
+        const hasNewThinking = buffer.thinking.length > lastLen.thinking;
 
-        if (newContent || newThinking) {
-          vanillaStore.setState((s: any) => ({
-            session: {
-              ...s.session,
-              messages: s.session.messages.map((msg: SessionMessage) =>
-                msg.id === streamingMsg.id
-                  ? {
-                      ...msg,
-                      content: newContent ? msg.content + newContent : msg.content,
-                      thinking: newThinking ? (msg.thinking || '') + newThinking : msg.thinking,
-                    }
-                  : msg
-              ),
-            },
-          }));
+        if (hasNewContent || hasNewThinking) {
           lastContentLenRef.current[streamingMsg.id] = {
             content: buffer.content.length,
             thinking: buffer.thinking.length,
           };
           // Keep consumer position in sync so finishStreamingMessage only
-          // flushes content the RAF loop hasn't already written to the store.
+          // flushes content the RAF loop hasn't already displayed.
           resetConsumerPosition();
+          // Trigger local re-render — does NOT touch the store, so no
+          // cascading subscription callbacks across the app.
+          setStreamingVersion(v => v + 1);
         }
       }
 
@@ -89,7 +94,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     // Start RAF loop
     rafId = requestAnimationFrame(pollBuffer);
 
-    // Store subscription for non-streaming updates (new messages, etc.)
+    // Store subscription for non-streaming updates only (new messages,
+    // streaming flag changes, showAllThinking toggle, etc.)
     const unsub = vanillaStore.subscribe((state) => {
       setMessages([...state.session.messages]);
       setShowAllThinking(state.app.showAllThinking);
@@ -106,22 +112,51 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       if (rafId !== null) cancelAnimationFrame(rafId);
       unsub();
     };
+    // streamingVersion is intentionally NOT in deps — it's set by the RAF loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <Box flexDirection="column">
-      {messages.map((msg, index) => (
-        <MessageRenderer
-          key={msg.id || index}
-          content={msg.content}
-          role={msg.role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-          thinking={msg.thinking}
-          isStreaming={msg.isStreaming}
-          showAllThinking={showAllThinking}
-        />
-      ))}
+      {messages.map((msg, index) => {
+        // For the active streaming message, MERGE store content (committed
+        // by flushStreamBuffer/finishStreamingMessage) with live buffer
+        // content (uncommitted streaming deltas). This avoids
+        // store→subscription→re-render cascades.
+        if (msg.isStreaming && isActiveStreamingMessage(msg)) {
+          const buffer = getStreamingContent();
+          if (buffer) {
+            // msg.content has base content from flushStreamBuffer or initial '';
+            // buffer.content has deltas since last flush/init.
+            // Merge them so flushed content doesn't disappear.
+            return (
+              <MessageRenderer
+                key={msg.id || index}
+                content={msg.content + buffer.content}
+                role={msg.role}
+                terminalWidth={terminalWidth}
+                showPrefix={true}
+                thinking={(msg.thinking || '') + buffer.thinking}
+                isStreaming={true}
+                showAllThinking={showAllThinking}
+              />
+            );
+          }
+        }
+
+        return (
+          <MessageRenderer
+            key={msg.id || index}
+            content={msg.content}
+            role={msg.role}
+            terminalWidth={terminalWidth}
+            showPrefix={true}
+            thinking={msg.thinking}
+            isStreaming={msg.isStreaming}
+            showAllThinking={showAllThinking}
+          />
+        );
+      })}
     </Box>
   );
 });

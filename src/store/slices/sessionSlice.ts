@@ -4,7 +4,7 @@
 
 import type { StateCreator } from 'zustand';
 import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage } from '../types.js';
-import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, getConsumerPosition, resetConsumerPosition } from '../streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, resetConsumerPosition } from '../streaming-buffer.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -151,6 +151,9 @@ export const createSessionSlice: StateCreator<
       // Reset RAF consumer position so the MessageList RAF loop doesn't
       // re-append old buffer content that was just flushed to the store.
       resetConsumerPosition();
+      // Re-init buffer with the same messageId so subsequent streaming
+      // deltas (after tool calls) are picked up by the RAF loop.
+      initStreamingBuffer(id);
     },
 
     /**
@@ -171,17 +174,17 @@ export const createSessionSlice: StateCreator<
     },
 
     /**
-     * Finalize streaming: sync remaining buffer content to the store
-     * and mark message as no longer streaming.
+     * Finalize streaming: sync all buffer content to the store and mark
+     * message as no longer streaming.
+     *
+     * The RAF loop in MessageList now reads the buffer directly and does
+     * NOT write to the store during streaming. This means the store's
+     * message.content is still the initial empty string (plus any
+     * flushStreamBuffer calls). We must write ALL buffer content here.
      */
     finishStreamingMessage: (id: string) => {
       const bufferContent = peekBuffer();
-      // The RAF loop in MessageList tracks its own write position via resetConsumerPosition().
-      // Only write the tail the RAF loop hasn't flushed yet — otherwise we double the content.
-      const consumed = getConsumerPosition();
       clearBuffer();
-      const remainingContent = bufferContent.content.slice(consumed.content);
-      const remainingThinking = bufferContent.thinking.slice(consumed.thinking);
       set((state) => ({
         session: {
           ...state.session,
@@ -189,8 +192,8 @@ export const createSessionSlice: StateCreator<
             msg.id === id
               ? {
                   ...msg,
-                  content: msg.content + remainingContent,
-                  thinking: (msg.thinking || '') + remainingThinking,
+                  content: msg.content + bufferContent.content,
+                  thinking: (msg.thinking || '') + bufferContent.thinking,
                   isStreaming: false,
                 }
               : msg
