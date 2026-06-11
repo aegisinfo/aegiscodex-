@@ -45,9 +45,6 @@ export class OpenAIChatService implements IChatService {
       } : undefined,
     });
     this.model = config.model || 'claude-sonnet-4-6';
-    if (isAnthropic || (config.baseURL && config.baseURL.includes('anthropic'))) {
-      console.error(`[AEGIS] WARNING: Using Anthropic endpoint! baseURL=${config.baseURL} model=${this.model}`);
-    }
   }
 
   async chat(
