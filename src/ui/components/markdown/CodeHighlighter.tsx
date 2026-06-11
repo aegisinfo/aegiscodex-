@@ -1,5 +1,6 @@
 /**
  * CodeHighlighter - with line-level caching to avoid re-highlighting unchanged lines
+ * Supports diff rendering when language === 'diff'
  */
 
 import React, { useMemo, memo } from 'react';
@@ -51,6 +52,33 @@ function doHighlightAst(
   }
 }
 
+// ── Diff rendering ──────────────────────────────────────────────────────────
+
+const DIFF_HEADER_RE = /^(diff --git |index |--- |\+\+\+ )/;
+const DIFF_HUNK_RE = /^@@ /;
+const DIFF_ADD_RE = /^\+/;
+const DIFF_DEL_RE = /^\-/;
+const DIFF_NBSP_RE = /^ /; // non-breaking space used by some diff outputs
+
+function getDiffLineStyle(
+  line: string
+): { prefix: string; color: string; bold?: boolean } | null {
+  if (DIFF_HEADER_RE.test(line)) {
+    return { prefix: ' ', color: 'yellow' };
+  }
+  if (DIFF_HUNK_RE.test(line)) {
+    return { prefix: ' ', color: 'cyan' };
+  }
+  if (DIFF_ADD_RE.test(line)) {
+    return { prefix: '+', color: 'green' };
+  }
+  if (DIFF_DEL_RE.test(line)) {
+    return { prefix: '-', color: 'red' };
+  }
+  // context lines
+  return { prefix: ' ', color: '' };
+}
+
 interface CodeHighlighterProps {
   content: string;
   language?: string;
@@ -75,6 +103,8 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
 
   const totalLines = startLine + lines.length - 1;
   const lineNumberWidth = showLineNumbers ? String(totalLines).length + 1 : 0;
+
+  const isDiff = language === 'diff' || language === 'patch';
 
   return (
     <Box
@@ -102,23 +132,27 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
         </Box>
       </Box>
 
-      {lines.map((line, index) => {
-        const lineNumber = startLine + index;
-        return (
-          <Box key={index} flexDirection="row">
-            {showLineNumbers && (
-              <Box width={lineNumberWidth} marginRight={1}>
-                <Text dimColor>
-                  {String(lineNumber).padStart(lineNumberWidth - 1, ' ')}
-                </Text>
+      {isDiff ? (
+        <DiffRenderer lines={lines} />
+      ) : (
+        lines.map((line, index) => {
+          const lineNumber = startLine + index;
+          return (
+            <Box key={index} flexDirection="row">
+              {showLineNumbers && (
+                <Box width={lineNumberWidth} marginRight={1}>
+                  <Text dimColor>
+                    {String(lineNumber).padStart(lineNumberWidth - 1, ' ')}
+                  </Text>
+                </Box>
+              )}
+              <Box flexShrink={1}>
+                <CachedHighlightedLine line={line} language={language} syntaxColors={syntaxColors} />
               </Box>
-            )}
-            <Box flexShrink={1}>
-              <CachedHighlightedLine line={line} language={language} syntaxColors={syntaxColors} />
             </Box>
-          </Box>
-        );
-      })}
+          );
+        })
+      )}
     </Box>
   );
 };
@@ -213,5 +247,48 @@ function getColorForClass(className: string, syntaxColors: SyntaxColors): string
   }
   return syntaxColors.default;
 }
+
+// ── Diff Renderer ──────────────────────────────────────────────────────────
+
+const DiffRenderer: React.FC<{ lines: string[] }> = memo(({ lines }) => {
+  return (
+    <>
+      {lines.map((line, index) => {
+        const style = getDiffLineStyle(line);
+        if (!style) {
+          // fallback: render as plain text
+          return (
+            <Box key={index} flexDirection="row">
+              <Text>{line}</Text>
+            </Box>
+          );
+        }
+        const { prefix: stylePrefix, color, bold } = style;
+        // Strip the first character (+/-) for display and show it as prefix instead
+        const displayText = color
+          ? (DIFF_ADD_RE.test(line) || DIFF_DEL_RE.test(line)
+              ? line.slice(1)
+              : line)
+          : line;
+
+        return (
+          <Box key={index} flexDirection="row">
+            <Box width={2} flexShrink={0}>
+              <Text bold={bold} color={color || undefined}>
+                {stylePrefix}
+              </Text>
+            </Box>
+            <Box flexShrink={1}>
+              <Text color={color || undefined} bold={bold}>
+                {displayText}
+              </Text>
+            </Box>
+          </Box>
+        );
+      })}
+    </>
+  );
+});
+DiffRenderer.displayName = 'DiffRenderer';
 
 export default CodeHighlighter;
