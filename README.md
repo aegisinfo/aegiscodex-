@@ -2,7 +2,10 @@
 
 **aegiscode remembers your project between sessions — so you never have to re-explain your stack, decisions, or context.**
 
-<img src="assets/demo.svg" alt="aegiscode terminal demo" width="100%"/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/demo.svg">
+  <img src="assets/demo.svg" alt="aegiscode terminal demo — animated" width="100%"/>
+</picture>
 
 Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Ollama. BYOK — your keys, your cost.
 
