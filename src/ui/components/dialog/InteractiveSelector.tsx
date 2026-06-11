@@ -4,7 +4,7 @@
  * 
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager, useIsFocused } from '../../focus/index.js';
@@ -49,6 +49,13 @@ export function InteractiveSelector<T = string>({
   const theme = themeManager.getTheme();
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
+  // Fire-once guard: prevents Enter key-repeat from calling onSelect multiple times.
+  // Ink's useInput listener stays registered until the component unmounts, but
+  // React may not re-render (and unmount) until after several key events have
+  // already queued. Resetting on options change handles re-use of the same component.
+  const selectFiredRef = useRef(false);
+  useEffect(() => { selectFiredRef.current = false; }, [options]);
+
   // 处理键盘输
   useInput(
     (input, key) => {
@@ -60,7 +67,10 @@ export function InteractiveSelector<T = string>({
       } else if (key.downArrow || input === 'j') {
         setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
       } else if (key.return) {
-        onSelect(options[selectedIndex].value);
+        if (!selectFiredRef.current) {
+          selectFiredRef.current = true;
+          onSelect(options[selectedIndex].value);
+        }
       } else if (key.escape || input === 'q') {
         onCancel();
       }
