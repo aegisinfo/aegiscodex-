@@ -68,7 +68,7 @@ import {
 } from '../../store/index.js';
 
 // Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { appendToBuffer, appendThinkingToBuffer } from '../../store/streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer } from '../../store/streaming-buffer.js';
 
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
@@ -605,21 +605,37 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         },
         onToolCallStart: (toolCall) => {
           if (abortController.signal.aborted) return;
-          // Tool calls need to be shown immediately — flush current buffer first
+          // Flush current buffer to capture preceding text before tool call
           sessionActions().flushStreamBuffer(streamingMessageId);
           const name = toolCall.function?.name || 'tool';
-          const args = formatToolArgs(name, toolCall.function?.arguments);
-          const line = args ? '\n  ' + name + ' ' + args : '\n  ' + name;
-          sessionActions().forceAppendToMessage(streamingMessageId, line);
+          const toolId = toolCall.id || `${name}-${Date.now()}`;
+          // Add tool_use content block to message
+          sessionActions().addContentBlock(streamingMessageId, {
+            type: 'tool_use',
+            id: toolId,
+            name,
+            input: '',
+            status: 'running',
+          });
+          startToolCallInBuffer(toolId, name);
+        },
+        onToolCallDelta: (toolCallId, argumentsDelta) => {
+          if (abortController.signal.aborted) return;
+          appendToolCallDelta(toolCallId, argumentsDelta);
+          sessionActions().updateToolCallInput(streamingMessageId, toolCallId, argumentsDelta);
         },
         onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
           if (abortController.signal.aborted) return;
-          const err = formatToolResult(toolResult);
-          const suffix = toolResult.success ? ' \u2713' : ' \u2717 ' + err;
-          sessionActions().forceAppendToMessage(
-            streamingMessageId,
-            suffix + '\n'
-          );
+          const toolId = _toolCall.id;
+          const isError = !toolResult.success;
+          finishToolCallInBuffer(toolId, isError);
+          sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success');
+          const resultContent = toolResult.error
+            ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
+            : (toolResult.displayContent
+                ? (toolResult.displayContent.length > 200 ? toolResult.displayContent.slice(0, 200) + '...' : toolResult.displayContent)
+                : '');
+          sessionActions().addToolResultBlock(streamingMessageId, toolId, resultContent, isError);
         },
       });
 

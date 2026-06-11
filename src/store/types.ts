@@ -4,6 +4,39 @@
 
 import type { RuntimeConfig } from '../config/types.js';
 
+// ========== Content Block Model (mirrors Claude SSE content blocks)
+
+export type ContentBlockType = 'text' | 'thinking' | 'tool_use' | 'tool_result';
+
+export type ToolCallStatus = 'running' | 'success' | 'error';
+
+export interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ThinkingBlock {
+  type: 'thinking';
+  thinking: string;
+}
+
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: string;        // JSON args being accumulated
+  status: ToolCallStatus;
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error: boolean;
+}
+
+export type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock;
+
 // ========== 会话状
 
 export interface TokenUsage {
@@ -23,6 +56,8 @@ export interface SessionMessage {
   /** 思考过程内容（用于支持 DeepSeek R1 等推理模型） */
   thinking?: string;
   isStreaming?: boolean;
+  /** Content blocks for structured rendering (Claude-style: text, thinking, tool_use, tool_result) */
+  contentBlocks?: ContentBlock[];
 }
 
 export interface SessionState {
@@ -49,6 +84,17 @@ export interface SessionActions {
   /** Write directly to store message, bypassing buffer (for tool calls) */
   forceAppendToMessage: (id: string, contentDelta: string) => void;
   finishStreamingMessage: (id: string) => void;
+
+  // ===== Content Block Operations (Claude-style) =====
+  /** Add a content block to the currently streaming message */
+  addContentBlock: (messageId: string, block: ContentBlock) => void;
+  /** Update a tool_use block's accumulated input JSON */
+  updateToolCallInput: (messageId: string, toolCallId: string, partialJson: string) => void;
+  /** Update a tool_use block's status */
+  updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus) => void;
+  /** Add a tool_result block linked to a tool_use */
+  addToolResultBlock: (messageId: string, toolUseId: string, content: string, isError: boolean) => void;
+
   setThinking: (isThinking: boolean) => void;
   setCompacting: (isCompacting: boolean) => void;
   setCurrentCommand: (command: string | null) => void;

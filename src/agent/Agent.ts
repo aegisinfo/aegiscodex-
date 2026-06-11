@@ -341,6 +341,7 @@ export class Agent {
       const streamCallbacks: StreamCallbacks = {
         onContentDelta: options?.onContentDelta,
         onThinkingDelta: options?.onThinkingDelta,
+        onToolCallDelta: options?.onToolCallDelta,
       };
 
       // 3.5 调用 LLM（流

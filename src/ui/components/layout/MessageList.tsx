@@ -72,8 +72,16 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
 
       if (buffer && streamingMsg) {
         const lastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
-        const deltaContent = buffer.content.length - lastLen.content;
-        const deltaThinking = buffer.thinking.length - lastLen.thinking;
+
+        // Detect buffer re-initialization (after flushStreamBuffer) — reset tracking
+        // so new content after a tool call triggers re-renders correctly.
+        if (lastLen.content > buffer.content.length || lastLen.thinking > buffer.thinking.length) {
+          lastContentLenRef.current[streamingMsg.id] = { content: 0, thinking: 0 };
+        }
+
+        const updatedLastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+        const deltaContent = buffer.content.length - updatedLastLen.content;
+        const deltaThinking = buffer.thinking.length - updatedLastLen.thinking;
 
         // Only re-render when enough new content accumulates (threshold)
         // or when streaming finishes (final flush). Small character-by-character
@@ -143,6 +151,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
                 thinking={(msg.thinking || '') + buffer.thinking}
                 isStreaming={true}
                 showAllThinking={showAllThinking}
+                contentBlocks={msg.contentBlocks}
               />
             );
           }
@@ -158,6 +167,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
             thinking={msg.thinking}
             isStreaming={msg.isStreaming}
             showAllThinking={showAllThinking}
+            contentBlocks={msg.contentBlocks}
           />
         );
       })}

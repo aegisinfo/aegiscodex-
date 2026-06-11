@@ -4,6 +4,12 @@
  * Critical perf note: no useStore hooks inside the memo component!
  * useShowAllThinking is passed as a prop from MessageList to avoid
  * re-rendering every message when the global toggle changes.
+ *
+ * Supports Content Block model (Claude-style):
+ * - text blocks → rendered as markdown
+ * - thinking blocks → collapsible with preview
+ * - tool_use blocks → formatted tool calls with status
+ * - tool_result blocks → tool output
  */
 
 import React, { useMemo, useState, useEffect, useRef, memo } from 'react'
@@ -13,6 +19,7 @@ import { parseMarkdown } from './parser.js'
 import { themeManager } from '../../themes/index.js'
 import { CodeHighlighter } from './CodeHighlighter.js'
 import type { ParsedBlock } from './types.js'
+import type { ContentBlock, ToolCallStatus } from '../../../store/types.js'
 
 interface MessageRendererProps {
   content: string
@@ -23,6 +30,8 @@ interface MessageRendererProps {
   isStreaming?: boolean
   /** Passed from parent to avoid hook call inside memo */
   showAllThinking?: boolean
+  /** Content blocks for Claude-style structured rendering */
+  contentBlocks?: ContentBlock[]
 }
 
 /**
@@ -43,6 +52,8 @@ const messageRendererComparator = (
   if (prev.content !== next.content) return false
   // Compare thinking state
   if (prev.thinking !== next.thinking) return false
+  // Compare content blocks
+  if (prev.contentBlocks !== next.contentBlocks) return false
   return true
 }
 
@@ -55,6 +66,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     thinking,
     isStreaming,
     showAllThinking = false,
+    contentBlocks,
   }) => {
     const theme = themeManager.getTheme()
     const roleStyle = themeManager.getRoleStyle(role)
@@ -135,6 +147,17 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0
 
+    // Separate content blocks by type for ordered rendering
+    const toolUseBlocks = useMemo(() => {
+      if (!contentBlocks) return null
+      return contentBlocks.filter(b => b.type === 'tool_use')
+    }, [contentBlocks])
+
+    const toolResultBlocks = useMemo(() => {
+      if (!contentBlocks) return null
+      return contentBlocks.filter(b => b.type === 'tool_result')
+    }, [contentBlocks])
+
     return (
       <Box flexDirection="column" marginBottom={1}>
         {filteredThinkingBlocks.length > 0 && (
@@ -144,7 +167,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
                 <Box marginBottom={0}>
                   <Text color={theme.colors.text.muted} dimColor>
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                    <Text italic>thinking...</Text>
+                    <Text italic>{isStreaming ? 'thinking...' : '▾ thought'}</Text>
+                    <Text> · {thinkingLineCount} lines</Text>
                   </Text>
                 </Box>
                 <Box
@@ -189,6 +213,43 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
           />
         ))}
 
+        {/* Render tool_use content blocks */}
+        {toolUseBlocks && toolUseBlocks.length > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            {toolUseBlocks.map((block, idx) => {
+              if (block.type !== 'tool_use') return null
+              return (
+                <ToolUseBlockRenderer
+                  key={`tool-${block.id || idx}`}
+                  name={block.name}
+                  input={block.input}
+                  status={block.status}
+                  theme={theme}
+                  prefixOffset={prefixOffset}
+                />
+              )
+            })}
+          </Box>
+        )}
+
+        {/* Render tool_result content blocks */}
+        {toolResultBlocks && toolResultBlocks.length > 0 && (
+          <Box flexDirection="column">
+            {toolResultBlocks.map((block, idx) => {
+              if (block.type !== 'tool_result') return null
+              return (
+                <ToolResultBlockRenderer
+                  key={`result-${block.tool_use_id || idx}`}
+                  content={block.content}
+                  isError={block.is_error}
+                  theme={theme}
+                  prefixOffset={prefixOffset}
+                />
+              )
+            })}
+          </Box>
+        )}
+
         {isStreaming && (
           <StreamingCursor prefixOffset={prefixOffset} />
         )}
@@ -228,7 +289,106 @@ const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
 
 StreamingCursor.displayName = 'StreamingCursor'
 
-// ===== 
+// ===== Tool Use Block Component =====
+
+interface ToolUseBlockRendererProps {
+  name: string
+  input: string
+  status: ToolCallStatus
+  theme: any
+  prefixOffset: number
+}
+
+const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
+  name,
+  input,
+  status,
+  theme,
+  prefixOffset,
+}) => {
+  const statusIcon = status === 'running' ? '…' : status === 'success' ? '✓' : '✗'
+  const statusColor = status === 'running' ? theme.colors.warning : status === 'success' ? theme.colors.success : theme.colors.error
+
+  const argSummary = useMemo(() => {
+    if (!input) return ''
+    try {
+      const parsed = JSON.parse(input)
+      const entries = Object.entries(parsed)
+      if (entries.length === 0) return ''
+      const [key, val] = entries[0]
+      const valStr = String(val)
+      return `${key}=${valStr.length > 40 ? valStr.slice(0, 37) + '...' : valStr}`
+    } catch {
+      return ''
+    }
+  }, [input])
+
+  return (
+    <Box flexDirection="column" marginLeft={prefixOffset} marginY={0}>
+      <Box>
+        <Text color={theme.colors.text.secondary} bold>
+          {'  '}Tool
+        </Text>
+        <Text color={statusColor}>
+          {' '}{statusIcon}
+        </Text>
+        <Text color={theme.colors.primary}>
+          {' '}{name}
+        </Text>
+        {argSummary && (
+          <Text color={theme.colors.text.muted} dimColor>
+            {' '}({argSummary})
+          </Text>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
+// ===== Tool Result Block Component =====
+
+interface ToolResultBlockRendererProps {
+  content: string
+  isError: boolean
+  theme: any
+  prefixOffset: number
+}
+
+const ToolResultBlockRenderer: React.FC<ToolResultBlockRendererProps> = ({
+  content,
+  isError,
+  theme,
+  prefixOffset,
+}) => {
+  const shortContent = useMemo(() => {
+    if (!content) return ''
+    const lines = content.split('\n')
+    const truncated = lines.slice(0, 3).join('\n')
+    if (lines.length > 3) return truncated + '\n...'
+    return truncated
+  }, [content])
+
+  if (!content) return null
+
+  return (
+    <Box flexDirection="column" marginLeft={prefixOffset} marginY={0}>
+      <Box>
+        <Text color={isError ? theme.colors.error : theme.colors.success} dimColor>
+          {'  '}{isError ? '✗' : '✓'} Result
+        </Text>
+      </Box>
+      {shortContent && (
+        <Box marginLeft={2}>
+          <Text color={theme.colors.text.muted} dimColor wrap="wrap">
+            {shortContent.length > 200 ? shortContent.slice(0, 200) + '...' : shortContent}
+          </Text>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+// ===== Block Renderer =====
 
 interface BlockRendererProps {
   block: ParsedBlock

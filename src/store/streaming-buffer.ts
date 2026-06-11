@@ -7,21 +7,30 @@
  * The MessageList RAF loop reads from this buffer directly.
  *
  * Only start/finish streaming and explicit flushes update the store.
+ *
+ * Supports Content Block model (Claude-style): text, thinking, tool_use, tool_result.
  */
 
-import type { SessionMessage } from './types.js';
+import type { SessionMessage, ToolCallStatus } from './types.js';
 
 // Shared mutable state for the currently streaming message
 interface StreamingState {
   messageId: string | null;
   content: string;
   thinking: string;
+  // Content block tracking
+  currentBlockType: 'text' | 'thinking' | null;
+  currentBlockAccumulator: string;
+  toolCalls: Map<string, { name: string; arguments: string; status: ToolCallStatus }>;
 }
 
 const streamingState: StreamingState = {
   messageId: null,
   content: '',
   thinking: '',
+  currentBlockType: null,
+  currentBlockAccumulator: '',
+  toolCalls: new Map(),
 };
 
 /**
@@ -51,20 +60,67 @@ export function initStreamingBuffer(messageId: string): void {
   streamingState.messageId = messageId;
   streamingState.content = '';
   streamingState.thinking = '';
+  streamingState.currentBlockType = null;
+  streamingState.currentBlockAccumulator = '';
+  streamingState.toolCalls.clear();
 }
 
 /**
  * Append content delta to the mutable buffer (NO store update).
+ * Tracks as 'text' content block if we're in a text block.
  */
 export function appendToBuffer(contentDelta: string): void {
   streamingState.content += contentDelta;
+  // Track as text block
+  streamingState.currentBlockType = 'text';
+  streamingState.currentBlockAccumulator += contentDelta;
 }
 
 /**
  * Append thinking delta to the mutable buffer (NO store update).
+ * Tracks as 'thinking' content block.
  */
 export function appendThinkingToBuffer(thinkingDelta: string): void {
   streamingState.thinking += thinkingDelta;
+  streamingState.currentBlockType = 'thinking';
+  streamingState.currentBlockAccumulator += thinkingDelta;
+}
+
+/**
+ * Signal the start of a tool_use block. Records the tool call ID and name.
+ */
+export function startToolCallInBuffer(toolCallId: string, name: string): void {
+  streamingState.toolCalls.set(toolCallId, { name, arguments: '', status: 'running' });
+}
+
+/**
+ * Accumulate tool call arguments JSON delta.
+ */
+export function appendToolCallDelta(toolCallId: string, argumentsDelta: string): void {
+  const existing = streamingState.toolCalls.get(toolCallId);
+  if (existing) {
+    existing.arguments += argumentsDelta;
+  }
+}
+
+/**
+ * Mark a tool call as completed (success or error).
+ */
+export function finishToolCallInBuffer(toolCallId: string, isError: boolean): void {
+  const existing = streamingState.toolCalls.get(toolCallId);
+  if (existing) {
+    existing.status = isError ? 'error' : 'success';
+  }
+}
+
+/**
+ * Get tool calls accumulated in the buffer.
+ */
+export function getBufferedToolCalls(): Array<{ id: string; name: string; arguments: string; status: ToolCallStatus }> {
+  return Array.from(streamingState.toolCalls.entries()).map(([id, tc]) => ({
+    id,
+    ...tc,
+  }));
 }
 
 /**
@@ -74,6 +130,9 @@ export function clearBuffer(): void {
   streamingState.messageId = null;
   streamingState.content = '';
   streamingState.thinking = '';
+  streamingState.currentBlockType = null;
+  streamingState.currentBlockAccumulator = '';
+  streamingState.toolCalls.clear();
 }
 
 // Global consumer position — tracks how much of the buffer the RAF loop has consumed.
@@ -84,17 +143,46 @@ let consumerPosition = { content: 0, thinking: 0 };
  * Check if buffer has content.
  */
 export function hasBufferContent(): boolean {
-  return streamingState.content.length > 0 || streamingState.thinking.length > 0;
+  return streamingState.content.length > 0 || streamingState.thinking.length > 0 || streamingState.toolCalls.size > 0;
 }
 
 /**
  * Peek at current content without clearing.
  */
-export function peekBuffer(): { content: string; thinking: string } {
+export function peekBuffer(): { content: string; thinking: string; currentBlockType: string | null; currentBlockContent: string; toolCalls: Array<{ id: string; name: string; arguments: string; status: ToolCallStatus }> } {
   return {
     content: streamingState.content,
     thinking: streamingState.thinking,
+    currentBlockType: streamingState.currentBlockType,
+    currentBlockContent: streamingState.currentBlockAccumulator,
+    toolCalls: getBufferedToolCalls(),
   };
+}
+
+/**
+ * Drain the accumulated content block from the buffer.
+ * Returns the block data and resets the accumulator.
+ */
+export function drainContentBlock(): { type: 'text' | 'thinking'; content: string } | null {
+  if (!streamingState.currentBlockType || !streamingState.currentBlockAccumulator) {
+    return null;
+  }
+  const block = {
+    type: streamingState.currentBlockType as 'text' | 'thinking',
+    content: streamingState.currentBlockAccumulator,
+  };
+  streamingState.currentBlockType = null;
+  streamingState.currentBlockAccumulator = '';
+  return block;
+}
+
+/**
+ * Drain tool calls from the buffer.
+ */
+export function drainToolCalls(): Array<{ id: string; name: string; arguments: string; status: ToolCallStatus }> {
+  const calls = getBufferedToolCalls();
+  streamingState.toolCalls.clear();
+  return calls;
 }
 
 /**

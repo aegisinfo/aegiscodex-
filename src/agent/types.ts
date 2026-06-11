@@ -129,7 +129,10 @@ export interface LoopOptions {
   
   /** 工具调用开始回调 */
   onToolCallStart?: (toolCall: Partial<ToolCall>) => void;
-  
+
+  /** 工具调用参数增量回调（流式） */
+  onToolCallDelta?: (toolCallId: string, argumentsDelta: string) => void;
+
   /** 工具结果回调 */
   onToolResult?: (toolCall: ToolCall, result: ToolResult) => void;
   

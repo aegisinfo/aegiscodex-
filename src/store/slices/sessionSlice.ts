@@ -3,7 +3,7 @@
  */
 
 import type { StateCreator } from 'zustand';
-import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage } from '../types.js';
+import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage, ContentBlock, ToolCallStatus } from '../types.js';
 import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, resetConsumerPosition } from '../streaming-buffer.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -202,8 +202,85 @@ export const createSessionSlice: StateCreator<
       }));
     },
 
+    // ===== Content Block Operations =====
+
+    addContentBlock: (messageId: string, block: ContentBlock) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  contentBlocks: [...(msg.contentBlocks || []), block],
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
+    updateToolCallInput: (messageId: string, toolCallId: string, partialJson: string) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === messageId && msg.contentBlocks
+              ? {
+                  ...msg,
+                  contentBlocks: msg.contentBlocks.map(block =>
+                    block.type === 'tool_use' && block.id === toolCallId
+                      ? { ...block, input: block.input + partialJson } as ContentBlock
+                      : block
+                  ),
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
+    updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === messageId && msg.contentBlocks
+              ? {
+                  ...msg,
+                  contentBlocks: msg.contentBlocks.map(block =>
+                    block.type === 'tool_use' && block.id === toolCallId
+                      ? { ...block, status } as ContentBlock
+                      : block
+                  ),
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
+    addToolResultBlock: (messageId: string, toolUseId: string, content: string, isError: boolean) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  contentBlocks: [
+                    ...(msg.contentBlocks || []),
+                    { type: 'tool_result', tool_use_id: toolUseId, content, is_error: isError } as ContentBlock,
+                  ],
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
     /**
-     * 
+     *
      */
     setThinking: (isThinking: boolean) => {
       set((state) => ({
