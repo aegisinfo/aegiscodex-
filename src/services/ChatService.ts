@@ -197,6 +197,11 @@ export class OpenAIChatService implements IChatService {
       );
 
       if (isTransient) {
+        // Don't retry if content was already streaming: the UI buffer has partial
+        // content and a retry with the same streamCallbacks would double it.
+        if (content.length > 0) {
+          return { content, reasoningContent: reasoningContent || undefined, usage };
+        }
         const delay = 1000;
         process.stderr.write(`[RETRY] after ${delay}ms\n`);
         await new Promise(r => setTimeout(r, delay));

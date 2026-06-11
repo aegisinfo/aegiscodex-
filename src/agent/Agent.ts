@@ -372,8 +372,10 @@ export class Agent {
 
       // 3.6 检查是否完成（无工具调
       if (!turnResult.toolCalls || turnResult.toolCalls.length === 0) {
-        // 意图未完成检
-        if (this.detectIncompleteIntent(turnResult.content) && recentRetries < 2) {
+        // 意图未完成检 — disabled for local Ollama: the check triggers on
+        // conversational replies, causing a second LLM turn whose content
+        // gets streamed into the same buffer → duplicate response in the UI.
+        if (!isLocal && this.detectIncompleteIntent(turnResult.content) && recentRetries < 2) {
           recentRetries++;
           messages.push({
             role: 'user',

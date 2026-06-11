@@ -177,11 +177,16 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     // 提交处
     const handleSubmit = useCallback(
-      (value: string) => {
-        if (value.trim() && onSubmitRef.current) {
-          addToHistory(value); // 添加到内部历
-          onSubmitRef.current(value);
-          clearInput();
+      (_value: string) => {
+        // Read from ref, not prop: the prop lags until React re-renders, so holding
+        // Enter fires multiple submits with the same stale value. The ref is
+        // pre-cleared here so any queued handler calls before re-render bail out.
+        const current = inputRef.current.value;
+        if (current.trim() && onSubmitRef.current) {
+          inputRef.current = { value: '', cursorPosition: 0 }; // guard before any async
+          addToHistory(current);
+          clearInput(); // queues setInput('') for React
+          onSubmitRef.current(current);
         }
       },
       [clearInput, addToHistory]
