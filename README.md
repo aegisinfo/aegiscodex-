@@ -45,6 +45,8 @@ Add your API keys to `.env` in the project root (or `~/.aegiscode/.env`) before 
 ANTHROPIC_API_KEY=sk-ant-...
 DEEPSEEK_API_KEY=sk-...
 GROQ_API_KEY=gsk_...
+GEMINI_API_KEY=AIza...
+OPENAI_API_KEY=sk-...
 ```
 
 ---
@@ -101,10 +103,14 @@ aegiscode ships with pre-configured entries for the following providers. Add you
 | `claude-sonnet-4` | claude-sonnet-4-6 | Anthropic |
 | `claude-opus-4` | claude-opus-4-8 | Anthropic |
 | `claude-haiku-4` | claude-haiku-4-5-20251001 | Anthropic |
+| `openai-gpt-4o` | gpt-4o | OpenAI |
+| `openai-o3` | o3 | OpenAI |
 | `deepseek-chat` | deepseek-chat | DeepSeek |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek |
 | `groq-llama` | llama-3.3-70b-versatile | Groq |
 | `groq-deepseek` | qwen-qwq-32b | Groq |
+| `gemini-2.5-pro` | gemini-2.5-pro | Google |
+| `gemini-2.5-flash` | gemini-2.5-flash | Google |
 | `ollama-local` | llama3.2 | Ollama (local) |
 
 Any OpenAI-compatible API can be added as a custom model.
