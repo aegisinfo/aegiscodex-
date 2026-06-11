@@ -255,17 +255,18 @@ MessageRenderer.displayName = 'MessageRenderer'
 
 // ===== Streaming Cursor Component (animated) =====
 
-const CURSOR_FRAMES = ['▌', '▋', '▊', '▉', '█', '▉', '▊', '▋']
-const CURSOR_INTERVAL = 120 // ms per frame — smooth 8-frame cycle
+// Clean blinking cursor — subtle thin bar, no pulsing blue block
+const CURSOR_FRAMES = ['▏', ' ']
+const CURSOR_INTERVAL = 530 // ms — calm blink rate
 
 const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
   ({ prefixOffset }) => {
     const theme = themeManager.getTheme()
-    const [frame, setFrame] = useState(0)
+    const [visible, setVisible] = useState(true)
 
     useEffect(() => {
       const interval = setInterval(() => {
-        setFrame(f => (f + 1) % CURSOR_FRAMES.length)
+        setVisible(v => !v)
       }, CURSOR_INTERVAL)
       return () => clearInterval(interval)
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +274,7 @@ const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
 
     return (
       <Box marginLeft={prefixOffset}>
-        <Text color={theme.colors.primary}>{CURSOR_FRAMES[frame]}</Text>
+        <Text dimColor color={theme.colors.text.muted}>{visible ? CURSOR_FRAMES[0] : CURSOR_FRAMES[1]}</Text>
       </Box>
     )
   }

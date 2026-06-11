@@ -70,14 +70,14 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
 
     if (value.length === 0) {
       // 空输入，显示光标和占位
-      return chalk.inverse(' ') + chalk.dim(placeholder);
+      return chalk.dim('▏') + chalk.dim(placeholder);
     }
 
     const before = value.slice(0, cursorPosition);
-    const cursorChar = value[cursorPosition] || ' ';
-    const after = value.slice(cursorPosition + 1);
+    const after = value.slice(cursorPosition);
 
-    return `${before}${chalk.inverse(cursorChar)}${after}`;
+    // Thin bar cursor sits at the cursor position — no blue block, no pulsing
+    return `${before}${chalk.dim('▏')}${after}`;
   }, [value, cursorPosition, isActive, placeholder]);
 
   // 粘贴检测状
