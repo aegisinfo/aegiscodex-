@@ -98,14 +98,15 @@ AEGISCode ships with pre-configured entries for the following providers. Add you
 
 | ID | Model | Provider |
 |----|-------|----------|
-| `claude-sonnet-4` | claude-sonnet-4-20250514 | Anthropic |
-| `claude-opus-4` | claude-opus-4-20250514 | Anthropic |
+| `claude-fable-5` | claude-fable-5 | Anthropic |
+| `claude-sonnet-4` | claude-sonnet-4-6 | Anthropic |
+| `claude-opus-4` | claude-opus-4-8 | Anthropic |
 | `claude-haiku-4` | claude-haiku-4-5-20251001 | Anthropic |
 | `deepseek-chat` | deepseek-chat | DeepSeek |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek |
 | `groq-llama` | llama-3.3-70b-versatile | Groq |
 | `groq-deepseek` | qwen-qwq-32b | Groq |
-| `ollama-local` | llama3 | Ollama (local) |
+| `ollama-local` | llama3.2 | Ollama (local) |
 
 Any OpenAI-compatible API can be added as a custom model.
 

@@ -348,24 +348,32 @@ export const DEFAULT_PERMISSIONS: PermissionConfig = {
  */
 export const DEFAULT_MODELS = [
   {
-    id: 'claude-sonnet-4',
-    name: 'Claude Sonnet 4',
+    id: 'claude-fable-5',
+    name: 'Claude Fable 5',
     provider: 'anthropic' as const,
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-fable-5',
+    baseURL: 'https://api.anthropic.com/v1',
+    apiKey: '',
+  },
+  {
+    id: 'claude-sonnet-4',
+    name: 'Claude Sonnet 4.6',
+    provider: 'anthropic' as const,
+    model: 'claude-sonnet-4-6',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
   },
   {
     id: 'claude-opus-4',
-    name: 'Claude Opus 4',
+    name: 'Claude Opus 4.8',
     provider: 'anthropic' as const,
-    model: 'claude-opus-4-20250514',
+    model: 'claude-opus-4-8',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
   },
   {
     id: 'claude-haiku-4',
-    name: 'Claude Haiku 4',
+    name: 'Claude Haiku 4.5',
     provider: 'anthropic' as const,
     model: 'claude-haiku-4-5-20251001',
     baseURL: 'https://api.anthropic.com/v1',
@@ -415,7 +423,7 @@ export const DEFAULT_MODELS = [
 
 export const DEFAULT_CONFIG: ClawdConfig = {
   default: {
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
   },
