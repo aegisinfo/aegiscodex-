@@ -10,7 +10,8 @@
 Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Ollama. BYOK — your keys, your cost.
 
 > **Semantic memory** — €2/month. The AI remembers you across every session.  
-> Activate with `/memory activate <token>` after subscribing at [aegiscloud.org](https://aegiscloud.org).
+> Subscribe at [aegiscloud.org](https://aegiscloud.org) — check your inbox for the activation token, then run:  
+> `/memory activate <token>`
 
 ---
 
@@ -97,7 +98,7 @@ API keys go in the model entry, not in `.bashrc` or environment variables — th
 
 ## Built-in models
 
-AEGISCode ships with pre-configured entries for the following providers. Add your API key to activate them:
+aegiscode ships with pre-configured entries for the following providers. Add your API key to activate them:
 
 | ID | Model | Provider |
 |----|-------|----------|
@@ -153,7 +154,7 @@ Changes are saved to `config.json` immediately.
 
 ## Tools
 
-AEGISCode can read, write, and execute files in your project. Tool permissions are configured per-project in `config.json`:
+aegiscode can read, write, and execute files in your project. Tool permissions are configured per-project in `config.json`:
 
 ```json
 {
@@ -178,7 +179,7 @@ Permission modes:
 
 ## Memory
 
-Persistent cross-session memory requires an active subscription (€2/month via aegiscloud.org). Activate with a memory token:
+Persistent cross-session memory requires an active subscription (€2/month). Subscribe at [aegiscloud.org](https://aegiscloud.org) — your activation token will arrive by email. Then run:
 
 ```
 /memory activate <token>
@@ -201,7 +202,7 @@ aegis --resume <session-id>   # resume by ID
 
 ## MCP
 
-AEGISCode supports MCP (Model Context Protocol) servers. Configure in `config.json`:
+aegiscode supports MCP (Model Context Protocol) servers. Configure in `config.json`:
 
 ```json
 {
@@ -222,4 +223,4 @@ AEGISCode supports MCP (Model Context Protocol) servers. Configure in `config.js
 
 **Niklas Borneklint** — [aegiscloud.org](https://aegiscloud.org) · [@aegisinfo](https://github.com/aegisinfo)
 
-Part of the AEGIS ecosystem.
+Part of the ÆGIS ecosystem.
