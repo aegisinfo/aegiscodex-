@@ -60,18 +60,37 @@ export class OpenAIChatService implements IChatService {
       });
 
 
+      const isGroq   = (this.client as any).baseURL?.includes('groq.com') || false;
+      const isOllama = (this.client as any).baseURL?.includes('11434') || false;
+
+      // For small local Ollama models, inject a guardrail into the system message
+      // so they don't hallucinate tool calls for casual/conversational input.
+      if (isOllama) {
+        const sysIdx = openaiMessages.findIndex(m => m.role === 'system');
+        const guardrail = '\n\nIMPORTANT: Only call tools when the user explicitly asks you to work with files, run commands, or perform a coding task. For greetings and conversational messages respond with plain text only — do NOT call any tool.';
+        if (sysIdx >= 0) {
+          const existing = openaiMessages[sysIdx];
+          openaiMessages[sysIdx] = {
+            ...existing,
+            content: (typeof existing.content === 'string' ? existing.content : '') + guardrail,
+          };
+        }
+      }
+
       const requestParams: OpenAI.ChatCompletionCreateParams = {
         model: this.model,
         messages: openaiMessages,
         stream: true,
       };
 
-      const isGroq = this.client.baseURL?.includes('groq.com') || false;
       if (tools && tools.length > 0 && !isGroq) {
         requestParams.tools = tools.map(tool => ({
           type: 'function' as const,
           function: tool.function,
         }));
+        if (isOllama) {
+          requestParams.tool_choice = 'auto';
+        }
       }
 
       const stream = await this.client.chat.completions.create(
@@ -177,7 +196,6 @@ export class OpenAIChatService implements IChatService {
       }
 
       if (error instanceof OpenAI.APIError) {
-        const isOllama = (this.client as any).baseURL?.includes('11434');
         if (isOllama && error.status === 400 && error.message.includes('does not support tools')) {
           throw new Error(
             `Model "${this.model}" does not support tools.\n\n` +
