@@ -240,7 +240,7 @@ export const createSessionSlice: StateCreator<
       }));
     },
 
-    updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus) => {
+    updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus, completedAt?: number) => {
       set((state) => ({
         session: {
           ...state.session,
@@ -250,7 +250,7 @@ export const createSessionSlice: StateCreator<
                   ...msg,
                   contentBlocks: msg.contentBlocks.map(block =>
                     block.type === 'tool_use' && block.id === toolCallId
-                      ? { ...block, status } as ContentBlock
+                      ? { ...block, status, ...(completedAt ? { completedAt } : {}) } as ContentBlock
                       : block
                   ),
                 }

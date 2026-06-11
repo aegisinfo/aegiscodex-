@@ -616,6 +616,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             name,
             input: '',
             status: 'running',
+            startedAt: Date.now(),
           });
           startToolCallInBuffer(toolId, name);
         },
@@ -629,7 +630,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           const toolId = _toolCall.id;
           const isError = !toolResult.success;
           finishToolCallInBuffer(toolId, isError);
-          sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success');
+          sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success', Date.now());
           const resultContent = toolResult.error
             ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
             : (toolResult.displayContent

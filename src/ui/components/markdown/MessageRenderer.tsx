@@ -147,16 +147,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0
 
-    // Separate content blocks by type for ordered rendering
-    const toolUseBlocks = useMemo(() => {
-      if (!contentBlocks) return null
-      return contentBlocks.filter(b => b.type === 'tool_use')
-    }, [contentBlocks])
-
-    const toolResultBlocks = useMemo(() => {
-      if (!contentBlocks) return null
-      return contentBlocks.filter(b => b.type === 'tool_result')
-    }, [contentBlocks])
+    const hasToolBlocks = contentBlocks && contentBlocks.some(b => b.type === 'tool_use' || b.type === 'tool_result')
 
     return (
       <Box flexDirection="column" marginBottom={1}>
@@ -213,39 +204,36 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
           />
         ))}
 
-        {/* Render tool_use content blocks */}
-        {toolUseBlocks && toolUseBlocks.length > 0 && (
+        {/* Render tool blocks in order — each result appears directly below its tool call */}
+        {hasToolBlocks && (
           <Box flexDirection="column" marginTop={1}>
-            {toolUseBlocks.map((block, idx) => {
-              if (block.type !== 'tool_use') return null
-              return (
-                <ToolUseBlockRenderer
-                  key={`tool-${block.id || idx}`}
-                  name={block.name}
-                  input={block.input}
-                  status={block.status}
-                  theme={theme}
-                  prefixOffset={prefixOffset}
-                />
-              )
-            })}
-          </Box>
-        )}
-
-        {/* Render tool_result content blocks */}
-        {toolResultBlocks && toolResultBlocks.length > 0 && (
-          <Box flexDirection="column">
-            {toolResultBlocks.map((block, idx) => {
-              if (block.type !== 'tool_result') return null
-              return (
-                <ToolResultBlockRenderer
-                  key={`result-${block.tool_use_id || idx}`}
-                  content={block.content}
-                  isError={block.is_error}
-                  theme={theme}
-                  prefixOffset={prefixOffset}
-                />
-              )
+            {contentBlocks!.map((block, idx) => {
+              if (block.type === 'tool_use') {
+                return (
+                  <ToolUseBlockRenderer
+                    key={`tool-${block.id || idx}`}
+                    name={block.name}
+                    input={block.input}
+                    status={block.status}
+                    startedAt={block.startedAt}
+                    completedAt={block.completedAt}
+                    theme={theme}
+                    prefixOffset={prefixOffset}
+                  />
+                )
+              }
+              if (block.type === 'tool_result') {
+                return (
+                  <ToolResultBlockRenderer
+                    key={`result-${block.tool_use_id || idx}`}
+                    content={block.content}
+                    isError={block.is_error}
+                    theme={theme}
+                    prefixOffset={prefixOffset}
+                  />
+                )
+              }
+              return null
             })}
           </Box>
         )}
@@ -289,12 +277,70 @@ const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
 
 StreamingCursor.displayName = 'StreamingCursor'
 
+// ===== Tool Call Visual Components =====
+
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPINNER_INTERVAL = 80
+
+const ToolSpinner: React.FC<{ color: string }> = React.memo(({ color }) => {
+  const [frame, setFrame] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setFrame(f => (f + 1) % SPINNER_FRAMES.length), SPINNER_INTERVAL)
+    return () => clearInterval(timer)
+  }, [])
+  return <Text color={color}>{SPINNER_FRAMES[frame]}</Text>
+})
+ToolSpinner.displayName = 'ToolSpinner'
+
+function shortenPath(p: string): string {
+  if (p.length <= 45) return p
+  const parts = p.split('/')
+  return parts.length > 3 ? '…/' + parts.slice(-2).join('/') : p
+}
+
+function getToolSummary(name: string, input: string): string {
+  if (!input) return name
+  try {
+    const args = JSON.parse(input)
+    switch (name) {
+      case 'Read':
+      case 'Write':
+      case 'Edit':
+        return `${name}(${shortenPath(args.file_path || '')})`
+      case 'Bash': {
+        const cmd = (args.command || '').trim().replace(/\n/g, ' ')
+        return `${name}(${cmd.length > 60 ? cmd.slice(0, 57) + '…' : cmd})`
+      }
+      case 'Glob':
+        return `${name}(${args.pattern || ''})`
+      case 'Grep':
+        return `${name}(${args.pattern || ''}${args.path ? ` in ${shortenPath(args.path)}` : ''})`
+      default: {
+        const entries = Object.entries(args)
+        if (entries.length === 0) return name
+        const [, val] = entries[0]
+        const valStr = String(val)
+        return `${name}(${valStr.length > 45 ? valStr.slice(0, 42) + '…' : valStr})`
+      }
+    }
+  } catch {
+    return name
+  }
+}
+
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
 // ===== Tool Use Block Component =====
 
 interface ToolUseBlockRendererProps {
   name: string
   input: string
   status: ToolCallStatus
+  startedAt: number
+  completedAt?: number
   theme: any
   prefixOffset: number
 }
@@ -303,44 +349,35 @@ const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
   name,
   input,
   status,
+  startedAt,
+  completedAt,
   theme,
   prefixOffset,
 }) => {
-  const statusIcon = status === 'running' ? '…' : status === 'success' ? '✓' : '✗'
-  const statusColor = status === 'running' ? theme.colors.warning : status === 'success' ? theme.colors.success : theme.colors.error
-
-  const argSummary = useMemo(() => {
-    if (!input) return ''
-    try {
-      const parsed = JSON.parse(input)
-      const entries = Object.entries(parsed)
-      if (entries.length === 0) return ''
-      const [key, val] = entries[0]
-      const valStr = String(val)
-      return `${key}=${valStr.length > 40 ? valStr.slice(0, 37) + '...' : valStr}`
-    } catch {
-      return ''
-    }
-  }, [input])
+  const summary = useMemo(() => getToolSummary(name, input), [name, input])
+  const isRunning = status === 'running'
+  const isError = status === 'error'
+  const elapsed = !isRunning && completedAt ? formatElapsed(completedAt - startedAt) : null
 
   return (
-    <Box flexDirection="column" marginLeft={prefixOffset} marginY={0}>
-      <Box>
-        <Text color={theme.colors.text.secondary} bold>
-          {'  '}Tool
+    <Box marginLeft={prefixOffset} marginY={0}>
+      <Text color={isRunning ? theme.colors.primary : isError ? theme.colors.error : theme.colors.text.muted} bold>
+        {'● '}
+      </Text>
+      {isRunning && (
+        <>
+          <ToolSpinner color={theme.colors.warning} />
+          <Text>{' '}</Text>
+        </>
+      )}
+      <Text color={isRunning ? theme.colors.text.primary : theme.colors.text.muted} dimColor={!isRunning}>
+        {summary}
+      </Text>
+      {elapsed && (
+        <Text color={theme.colors.text.muted} dimColor>
+          {'  '}{elapsed}
         </Text>
-        <Text color={statusColor}>
-          {' '}{statusIcon}
-        </Text>
-        <Text color={theme.colors.primary}>
-          {' '}{name}
-        </Text>
-        {argSummary && (
-          <Text color={theme.colors.text.muted} dimColor>
-            {' '}({argSummary})
-          </Text>
-        )}
-      </Box>
+      )}
     </Box>
   )
 }
@@ -360,30 +397,26 @@ const ToolResultBlockRenderer: React.FC<ToolResultBlockRendererProps> = ({
   theme,
   prefixOffset,
 }) => {
-  const shortContent = useMemo(() => {
-    if (!content) return ''
-    const lines = content.split('\n')
-    const truncated = lines.slice(0, 3).join('\n')
-    if (lines.length > 3) return truncated + '\n...'
-    return truncated
+  const lines = useMemo(() => {
+    if (!content) return []
+    const all = content.split('\n').filter(l => l.trim())
+    return all.slice(0, 4)
   }, [content])
 
-  if (!content) return null
+  if (lines.length === 0) return null
 
   return (
-    <Box flexDirection="column" marginLeft={prefixOffset} marginY={0}>
-      <Box>
-        <Text color={isError ? theme.colors.error : theme.colors.success} dimColor>
-          {'  '}{isError ? '✗' : '✓'} Result
-        </Text>
-      </Box>
-      {shortContent && (
-        <Box marginLeft={2}>
-          <Text color={theme.colors.text.muted} dimColor wrap="wrap">
-            {shortContent.length > 200 ? shortContent.slice(0, 200) + '...' : shortContent}
+    <Box flexDirection="column" marginLeft={prefixOffset} marginBottom={0}>
+      {lines.map((line, i) => (
+        <Box key={i}>
+          <Text color={theme.colors.text.muted} dimColor>
+            {i === 0 ? (isError ? '└ ✗ ' : '└ ') : '  '}
+          </Text>
+          <Text color={isError ? theme.colors.error : theme.colors.text.muted} dimColor wrap="wrap">
+            {line.length > 120 ? line.slice(0, 117) + '…' : line}
           </Text>
         </Box>
-      )}
+      ))}
     </Box>
   )
 }

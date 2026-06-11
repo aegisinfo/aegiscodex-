@@ -26,6 +26,8 @@ export interface ToolUseBlock {
   name: string;
   input: string;        // JSON args being accumulated
   status: ToolCallStatus;
+  startedAt: number;
+  completedAt?: number;
 }
 
 export interface ToolResultBlock {
@@ -91,7 +93,7 @@ export interface SessionActions {
   /** Update a tool_use block's accumulated input JSON */
   updateToolCallInput: (messageId: string, toolCallId: string, partialJson: string) => void;
   /** Update a tool_use block's status */
-  updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus) => void;
+  updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus, completedAt?: number) => void;
   /** Add a tool_result block linked to a tool_use */
   addToolResultBlock: (messageId: string, toolUseId: string, content: string, isError: boolean) => void;
 
