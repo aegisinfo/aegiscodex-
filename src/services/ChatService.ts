@@ -56,6 +56,12 @@ export class OpenAIChatService implements IChatService {
     signal?: AbortSignal,
     streamCallbacks?: StreamCallbacks
   ): Promise<ChatResponse> {
+    const isGroq   = (this.client as any).baseURL?.includes('groq.com') || false;
+    const isOllama = (this.client as any).baseURL?.includes('11434') || false;
+    let content = '';
+    let reasoningContent = '';
+    let usage: ChatResponse['usage'] | undefined;
+
     try {
       // Strip zero-width characters and control characters that cause JSON parse errors
       const cleanContent = (s: string) => s.replace(/[\u200b-\u200f\u2028-\u202f\ufeff]/g, '');
@@ -66,10 +72,6 @@ export class OpenAIChatService implements IChatService {
         }
         return converted;
       });
-
-
-      const isGroq   = (this.client as any).baseURL?.includes('groq.com') || false;
-      const isOllama = (this.client as any).baseURL?.includes('11434') || false;
 
       // For small local Ollama models, inject a guardrail into the system message
       // so they don't hallucinate tool calls for casual/conversational input.
@@ -106,10 +108,7 @@ export class OpenAIChatService implements IChatService {
         { signal }
       );
 
-      let content = '';
-      let reasoningContent = '';
       const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
-      let usage: ChatResponse['usage'] | undefined;
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;

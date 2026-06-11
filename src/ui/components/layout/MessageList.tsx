@@ -29,8 +29,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   const [messages, setMessages] = useState(() => getState().session.messages);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
 
-  // Track last-seen content length per streaming message to avoid dupes
-  const lastContentLenRef = useRef<Record<string, number>>({});
+  // Track last-seen content & thinking length per streaming message to avoid dupes
+  // Separate tracking is needed because thinking often arrives ahead of content (DeepSeek, etc.)
+  const lastContentLenRef = useRef<Record<string, { content: number; thinking: number }>>({});
 
   useEffect(() => {
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
@@ -53,9 +54,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       const streamingMsg = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
 
       if (buffer && streamingMsg) {
-        const lastLen = lastContentLenRef.current[streamingMsg.id] || 0;
-        const newContent = buffer.content.slice(lastLen);
-        const newThinking = buffer.thinking.slice(lastLen);
+        const lastPos = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+        const newContent = buffer.content.slice(lastPos.content);
+        const newThinking = buffer.thinking.slice(lastPos.thinking);
 
         if (newContent || newThinking) {
           vanillaStore.setState((s: any) => ({
@@ -72,7 +73,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
               ),
             },
           }));
-          lastContentLenRef.current[streamingMsg.id] = buffer.content.length;
+          lastContentLenRef.current[streamingMsg.id] = {
+            content: buffer.content.length,
+            thinking: buffer.thinking.length,
+          };
           // Keep consumer position in sync so finishStreamingMessage only
           // flushes content the RAF loop hasn't already written to the store.
           resetConsumerPosition();
@@ -90,7 +94,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       setMessages([...state.session.messages]);
       setShowAllThinking(state.app.showAllThinking);
 
-      // Clean up content length tracking for finished messages
+      // Clean up position tracking for finished messages
       state.session.messages.forEach(msg => {
         if (!msg.isStreaming) {
           delete lastContentLenRef.current[msg.id];
