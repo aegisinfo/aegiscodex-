@@ -225,8 +225,8 @@ export class ContextManager {
         try {
           const fs = require('fs'), os = require('os'), path = require('path');
           const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.aegiscode', 'config.json'), 'utf8'));
-          return cfg?.default?.model || 'claude-sonnet-4-20250514';
-        } catch { return 'claude-sonnet-4-20250514'; }
+          return cfg?.default?.model || 'claude-sonnet-4-6';
+        } catch { return 'claude-sonnet-4-6'; }
       })(),
       maxContextTokens: this.options.compressionThreshold,
     });
@@ -277,7 +277,7 @@ export class ContextManager {
 
     const result = await CompactionService.compact(messages, {
       trigger: 'manual',
-      modelName: 'claude-sonnet-4-20250514',
+      modelName: 'claude-sonnet-4-6',
       maxContextTokens: this.options.compressionThreshold,
     });
 

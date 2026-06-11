@@ -44,7 +44,7 @@ export class OpenAIChatService implements IChatService {
         'anthropic-beta': 'messages-2023-12-15',
       } : undefined,
     });
-    this.model = config.model || 'claude-sonnet-4-20250514';
+    this.model = config.model || 'claude-sonnet-4-6';
     if (isAnthropic || (config.baseURL && config.baseURL.includes('anthropic'))) {
       console.error(`[AEGIS] WARNING: Using Anthropic endpoint! baseURL=${config.baseURL} model=${this.model}`);
     }

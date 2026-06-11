@@ -566,7 +566,7 @@ export class SharedMemory {
       };
 
       const body = isAnthropic ? {
-        model: model || 'claude-sonnet-4-20250514',
+        model: model || 'claude-sonnet-4-6',
         max_tokens: 150,
         messages: [{ role: 'user', content: `Summarize this conversation in 2-3 sentences. Focus on key decisions, problems solved, and important context:\n\n${conversation}` }],
       } : {

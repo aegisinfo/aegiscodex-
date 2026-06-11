@@ -173,7 +173,7 @@ export const compactCommand: SlashCommand = {
       }));
       
       const result = await CompactionService.compact(messages, {
-        modelName: modelName || 'claude-sonnet-4-20250514',
+        modelName: modelName || 'claude-sonnet-4-6',
         maxContextTokens,
         chatService,
         trigger: 'manual',

@@ -397,7 +397,7 @@ export class ConfigManager {
     // 写入默认配置（不包含敏感信
     const defaultConfig: Config = {
       default: {
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         // apiKey: 'your-api-key',  // 需要用户自己填
         // baseURL: 'https://api.openai.com/v1',
       },

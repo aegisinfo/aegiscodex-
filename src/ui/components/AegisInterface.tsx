@@ -535,7 +535,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             content: m.content,
           }));
           const result = await CompactionService.compact(msgs, {
-            modelName: modelRef.current || 'claude-sonnet-4-20250514',
+            modelName: modelRef.current || 'claude-sonnet-4-6',
             maxContextTokens: maxCtx,
             chatService: agentRef.current?.getChatService(),
             trigger: 'auto',
@@ -575,7 +575,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
     try {
       const contextMessages = ctxManager.getMessages();
-      const modelName = modelRef.current || 'claude-sonnet-4-20250514';
+      const modelName = modelRef.current || 'claude-sonnet-4-6';
 
       const inputTokens = TokenCounter.countTokens(
         contextMessages.map(m => ({ role: m.role as Message['role'], content: m.content })),

@@ -22,7 +22,7 @@ export class SimpleAgent {
       apiKey: config.apiKey,
       baseURL: config.baseURL,
     });
-    this.model = config.model || 'claude-sonnet-4-20250514';
+    this.model = config.model || 'claude-sonnet-4-6';
   }
 
   /**
