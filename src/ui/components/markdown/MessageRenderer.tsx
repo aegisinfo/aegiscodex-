@@ -131,19 +131,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
       return thinkingBlocks.filter((block) => block.type !== 'empty')
     }, [thinkingBlocks])
 
-    const thinkingLineCount = useMemo(() => {
+    const thinkingWordCount = useMemo(() => {
       if (!thinking) return 0
-      return thinking.split('\n').filter(l => l.trim()).length
+      return thinking.trim().split(/\s+/).filter(Boolean).length
     }, [thinking])
-
-    const thinkingPreview = useMemo(() => {
-      if (!thinking) return ''
-      const firstLine = thinking.split('\n').find(l => l.trim()) || ''
-      const maxLen = Math.min(terminalWidth - 30, 60)
-      return firstLine.length > maxLen
-        ? firstLine.slice(0, maxLen) + '...'
-        : firstLine
-    }, [thinking, terminalWidth])
 
     const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0
 
@@ -158,8 +149,22 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
                 <Box marginBottom={0}>
                   <Text color={theme.colors.text.muted} dimColor>
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                    <Text italic>{isStreaming ? 'thinking...' : '▾ thought'}</Text>
-                    <Text> · {thinkingLineCount} lines</Text>
+                    {isStreaming ? (
+                      <>
+                        <ToolSpinner color={theme.colors.text.muted} />
+                        <Text italic> thinking</Text>
+                        {thinkingWordCount > 0 && <Text> · {thinkingWordCount}w</Text>}
+                        <Text>...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text>◆ </Text>
+                        <Text italic>thought</Text>
+                        {thinkingWordCount > 0 && (
+                          <Text> · {thinkingWordCount} {thinkingWordCount === 1 ? 'word' : 'words'}</Text>
+                        )}
+                      </>
+                    )}
                   </Text>
                 </Box>
                 <Box
@@ -181,11 +186,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
             ) : (
               <Box marginLeft={prefixOffset}>
                 <Text color={theme.colors.text.muted} dimColor>
-                  <Text>▸ </Text>
+                  <Text>◆ </Text>
                   <Text italic>thought</Text>
-                  <Text> · {thinkingLineCount} lines</Text>
-                  {thinkingPreview && (
-                    <Text> · {thinkingPreview}</Text>
+                  {thinkingWordCount > 0 && (
+                    <Text> · {thinkingWordCount} {thinkingWordCount === 1 ? 'word' : 'words'}</Text>
                   )}
                 </Text>
               </Box>

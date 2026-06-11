@@ -9,9 +9,9 @@
     "aegis-cli": "./dist/main.js"
   },
   "scripts": {
-    "dev": "tsx src/main.tsx",
+    "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "build": "node esbuild.mjs",
-    "start": "node dist/main.js",
+    "start": "node --no-deprecation dist/main.js",
     "typecheck": "tsc --noEmit",
     "test:prompts": "tsx src/prompts/test.ts",
     "test:tools": "tsx src/tools/test.ts",
