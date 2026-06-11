@@ -27,7 +27,6 @@ import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
 dotenvConfig({ path: resolve(process.cwd(), '.env') });
 import React from 'react';
-import { render } from 'ink';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { App } from './ui/App.js';
@@ -326,7 +325,7 @@ async function main(): Promise<void> {
             />,
             {
               exitOnCtrlC: false,
-              patchConsole: false,
+              patchConsole: true,
               stdin: renderStdin,
               stdout: process.stdout,
             },

@@ -34,7 +34,8 @@ interface MessageListProps {
   terminalWidth: number;
 }
 
-const RAF_INTERVAL_MS = 120; // ~8fps — fewer repaints = less blink; still responsive for terminal
+const RAF_INTERVAL_MS = 200; // ~5fps — fewer repaints = less blink; still responsive for terminal
+const CONTENT_THRESHOLD = 5; // min chars accumulated before triggering re-render (reduces flicker on small deltas)
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);
@@ -71,10 +72,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
 
       if (buffer && streamingMsg) {
         const lastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
-        const hasNewContent = buffer.content.length > lastLen.content;
-        const hasNewThinking = buffer.thinking.length > lastLen.thinking;
+        const deltaContent = buffer.content.length - lastLen.content;
+        const deltaThinking = buffer.thinking.length - lastLen.thinking;
 
-        if (hasNewContent || hasNewThinking) {
+        // Only re-render when enough new content accumulates (threshold)
+        // or when streaming finishes (final flush). Small character-by-character
+        // arrivals are batched — reduces visible terminal flickering.
+        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= CONTENT_THRESHOLD) {
           lastContentLenRef.current[streamingMsg.id] = {
             content: buffer.content.length,
             thinking: buffer.thinking.length,
