@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="860" height="540" viewBox="0 0 860 540" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<defs>
+  <style>
+    @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+    @keyframes fadein { from{opacity:0} to{opacity:1} }
+    @keyframes slidein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+    .cursor { animation: blink 1s step-end infinite; }
+    .line-1  { animation: fadein 0.01s 0.3s both; }
+    .line-2  { animation: fadein 0.01s 0.4s both; }
+    .line-3  { animation: fadein 0.01s 0.5s both; }
+    .line-4  { animation: fadein 0.01s 0.8s both; }
+    .line-5  { animation: fadein 0.01s 0.9s both; }
+    .line-6  { animation: fadein 0.01s 1.0s both; }
+    .line-7  { animation: fadein 0.01s 1.1s both; }
+    .line-8  { animation: fadein 0.01s 1.2s both; }
+    .line-9  { animation: fadein 0.01s 1.3s both; }
+    .line-10 { animation: fadein 0.01s 1.4s both; }
+    .line-11 { animation: fadein 0.01s 1.5s both; }
+    .line-12 { animation: fadein 0.01s 1.6s both; }
+    .prompt  { animation: fadein 0.01s 1.8s both; }
+    .input   { animation: fadein 0.01s 2.0s both; }
+    .sep1    { animation: fadein 0.01s 3.0s both; }
+    .think-h { animation: fadein 0.01s 3.2s both; }
+    .think-1 { animation: fadein 0.01s 3.5s both; }
+    .think-2 { animation: fadein 0.01s 3.8s both; }
+    .sep2    { animation: fadein 0.01s 4.1s both; }
+    .resp-1  { animation: slidein 0.3s 4.3s both; }
+    .resp-2  { animation: slidein 0.3s 4.6s both; }
+    .resp-3  { animation: slidein 0.3s 4.9s both; }
+    .tool-1  { animation: slidein 0.3s 5.2s both; }
+    .tool-2  { animation: slidein 0.3s 5.4s both; }
+    .tool-3  { animation: slidein 0.3s 5.6s both; }
+    .resp-4  { animation: slidein 0.3s 6.0s both; }
+    .resp-5  { animation: slidein 0.3s 6.3s both; }
+    .prompt2 { animation: fadein 0.01s 6.8s both; }
+    .cur2    { animation: fadein 0.01s 6.8s both; }
+  </style>
+  <clipPath id="win"><rect x="0" y="0" width="860" height="540" rx="10"/></clipPath>
+</defs>
+
+<!-- Window -->
+<rect width="860" height="540" rx="10" fill="#0d0d14"/>
+
+<!-- Title bar -->
+<rect width="860" height="38" rx="10" fill="#13131f" clip-path="url(#win)"/>
+<rect y="28" width="860" height="10" fill="#13131f"/>
+<rect y="37" width="860" height="1" fill="#1e1e2e"/>
+
+<!-- Traffic lights -->
+<circle cx="18" cy="19" r="6" fill="#ff5f57"/>
+<circle cx="38" cy="19" r="6" fill="#febc2e"/>
+<circle cx="58" cy="19" r="6" fill="#28c840"/>
+
+<!-- Title -->
+<text x="430" y="24" text-anchor="middle" font-family="'SF Mono','JetBrains Mono','Fira Mono',monospace" font-size="12" fill="#555570">aegiscode — terminal</text>
+
+<!-- Terminal body -->
+<g font-family="'SF Mono','JetBrains Mono','Fira Mono','Courier New',monospace" font-size="13.5" clip-path="url(#win)">
+
+  <!-- Welcome: ASCII art + logo -->
+  <text class="line-1" x="28" y="76"  fill="#6c63ff">   ╔═╗╔═╗╔═╗╦╔═╗</text>
+  <text class="line-2" x="28" y="94"  fill="#6c63ff">   ╠═╣║╣ ║ ╦║╚═╗</text>
+  <text class="line-3" x="28" y="112" fill="#6c63ff">   ╩ ╩╚═╝╚═╝╩╚═╝</text>
+  <text class="line-4" x="200" y="94" fill="#00e5c0">✻ </text>
+  <text class="line-4" x="218" y="94" fill="#e0e0f0" font-weight="bold">aegiscode</text>
+  <text class="line-5" x="218" y="112" fill="#505070">  v2.1.0</text>
+
+  <text class="line-6" x="42" y="136" fill="#505070">AI-powered terminal coding agent</text>
+
+  <!-- Divider -->
+  <text class="line-7" x="42" y="156" fill="#222234">──────────────────────────────────────</text>
+
+  <!-- Commands -->
+  <text class="line-8"  x="42" y="176"><tspan fill="#6c63ff">/help       </tspan><tspan fill="#505070">all commands</tspan></text>
+  <text class="line-9"  x="42" y="194"><tspan fill="#6c63ff">/model      </tspan><tspan fill="#505070">switch AI model</tspan></text>
+  <text class="line-10" x="42" y="212"><tspan fill="#6c63ff">/theme      </tspan><tspan fill="#505070">change appearance</tspan></text>
+  <text class="line-11" x="42" y="230"><tspan fill="#6c63ff">/compact    </tspan><tspan fill="#505070">compress context</tspan></text>
+
+  <text class="line-12" x="42" y="252" fill="#505070">Ctrl+C exit  ·  Ctrl+F search</text>
+
+  <!-- Input prompt box -->
+  <rect class="prompt" x="14" y="268" width="832" height="36" rx="6" fill="#0a0a18" stroke="#1e1e30" stroke-width="1"/>
+  <text class="input"  x="28" y="291" fill="#505070">›  </text>
+  <text class="input"  x="50" y="291" fill="#e0e0f0">add semantic memory to our auth flow</text>
+  <rect class="input"  x="342" y="278" width="2" height="16" fill="#00e5c0" class="cursor"/>
+
+  <!-- Status bar -->
+  <text class="prompt" x="28" y="316" fill="#2a2a40">─ model:</text>
+  <text class="prompt" x="93" y="316" fill="#2a2a40">claude-sonnet-4</text>
+  <text class="prompt" x="230" y="316" fill="#2a2a40"> · msgs:4 · sid:aX7kP2</text>
+
+  <!-- Separator -->
+  <text class="sep1" x="28" y="338" fill="#1e1e2e">────────────────────────────────────────────────────────────────────────────────────────────</text>
+
+  <!-- Thinking block header -->
+  <text class="think-h" x="28" y="360">
+    <tspan fill="#6c63ff">⠸ </tspan>
+    <tspan fill="#505070" font-style="italic">thinking</tspan>
+    <tspan fill="#505070"> · 38w...</tspan>
+  </text>
+
+  <!-- Collapsed thinking lines -->
+  <text class="think-1" x="44" y="378" fill="#383850" font-style="italic">The auth flow needs session-scoped context. I should inject</text>
+  <text class="think-2" x="44" y="394" fill="#383850" font-style="italic">memory.retrieve() into the login handler and store user prefs...</text>
+
+  <!-- Separator -->
+  <text class="sep2" x="28" y="414" fill="#1e1e2e">────────────────────────────────────────────────────────────────────────────────────────────</text>
+
+  <!-- Response -->
+  <text class="resp-1" x="28" y="434" fill="#e0e0f0">I'll add semantic memory to the auth flow. Here's the plan:</text>
+  <text class="resp-2" x="28" y="452" fill="#e0e0f0">1. Retrieve user context on login  2. Store prefs on logout</text>
+
+  <!-- Tool call -->
+  <rect class="tool-1" x="14" y="460" width="832" height="22" rx="4" fill="#0c1a2e"/>
+  <text class="tool-1" x="28" y="476">
+    <tspan fill="#00e5c0">⬡ </tspan>
+    <tspan fill="#4a9eff">Edit</tspan>
+    <tspan fill="#505070"> src/auth/login.ts</tspan>
+    <tspan fill="#2a4a6e">  +14 -2  ✓ applied</tspan>
+  </text>
+
+  <rect class="tool-2" x="14" y="486" width="832" height="22" rx="4" fill="#0c1a2e"/>
+  <text class="tool-2" x="28" y="502">
+    <tspan fill="#00e5c0">⬡ </tspan>
+    <tspan fill="#4a9eff">Edit</tspan>
+    <tspan fill="#505070"> src/auth/logout.ts</tspan>
+    <tspan fill="#2a4a6e">  +8 -0   ✓ applied</tspan>
+  </text>
+
+  <text class="resp-4" x="28" y="524" fill="#e0e0f0">Done. Memory now persists user context across sessions.</text>
+
+</g>
+
+<!-- Cursor blink at bottom prompt -->
+<rect class="cur2" x="28" y="530" width="8" height="2" fill="#00e5c0" opacity="0"/>
+
+</svg>

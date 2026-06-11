@@ -1,16 +1,13 @@
-# AEGISCode
+# aegiscode
 
 **aegiscode remembers your project between sessions — so you never have to re-explain your stack, decisions, or context.**
+
+<img src="assets/demo.svg" alt="aegiscode terminal demo" width="100%"/>
 
 Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Ollama. BYOK — your keys, your cost.
 
 > **Semantic memory** — €2/month. The AI remembers you across every session.  
 > Activate with `/memory activate <token>` after subscribing at [aegiscloud.org](https://aegiscloud.org).
-
-```
-╭── AEGISCode ◆ v1.8.0
-  AI-powered terminal coding assistant
-```
 
 ---
 
@@ -107,7 +104,7 @@ AEGISCode ships with pre-configured entries for the following providers. Add you
 | `deepseek-chat` | deepseek-chat | DeepSeek |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek |
 | `groq-llama` | llama-3.3-70b-versatile | Groq |
-| `groq-deepseek` | deepseek-r1-distill-llama-70b | Groq |
+| `groq-deepseek` | qwen-qwq-32b | Groq |
 | `ollama-local` | llama3 | Ollama (local) |
 
 Any OpenAI-compatible API can be added as a custom model.
