@@ -397,9 +397,9 @@ export const DEFAULT_MODELS = [
   },
   {
     id: 'groq-deepseek',
-    name: 'Groq DeepSeek R1',
+    name: 'Groq QwQ-32B',
     provider: 'openai-compatible' as const,
-    model: 'deepseek-r1-distill-llama-70b',
+    model: 'qwen-qwq-32b',
     baseURL: 'https://api.groq.com/openai/v1',
     apiKey: '',
   },
