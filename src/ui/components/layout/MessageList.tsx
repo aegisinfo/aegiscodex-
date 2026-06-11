@@ -48,6 +48,12 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   // Separate tracking is needed because thinking often arrives ahead of content (DeepSeek, etc.)
   const lastContentLenRef = useRef<Record<string, { content: number; thinking: number }>>({});
 
+  // Ref to track latest messages for store subscription comparison (avoids stale closure)
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const showAllThinkingRef = useRef(showAllThinking);
+  showAllThinkingRef.current = showAllThinking;
+
   useEffect(() => {
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
@@ -106,14 +112,39 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     // Start RAF loop
     rafId = requestAnimationFrame(pollBuffer);
 
-    // Store subscription for non-streaming updates only (new messages,
-    // streaming flag changes, showAllThinking toggle, etc.)
+    // Store subscription — guarded: only re-render when messages or
+    // showAllThinking actually change. Prevents cascading re-renders from
+    // unrelated store updates (setThinking, updateTokenUsage, etc.).
+    // Uses refs to avoid stale closure issues.
     const unsub = vanillaStore.subscribe((state) => {
-      setMessages([...state.session.messages]);
-      setShowAllThinking(state.app.showAllThinking);
+      const newMessages = state.session.messages;
+      const newShowAllThinking = state.app.showAllThinking;
+      const prevMessages = messagesRef.current;
+
+      // Deep comparison: only re-render if messages actually changed
+      let messagesChanged = false;
+      if (newMessages.length !== prevMessages.length) {
+        messagesChanged = true;
+      } else {
+        for (let i = 0; i < newMessages.length; i++) {
+          const a = prevMessages[i];
+          const b = newMessages[i];
+          if (a.id !== b.id || a.isStreaming !== b.isStreaming || a.content !== b.content || a.thinking !== b.thinking) {
+            messagesChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (messagesChanged) {
+        setMessages([...newMessages]);
+      }
+      if (newShowAllThinking !== showAllThinkingRef.current) {
+        setShowAllThinking(newShowAllThinking);
+      }
 
       // Clean up position tracking for finished messages
-      state.session.messages.forEach(msg => {
+      newMessages.forEach(msg => {
         if (!msg.isStreaming) {
           delete lastContentLenRef.current[msg.id];
         }

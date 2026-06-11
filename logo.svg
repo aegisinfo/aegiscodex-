@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5"/>
+      <stop offset="100%" style="stop-color:#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="swordGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#22D3EE"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+    <linearGradient id="armorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E293B"/>
+      <stop offset="100%" style="stop-color:#0F172A"/>
+    </linearGradient>
+    <linearGradient id="glowText" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#22D3EE"/>
+      <stop offset="50%" style="stop-color:#A855F7"/>
+      <stop offset="100%" style="stop-color:#22D3EE"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="600" fill="#0B0E1A"/>
+  <rect width="800" height="600" fill="url(#none)" opacity="0"/>
+  
+  <!-- Subtle grid pattern -->
+  <g opacity="0.05" stroke="#6366F1" stroke-width="0.5">
+    <line x1="0" y1="100" x2="800" y2="100"/><line x1="0" y1="200" x2="800" y2="200"/>
+    <line x1="0" y1="300" x2="800" y2="300"/><line x1="0" y1="400" x2="800" y2="400"/>
+    <line x1="0" y1="500" x2="800" y2="500"/>
+    <line x1="100" y1="0" x2="100" y2="600"/><line x1="200" y1="0" x2="200" y2="600"/>
+    <line x1="300" y1="0" x2="300" y2="600"/><line x1="400" y1="0" x2="400" y2="600"/>
+    <line x1="500" y1="0" x2="500" y2="600"/><line x1="600" y1="0" x2="600" y2="600"/>
+    <line x1="700" y1="0" x2="700" y2="600"/>
+  </g>
+
+  <!-- === WARRIOR === -->
+
+  <!-- Legs / lower body -->
+  <rect x="340" y="420" width="40" height="80" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+  <rect x="420" y="420" width="40" height="80" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1.5"/>
+  <!-- Boots -->
+  <rect x="335" y="480" width="50" height="25" rx="6" fill="#0F172A" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="415" y="480" width="50" height="25" rx="6" fill="#0F172A" stroke="#4F46E5" stroke-width="1.5"/>
+
+  <!-- Torso / Chest plate -->
+  <path d="M330 260 L340 420 L460 420 L470 260 Z" fill="url(#armorGrad)" stroke="#4F46E5" stroke-width="2"/>
+  <!-- Chest plate details -->
+  <path d="M370 260 L400 350 L430 260" fill="none" stroke="#06B6D4" stroke-width="1.5" opacity="0.6"/>
+  <circle cx="400" cy="310" r="12" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.5"/>
+  <circle cx="400" cy="310" r="5" fill="#22D3EE" opacity="0.3"/>
+  <!-- Belt -->
+  <rect x="335" y="405" width="130" height="15" rx="4" fill="#0F172A" stroke="#4F46E5" stroke-width="1.5"/>
+  <rect x="390" y="403" width="20" height="19" rx="3" fill="#4F46E5"/>
+
+  <!-- Shoulders / Pauldrons -->
+  <ellipse cx="320" cy="270" rx="35" ry="20" fill="#1E293B" stroke="#4F46E5" stroke-width="2"/>
+  <ellipse cx="480" cy="270" rx="35" ry="20" fill="#1E293B" stroke="#4F46E5" stroke-width="2"/>
+  <!-- Shoulder spikes -->
+  <polygon points="295,260 285,240 310,258" fill="#4F46E5" opacity="0.7"/>
+  <polygon points="505,260 515,240 490,258" fill="#4F46E5" opacity="0.7"/>
+
+  <!-- Arms -->
+  <rect x="290" y="275" width="40" height="18" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+  <rect x="470" y="275" width="40" height="18" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+
+  <!-- Neck -->
+  <rect x="385" y="235" width="30" height="30" rx="6" fill="#1E293B"/>
+
+  <!-- === HELMET === -->
+  <g>
+    <!-- Helmet base -->
+    <path d="M345 235 Q345 160 400 150 Q455 160 455 235 Z" fill="#0F172A" stroke="#4F46E5" stroke-width="2.5"/>
+    <!-- Helmet crest / ridge -->
+    <path d="M388 155 Q400 130 412 155" fill="none" stroke="#22D3EE" stroke-width="3" filter="url(#softGlow)"/>
+    <path d="M380 160 Q400 135 420 160" fill="none" stroke="#06B6D4" stroke-width="1.5" opacity="0.5"/>
+    <!-- Visor -->
+    <rect x="362" y="200" width="76" height="35" rx="8" fill="#0B0E1A" stroke="#6366F1" stroke-width="1.5"/>
+    <!-- Visor slit -->
+    <rect x="368" y="210" width="64" height="6" rx="3" fill="#22D3EE" opacity="0.6" filter="url(#softGlow)"/>
+    <!-- Eyes (cyan glow) -->
+    <ellipse cx="382" cy="217" rx="8" ry="5" fill="#22D3EE" opacity="0.8" filter="url(#glow)"/>
+    <ellipse cx="418" cy="217" rx="8" ry="5" fill="#22D3EE" opacity="0.8" filter="url(#glow)"/>
+    <!-- Jaw guard -->
+    <path d="M355 235 Q400 255 445 235" fill="none" stroke="#4F46E5" stroke-width="2"/>
+  </g>
+
+  <!-- === CODE SWORD (left hand, angled right-up) === -->
+  <g transform="rotate(-40, 280, 400)">
+    <!-- Blade made of code symbols -->
+    <rect x="240" y="80" width="14" height="250" rx="3" fill="url(#swordGrad)" opacity="0.9"/>
+    <!-- Code symbols embedded in blade -->
+    <text x="250" y="120" font-family="monospace" font-size="12" fill="#0B0E1A" text-anchor="middle" font-weight="bold">&lt;</text>
+    <text x="253" y="145" font-family="monospace" font-size="14" fill="#0B0E1A" text-anchor="middle" font-weight="bold">/</text>
+    <text x="250" y="170" font-family="monospace" font-size="12" fill="#0B0E1A" text-anchor="middle" font-weight="bold">&gt;</text>
+    <text x="252" y="195" font-family="monospace" font-size="11" fill="#0B0E1A" text-anchor="middle" font-weight="bold">{</text>
+    <text x="248" y="220" font-family="monospace" font-size="11" fill="#0B0E1A" text-anchor="middle" font-weight="bold">}</text>
+    <text x="250" y="245" font-family="monospace" font-size="12" fill="#0B0E1A" text-anchor="middle" font-weight="bold">&lt;</text>
+    <text x="252" y="270" font-family="monospace" font-size="12" fill="#0B0E1A" text-anchor="middle" font-weight="bold">/</text>
+    <text x="250" y="295" font-family="monospace" font-size="12" fill="#0B0E1A" text-anchor="middle" font-weight="bold">&gt;</text>
+    <!-- Blade glow -->
+    <rect x="240" y="80" width="14" height="250" rx="3" fill="none" stroke="#22D3EE" stroke-width="1" opacity="0.4" filter="url(#glow)"/>
+    
+    <!-- Cross guard -->
+    <rect x="215" y="310" width="64" height="10" rx="4" fill="#0F172A" stroke="#4F46E5" stroke-width="1.5"/>
+    <rect x="230" y="305" width="34" height="20" rx="5" fill="#4F46E5" opacity="0.6"/>
+    
+    <!-- Grip -->
+    <rect x="240" y="320" width="14" height="50" rx="3" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+    <line x1="243" y1="335" x2="251" y2="335" stroke="#4F46E5" stroke-width="1" opacity="0.5"/>
+    <line x1="243" y1="345" x2="251" y2="345" stroke="#4F46E5" stroke-width="1" opacity="0.5"/>
+    <line x1="243" y1="355" x2="251" y2="355" stroke="#4F46E5" stroke-width="1" opacity="0.5"/>
+    
+    <!-- Pommel -->
+    <circle cx="247" cy="375" r="8" fill="#0F172A" stroke="#6366F1" stroke-width="1.5"/>
+    <circle cx="247" cy="375" r="3" fill="#22D3EE" opacity="0.5"/>
+  </g>
+
+  <!-- === SHIELD (right arm) === -->
+  <g transform="translate(130, 50)">
+    <!-- Shield outer hexagon -->
+    <polygon points="400,200 460,240 460,320 400,360 340,320 340,240" fill="url(#shieldGrad)" stroke="#22D3EE" stroke-width="2.5" opacity="0.85" filter="url(#softGlow)"/>
+    <!-- Shield inner hexagon -->
+    <polygon points="400,215 448,248 448,312 400,345 352,312 352,248" fill="#0F172A" stroke="#6366F1" stroke-width="1.5" opacity="0.9"/>
+    <!-- Shield emblem - circuit/code center -->
+    <circle cx="400" cy="280" r="25" fill="none" stroke="#22D3EE" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="400" cy="280" r="8" fill="#22D3EE" opacity="0.3"/>
+    <!-- Circuit lines on shield -->
+    <line x1="375" y1="280" x2="425" y2="280" stroke="#06B6D4" stroke-width="1.5" opacity="0.5"/>
+    <line x1="400" y1="255" x2="400" y2="305" stroke="#06B6D4" stroke-width="1.5" opacity="0.5"/>
+    <line x1="380" y1="265" x2="420" y2="295" stroke="#06B6D4" stroke-width="1" opacity="0.3"/>
+    <line x1="420" y1="265" x2="380" y2="295" stroke="#06B6D4" stroke-width="1" opacity="0.3"/>
+    <!-- Shield nodes -->
+    <circle cx="375" cy="280" r="3" fill="#22D3EE" opacity="0.8"/>
+    <circle cx="425" cy="280" r="3" fill="#22D3EE" opacity="0.8"/>
+    <circle cx="400" cy="255" r="3" fill="#22D3EE" opacity="0.8"/>
+    <circle cx="400" cy="305" r="3" fill="#22D3EE" opacity="0.8"/>
+    <!-- Code brackets on shield -->
+    <text x="400" y="345" font-family="monospace" font-size="11" fill="#22D3EE" text-anchor="middle" opacity="0.7" filter="url(#softGlow)">&lt;/&gt;</text>
+  </g>
+
+  <!-- === FLOATING CODE PARTICLES === -->
+  <g font-family="monospace" font-size="10" fill="#06B6D4" opacity="0.4">
+    <text x="150" y="130" opacity="0.6" filter="url(#softGlow)">&lt;/&gt;</text>
+    <text x="620" y="160" opacity="0.5" filter="url(#softGlow)">const</text>
+    <text x="160" y="380" opacity="0.4" filter="url(#softGlow)">fn()</text>
+    <text x="650" y="350" opacity="0.5" filter="url(#softGlow)">=&gt;</text>
+    <text x="580" y="480" opacity="0.3" filter="url(#softGlow)">import</text>
+    <text x="200" y="500" opacity="0.35" filter="url(#softGlow)">class</text>
+    <text x="100" y="250" opacity="0.3" filter="url(#softGlow)">if()</text>
+    <text x="680" y="250" opacity="0.3" filter="url(#softGlow)">else</text>
+    <text x="120" y="450" opacity="0.25" filter="url(#softGlow)">true</text>
+    <text x="660" y="430" opacity="0.25" filter="url(#softGlow)">null</text>
+  </g>
+
+  <!-- Glowing particles/dots -->
+  <circle cx="180" cy="180" r="2" fill="#22D3EE" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.1;0.5" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="600" cy="200" r="2" fill="#A855F7" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="650" cy="300" r="1.5" fill="#22D3EE" opacity="0.4">
+    <animate attributeName="opacity" values="0.4;0.1;0.4" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="140" cy="320" r="1.5" fill="#A855F7" opacity="0.4">
+    <animate attributeName="opacity" values="0.4;0.1;0.4" dur="3.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="550" cy="120" r="2" fill="#06B6D4" opacity="0.3">
+    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- === TITLE === -->
+  <text x="400" y="555" font-family="monospace, 'Courier New'" font-size="36" font-weight="bold" fill="url(#glowText)" text-anchor="middle" letter-spacing="6" filter="url(#glow)">AEGISCODE</text>
+  <text x="400" y="580" font-family="monospace, 'Courier New'" font-size="12" fill="#6366F1" text-anchor="middle" letter-spacing="4" opacity="0.7">GUARDIAN OF CODE</text>
+</svg>
