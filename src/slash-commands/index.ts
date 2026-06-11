@@ -142,7 +142,7 @@ function convertCustomToSlashCommand(
         return {
           success: false,
           type: 'error',
-          error: `执行失败: ${error instanceof Error ? error.message : String(error)}`,
+          error: `Execution failed: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },
@@ -269,16 +269,16 @@ export async function executeSlashCommand(
   if (!command) {
     // 尝试模糊匹配建
     const suggestions = getFuzzyCommandSuggestions(name);
-    let errorMsg = `未知命令: /${name}`;
-    
+    let errorMsg = `Unknown command: /${name}`;
+
     if (suggestions.length > 0) {
-      errorMsg += `\n\n你是否想输入：\n`;
+      errorMsg += `\n\nDid you mean:\n`;
       for (const s of suggestions.slice(0, 3)) {
         errorMsg += `- \`${s.command}\` - ${s.description}\n`;
       }
     }
-    
-    errorMsg += `\n使用 \`/help\` 查看可用命令`;
+
+    errorMsg += `\nUse \`/help\` to see available commands`;
     
     return {
       success: false,
@@ -293,7 +293,7 @@ export async function executeSlashCommand(
     return {
       success: false,
       type: 'error',
-      error: `命令执行失败: ${error instanceof Error ? error.message : String(error)}`,
+      error: `Command failed: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

@@ -120,7 +120,7 @@ export function InteractiveSelector<T = string>({
       {/* 操作提示 */}
       <Box marginTop={1} borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={theme.colors.border.light}>
         <Text color={theme.colors.text.muted} dimColor>
-          ↑/↓ 选择  Enter 确认  Esc 取消
+          ↑/↓ navigate  Enter confirm  Esc cancel
         </Text>
       </Box>
     </Box>
