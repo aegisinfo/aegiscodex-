@@ -77,6 +77,21 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     // 自己订阅需要的状
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
+
+    // Elapsed-time counter — increments every second while processing.
+    // Only displayed after 2s to avoid flicker on fast cloud responses.
+    const [thinkingSeconds, setThinkingSeconds] = useState(0);
+    const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+      if (isProcessing) {
+        setThinkingSeconds(0);
+        thinkingTimerRef.current = setInterval(() => setThinkingSeconds(s => s + 1), 1000);
+      } else {
+        if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; }
+        setThinkingSeconds(0);
+      }
+      return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
+    }, [isProcessing]);
     
     // hasStreamingMessage via store subscription to avoid re-render on every delta
     const [hasStreamingMessage, setHasStreamingMessage] = useState(
@@ -199,9 +214,10 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     // 计算 thinking 状态文
     const thinkingLabel = useMemo(() => {
       if (!isProcessing) return null;
-      if (hasStreamingMessage) return 'Generating...';
-      return 'Thinking...';
-    }, [isProcessing, hasStreamingMessage]);
+      const elapsed = thinkingSeconds >= 2 ? ` ${thinkingSeconds}s` : '';
+      if (hasStreamingMessage) return `Generating...${elapsed}`;
+      return `Thinking...${elapsed}`;
+    }, [isProcessing, hasStreamingMessage, thinkingSeconds]);
 
     // Rubik's cube for /multi (non-streaming thinking), dots for streaming
     const isMultiMode = isProcessing && !hasStreamingMessage;

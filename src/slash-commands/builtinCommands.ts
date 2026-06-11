@@ -5,6 +5,7 @@
 import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './types.js';
 import { sessionActions, getState, getConfig, getCurrentModel } from '../store/index.js';
 import { createDefaultOrchestrator, CouncilAgent } from '../agent/orchestrator/index.js';
+import { getOllamaModels, isLocalOllamaUrl, type OllamaModelInfo } from '../services/OllamaInstaller.js';
 
 /**
  * /help - 显示所有可用命令
@@ -389,17 +390,51 @@ export const modelCommand: SlashCommand = {
       const modelInfo = defaultModel?.model || currentModelId || 'unknown';
       return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
     }
+
+    // Fetch Ollama runtime info for any locally-configured models (non-blocking on failure)
+    const ollamaInfoByName = new Map<string, OllamaModelInfo>();
+    const ollamaBaseURLs = [...new Set(
+      models
+        .filter((m: any) => isLocalOllamaUrl(m.baseURL || m.baseUrl))
+        .map((m: any) => m.baseURL || m.baseUrl)
+    )];
+    await Promise.all(
+      ollamaBaseURLs.map(async (url: string) => {
+        const infos = await getOllamaModels(url).catch(() => []);
+        for (const info of infos) {
+          ollamaInfoByName.set(info.name, info);
+          ollamaInfoByName.set(info.name.split(':')[0], info);
+        }
+      })
+    );
+
     return {
       success: true,
       type: 'selector',
       selector: {
         title: 'Select model',
-        options: models.map((m: any) => ({
-          value: m.id,
-          label: (m as any).label || m.name || m.model || m.id,
-          description: m.model || m.baseURL || '',
-          isCurrent: m.id === currentModelId,
-        })),
+        options: models.map((m: any) => {
+          const modelName: string = m.model || m.id;
+          const ollamaInfo = ollamaInfoByName.get(modelName) ?? ollamaInfoByName.get(modelName.split(':')[0]);
+
+          let description: string;
+          if (ollamaInfo) {
+            const parts: string[] = [];
+            parts.push(ollamaInfo.isLoaded ? '● loaded' : '○ cold');
+            if (ollamaInfo.sizeGB !== undefined) parts.push(`${ollamaInfo.sizeGB.toFixed(1)} GB`);
+            if (ollamaInfo.supportsTools) parts.push('[tools]');
+            description = parts.join(' · ');
+          } else {
+            description = m.model || m.baseURL || '';
+          }
+
+          return {
+            value: m.id,
+            label: (m as any).label || m.name || m.model || m.id,
+            description,
+            isCurrent: m.id === currentModelId,
+          };
+        }),
         handler: 'model',
       },
     };

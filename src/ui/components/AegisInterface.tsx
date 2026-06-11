@@ -403,6 +403,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const handleSelectorSelect = useCallback(async (value: string) => {
     const { handler } = selectorState;
 
+    // Defocus selector immediately (imperative, not React state) so any key-repeat
+    // Enter events fail the focus check in InteractiveSelector.useInput before re-firing.
+    focusActions.setFocus(FocusId.MAIN_INPUT);
+    setSelectorState({ isVisible: false, title: '', options: [], handler: null });
+
     if (handler === 'theme') {
       const { themeManager } = await import('../themes/index.js');
       themeManager.setTheme(value);
@@ -412,9 +417,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       configActions().updateConfig({ currentModelId: value });
       sessionActions().addAssistantMessage('✓  ' + value);
     }
-
-    setSelectorState({ isVisible: false, title: '', options: [], handler: null });
-    focusActions.setFocus(FocusId.MAIN_INPUT);
   }, [selectorState]);
 
   const handleSelectorCancel = useCallback(() => {

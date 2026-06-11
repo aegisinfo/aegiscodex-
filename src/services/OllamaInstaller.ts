@@ -6,7 +6,7 @@
  *  1. Detect if baseURL points to a local Ollama instance
  *  2. Ensure server is running (install if missing)
  *  3. Ensure the requested model is pulled
- *  4. Check that the model supports tools — auto-swap to llama3.2 if not
+ *  4. Check that the model supports tools — auto-swap to best installed capable model if not
  *  5. Return the final model name to use (may differ from the input)
  */
 
@@ -31,6 +31,21 @@ const TOOL_INCAPABLE_PATTERNS = [
   /^vicuna(:|$)/,
 ];
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface OllamaModelInfo {
+  name: string;
+  supportsTools: boolean;
+  sizeGB?: number;
+  isLoaded: boolean;
+}
+
+// ── Session cache ─────────────────────────────────────────────────────────────
+// Keyed by model name. isLoaded is always fetched fresh (changes at runtime);
+// supportsTools and sizeGB are stable per model and cached after first fetch.
+
+const detailsCache = new Map<string, { supportsTools: boolean; sizeGB?: number }>();
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function isLocalOllamaUrl(baseURL?: string): boolean {
@@ -51,6 +66,10 @@ function log(msg: string): void {
   process.stderr.write(`\x1b[38;2;83;74;183m[Ollama]\x1b[0m ${msg}\n`);
 }
 
+function nameMatchesBare(installed: string, bare: string): boolean {
+  return installed === bare || installed.startsWith(bare + ':') || installed === bare + ':latest';
+}
+
 async function isOllamaResponding(baseURL: string): Promise<boolean> {
   try {
     const ctrl = new AbortController();
@@ -64,11 +83,8 @@ async function isOllamaResponding(baseURL: string): Promise<boolean> {
 }
 
 function isBinaryInstalled(): boolean {
-  // Try PATH lookup first
   try { execSync('which ollama', { stdio: 'ignore' }); return true; } catch {}
-  // Try ollama --version (works even if not on PATH in current shell)
   try { execSync('ollama --version', { stdio: 'ignore' }); return true; } catch {}
-  // Common install locations
   const paths = [
     '/usr/local/bin/ollama',
     '/usr/bin/ollama',
@@ -81,35 +97,104 @@ function isBinaryInstalled(): boolean {
   return false;
 }
 
-// ── Tool-support check ────────────────────────────────────────────────────────
+// ── Model info fetchers ───────────────────────────────────────────────────────
 
-async function modelSupportsTools(baseURL: string, model: string): Promise<boolean> {
-  // 1. Try the Ollama /api/show capabilities field (Ollama ≥ 0.3.3)
+// /api/show — capabilities + disk size. Results cached per model name.
+async function fetchModelDetails(base: string, model: string): Promise<{ supportsTools: boolean; sizeGB?: number }> {
+  const cached = detailsCache.get(model);
+  if (cached) return cached;
+
   try {
-    const res = await fetch(ollamaRoot(baseURL) + '/api/show', {
+    const res = await fetch(base + '/api/show', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: model }),
     });
     if (res.ok) {
-      const data = await res.json() as { capabilities?: string[] };
-      if (Array.isArray(data.capabilities)) {
-        return data.capabilities.includes('tools');
-      }
-    }
-  } catch {
-    // fall through to name heuristic
-  }
+      const data = await res.json() as {
+        capabilities?: string[];
+        size?: number;
+      };
 
-  // 2. Name-based heuristic for older Ollama versions
+      const supportsTools = Array.isArray(data.capabilities)
+        ? data.capabilities.includes('tools')
+        : !TOOL_INCAPABLE_PATTERNS.some(re => re.test(model.toLowerCase().replace(/^registry\.ollama\.ai\/library\//, '')));
+
+      const sizeGB = typeof data.size === 'number' && data.size > 0
+        ? Math.round(data.size / 1e8) / 10   // round to 1 decimal GB
+        : undefined;
+
+      const result = { supportsTools, sizeGB };
+      detailsCache.set(model, result);
+      return result;
+    }
+  } catch {}
+
+  // Fallback: name heuristic only
   const tag = model.toLowerCase().replace(/^registry\.ollama\.ai\/library\//, '');
-  return !TOOL_INCAPABLE_PATTERNS.some(re => re.test(tag));
+  const result = { supportsTools: !TOOL_INCAPABLE_PATTERNS.some(re => re.test(tag)) };
+  detailsCache.set(model, result);
+  return result;
+}
+
+// /api/tags — all installed models with their disk sizes
+async function getInstalledModels(base: string): Promise<{ name: string; size: number }[]> {
+  try {
+    const res = await fetch(base + '/api/tags');
+    if (!res.ok) return [];
+    const data = await res.json() as { models?: { name: string; size?: number }[] };
+    return (data.models || []).map(m => ({ name: m.name, size: m.size ?? 0 }));
+  } catch {
+    return [];
+  }
+}
+
+// /api/ps — models currently loaded in memory (respond instantly, no cold-start)
+async function getLoadedModels(base: string): Promise<string[]> {
+  try {
+    const res = await fetch(base + '/api/ps');
+    if (!res.ok) return [];
+    const data = await res.json() as { models?: { name: string }[] };
+    return (data.models || []).map(m => m.name);
+  } catch {
+    return [];
+  }
+}
+
+// ── Public: enriched model list ───────────────────────────────────────────────
+
+/**
+ * Returns enriched info for every model installed in a local Ollama instance.
+ * Used by the /model selector to show size, tool support, and loaded status.
+ * Returns [] if baseURL is not a local Ollama URL or the server is not running.
+ */
+export async function getOllamaModels(baseURL?: string): Promise<OllamaModelInfo[]> {
+  if (!isLocalOllamaUrl(baseURL)) return [];
+  const base = ollamaRoot(baseURL!);
+
+  if (!await isOllamaResponding(base)) return [];
+
+  const [installed, loadedNames] = await Promise.all([
+    getInstalledModels(base),
+    getLoadedModels(base),
+  ]);
+
+  const loadedSet = new Set(loadedNames.map(n => n.split(':')[0]));
+
+  return Promise.all(
+    installed.map(async ({ name, size }) => {
+      const details = await fetchModelDetails(base, name);
+      // Use size from /api/tags if /api/show didn't return it
+      const sizeGB = details.sizeGB ?? (size > 0 ? Math.round(size / 1e8) / 10 : undefined);
+      const isLoaded = loadedSet.has(name.split(':')[0]);
+      return { name, supportsTools: details.supportsTools, sizeGB, isLoaded };
+    })
+  );
 }
 
 // ── Install ───────────────────────────────────────────────────────────────────
 
 async function installOllama(): Promise<boolean> {
-  // Guard: never re-install if already present
   if (isBinaryInstalled()) {
     log('Ollama is already installed.');
     return true;
@@ -152,17 +237,6 @@ async function startOllamaServer(): Promise<boolean> {
 }
 
 // ── Model pull ────────────────────────────────────────────────────────────────
-
-async function getInstalledModels(baseURL: string): Promise<string[]> {
-  try {
-    const res = await fetch(ollamaRoot(baseURL) + '/api/tags');
-    if (!res.ok) return [];
-    const data = await res.json() as { models?: { name: string }[] };
-    return (data.models || []).map(m => m.name);
-  } catch {
-    return [];
-  }
-}
 
 async function pullModel(modelName: string): Promise<void> {
   const tag = modelName.replace(/^registry\.ollama\.ai\/library\//, '').split('/').pop() || modelName;
@@ -207,33 +281,58 @@ export async function ensureOllama(baseURL?: string, model?: string): Promise<st
   }
 
   // ── Ensure model is pulled ────────────────────────────────────────────────
-  const installedModels = await getInstalledModels(base);
+  const installed = await getInstalledModels(base);
+  const installedNames = installed.map(m => m.name);
   const requestedTag = (model || '').replace(/^registry\.ollama\.ai\/library\//, '');
 
-  if (installedModels.length === 0) {
-    const target = requestedTag || TOOLS_CAPABLE_FALLBACK;
-    await pullModel(target);
+  if (installedNames.length === 0) {
+    await pullModel(requestedTag || TOOLS_CAPABLE_FALLBACK);
   } else if (requestedTag) {
     const bare = requestedTag.split(':')[0];
-    const exists = installedModels.some(m => m === requestedTag || m.startsWith(bare + ':') || m === bare);
+    const exists = installedNames.some(m => nameMatchesBare(m, bare) || m === requestedTag);
     if (!exists) await pullModel(requestedTag);
   }
 
   // ── Check tool support ────────────────────────────────────────────────────
   const effectiveModel = requestedTag || TOOLS_CAPABLE_FALLBACK;
-  const supportsTools = await modelSupportsTools(base, effectiveModel);
+  const { supportsTools } = await fetchModelDetails(base, effectiveModel);
 
   if (!supportsTools) {
-    log(`"${effectiveModel}" does not support tools. Switching to ${TOOLS_CAPABLE_FALLBACK}.`);
+    // Prefer an already-installed tool-capable model over pulling a new one
+    const freshInstalled = await getInstalledModels(base);
+    const capableFallback = await findBestInstalledCapableModel(base, freshInstalled.map(m => m.name));
 
-    // Pull the fallback if needed
-    const bare = TOOLS_CAPABLE_FALLBACK.split(':')[0];
-    const freshModels = await getInstalledModels(base);
-    const fallbackExists = freshModels.some(m => m === TOOLS_CAPABLE_FALLBACK || m.startsWith(bare + ':') || m === bare);
-    if (!fallbackExists) await pullModel(TOOLS_CAPABLE_FALLBACK);
+    if (capableFallback) {
+      log(`"${effectiveModel}" does not support tools. Switching to installed model "${capableFallback}".`);
+      return capableFallback;
+    }
 
+    // Nothing capable installed — pull the default fallback
+    log(`"${effectiveModel}" does not support tools. Pulling ${TOOLS_CAPABLE_FALLBACK}...`);
+    await pullModel(TOOLS_CAPABLE_FALLBACK);
     return TOOLS_CAPABLE_FALLBACK;
   }
 
   return effectiveModel || model;
+}
+
+// Find the best already-installed model that supports tools.
+// Prefers loaded models, then prefers well-known capable models.
+async function findBestInstalledCapableModel(base: string, names: string[]): Promise<string | undefined> {
+  const loadedNames = await getLoadedModels(base);
+  const loadedSet = new Set(loadedNames.map(n => n.split(':')[0]));
+
+  const capable: string[] = [];
+  for (const name of names) {
+    const { supportsTools } = await fetchModelDetails(base, name);
+    if (supportsTools) capable.push(name);
+  }
+
+  if (capable.length === 0) return undefined;
+
+  // Prefer a currently loaded model
+  const loadedCapable = capable.find(n => loadedSet.has(n.split(':')[0]));
+  if (loadedCapable) return loadedCapable;
+
+  return capable[0];
 }
