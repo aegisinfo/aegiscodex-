@@ -213,7 +213,15 @@ export class ConfigManager {
       defaultConfig.baseURL = args.baseURL;
     }
     if (args.model) {
-      defaultConfig.model = args.model;
+      const models: any[] = (this.config as any).models || [];
+      const found = models.find((m: any) => m.id === args.model || m.model === args.model);
+      if (found) {
+        // args.model is a model ID — switch fully to that model's config
+        (this.config as any).currentModelId = found.id;
+        this.config.default = { ...defaultConfig, ...found };
+      } else {
+        defaultConfig.model = args.model;
+      }
     }
   }
 
