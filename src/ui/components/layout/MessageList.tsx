@@ -73,6 +73,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
             },
           }));
           lastContentLenRef.current[streamingMsg.id] = buffer.content.length;
+          // Keep consumer position in sync so finishStreamingMessage only
+          // flushes content the RAF loop hasn't already written to the store.
+          resetConsumerPosition();
         }
       }
 

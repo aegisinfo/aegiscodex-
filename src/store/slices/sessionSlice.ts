@@ -4,7 +4,7 @@
 
 import type { StateCreator } from 'zustand';
 import type { ClawdStore, SessionSlice, SessionMessage, TokenUsage } from '../types.js';
-import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, resetConsumerPosition } from '../streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, getConsumerPosition, resetConsumerPosition } from '../streaming-buffer.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -176,7 +176,12 @@ export const createSessionSlice: StateCreator<
      */
     finishStreamingMessage: (id: string) => {
       const bufferContent = peekBuffer();
+      // The RAF loop in MessageList tracks its own write position via resetConsumerPosition().
+      // Only write the tail the RAF loop hasn't flushed yet — otherwise we double the content.
+      const consumed = getConsumerPosition();
       clearBuffer();
+      const remainingContent = bufferContent.content.slice(consumed.content);
+      const remainingThinking = bufferContent.thinking.slice(consumed.thinking);
       set((state) => ({
         session: {
           ...state.session,
@@ -184,8 +189,8 @@ export const createSessionSlice: StateCreator<
             msg.id === id
               ? {
                   ...msg,
-                  content: msg.content + bufferContent.content,
-                  thinking: (msg.thinking || '') + bufferContent.thinking,
+                  content: msg.content + remainingContent,
+                  thinking: (msg.thinking || '') + remainingThinking,
                   isStreaming: false,
                 }
               : msg

@@ -188,9 +188,14 @@ export class Agent {
 
   // ========== 公共方
 
+  /** Expose chat service so callers (e.g. auto-compact) can use the configured LLM. */
+  getChatService(): IChatService {
+    return this.chatService;
+  }
+
   /**
-   * 
-   * 
+   *
+   *
    * @param message 用户消息
    * @param context 聊天上下文（包含历史消息、sessionId 等）
    * @param options 循环选项

@@ -332,6 +332,15 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           }
         }
 
+        // Show one-time free-tier upgrade reminder if past the 1 free session
+        try {
+          const { sharedMemory } = await import('../../memory/SharedMemory.js');
+          const reminder = sharedMemory.getUpgradeReminder(currentSessionId);
+          if (reminder) {
+            sessionActions().addAssistantMessage(reminder);
+          }
+        } catch {}
+
         setIsInitializing(false);
 
         if (debug) {
@@ -508,6 +517,48 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     }
 
     await ctxManager.addMessage('user', value);
+
+    // Auto-compact when context approaches 80% of the token limit.
+    // This prevents the Agent's hard truncation (which drops context without summarizing).
+    {
+      const currentTokens = ctxManager.getTokenCount();
+      const runtimeConfig = getState().config.config;
+      const maxCtx = (runtimeConfig as any)?.maxContextTokens ?? 200000;
+      if (currentTokens > 0 && currentTokens >= maxCtx * 0.8) {
+        try {
+          sessionActions().setCompacting(true);
+          sessionActions().addAssistantMessage('⟳ Context near limit — auto-compacting...');
+          const { CompactionService } = await import('../../context/CompactionService.js');
+          const ctxMsgs = ctxManager.getMessages();
+          const msgs = ctxMsgs.map((m: { role: string; content: string }) => ({
+            role: m.role as Message['role'],
+            content: m.content,
+          }));
+          const result = await CompactionService.compact(msgs, {
+            modelName: modelRef.current || 'claude-sonnet-4-20250514',
+            maxContextTokens: maxCtx,
+            chatService: agentRef.current?.getChatService(),
+            trigger: 'auto',
+            actualPreTokens: currentTokens,
+          });
+          if (result.success) {
+            const { nanoid } = await import('nanoid');
+            ctxManager.replaceMessages(result.compactedMessages.map((m: Message) => ({
+              id: nanoid(),
+              role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+              content: m.content,
+              timestamp: Date.now(),
+            })));
+            ctxManager.updateTokenCount(result.postTokens);
+            const saved = result.preTokens - result.postTokens;
+            sessionActions().addAssistantMessage(
+              `✓ Auto-compact: ${result.preTokens.toLocaleString()} → ${result.postTokens.toLocaleString()} tokens (−${saved.toLocaleString()})`
+            );
+          }
+        } catch { /* non-fatal — continue without compaction */ }
+        finally { sessionActions().setCompacting(false); }
+      }
+    }
 
     if (debugRef.current) {
       const contextMessages = ctxManager.getMessages();

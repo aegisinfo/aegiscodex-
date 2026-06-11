@@ -366,8 +366,9 @@ export class SharedMemory {
   ): Promise<MemoryEntry | null> {
     await this.ensureReady();
 
-    // Cross-semantic memory kräver prenumeration
-    if (!this.isEnabled()) return null;
+    if (!this.isWriteAllowed(session)) return null;
+    // Record this session as the free-tier session on first write
+    this.recordFreeSession(session);
 
     const cleaned = stripInvalidChars(content);
     if (isJunk(cleaned)) return null;
@@ -434,7 +435,6 @@ export class SharedMemory {
   async search(query: string, limit = 6): Promise<MemoryEntry[]> {
     await this.ensureReady();
 
-    // Cross-semantic memory kräver prenumeration
     if (!this.isEnabled()) return [];
 
     const q = query.toLowerCase();
@@ -708,8 +708,9 @@ export class SharedMemory {
     } catch {}
   }
 
-  // ── isEnabled ────────────────────────────────────────────────────────────
-  isEnabled(): boolean {
+  // ── Subscription / free-tier helpers ────────────────────────────────────
+
+  isSubscribed(): boolean {
     if (process.env.AEGIS_MEMORY_TOKEN) {
       try {
         const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -724,6 +725,63 @@ export class SharedMemory {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
       return cfg?.memory?.subscribed === true;
     } catch { return false; }
+  }
+
+  /** Returns true only for write operations: subscribed, or this IS the free-tier session. */
+  isWriteAllowed(sessionId: string): boolean {
+    if (this.isSubscribed()) return true;
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const freeId = cfg?.memory?.freeSessionId ?? null;
+      // Free tier not yet used — this session will be the free one
+      if (!freeId) return true;
+      return freeId === sessionId;
+    } catch { return true; }
+  }
+
+  /** Returns true for reads: subscribed, OR free session was ever used (let them see value). */
+  isEnabled(): boolean {
+    if (this.isSubscribed()) return true;
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      // Allow reads if a free session was recorded (show stored memories to motivate upgrade)
+      return cfg?.memory?.freeSessionId != null;
+    } catch { return false; }
+  }
+
+  /**
+   * Returns an upgrade reminder if the session has exhausted the free tier.
+   * Returns null if subscribed or still within the free session.
+   * Call once at session start; reminder is suppressed after the first call this process.
+   */
+  private _reminderShownThisProcess = false;
+  getUpgradeReminder(sessionId: string): string | null {
+    if (this._reminderShownThisProcess) return null;
+    if (this.isSubscribed()) return null;
+    if (this.isWriteAllowed(sessionId)) return null; // still in free tier
+    this._reminderShownThisProcess = true;
+    return [
+      '◎ Memory · free tier used',
+      '',
+      'Your 1 free memory session has been used. Past context is still visible but new',
+      'sessions will not be remembered without a subscription.',
+      '',
+      '  aegiscloud.org  →  /memory  →  €2/month  ·  cancel anytime',
+      '',
+      'Or set AEGIS_MEMORY_TOKEN in your .env to activate.',
+    ].join('\n');
+  }
+
+  /** Record the free-tier session ID the first time this session writes to memory. */
+  private recordFreeSession(sessionId: string): void {
+    try {
+      const raw = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf8') : '{}';
+      const cfg = JSON.parse(raw);
+      if (!cfg?.memory?.freeSessionId) {
+        const updated = { ...cfg, memory: { ...cfg.memory, freeSessionId: sessionId } };
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+      }
+    } catch {}
   }
 
   size(): number {
