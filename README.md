@@ -7,7 +7,7 @@
   <img src="assets/demo.svg" alt="aegiscode terminal demo — animated" width="100%"/>
 </picture>
 
-Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Ollama. BYOK — your keys, your cost.
+Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq, Gemini and Ollama. BYOK — your keys, your cost.
 
 > **Semantic memory** — €2/month. The AI remembers you across every session.  
 > Subscribe at [aegiscloud.org](https://aegiscloud.org) — check your inbox for the activation token, then run:  
@@ -41,15 +41,35 @@ bash install.sh
 
 ## First run
 
-Add your API keys to `.env` in the project root (or `~/.aegiscode/.env`) before starting:
+Run `aegis` — if no API keys are configured, an interactive setup guide launches automatically:
+
+```
+◆ aegiscode — Setup
+
+  Keys are saved to ~/.aegiscode/.env
+
+  Select provider:
+❯ Anthropic (Claude)    ANTHROPIC_API_KEY
+  OpenAI (GPT)          OPENAI_API_KEY
+  DeepSeek              DEEPSEEK_API_KEY
+  Groq                  GROQ_API_KEY
+  Google Gemini         GEMINI_API_KEY
+  Ollama (local)        (no key needed)
+```
+
+Pick a provider, paste your key, and optionally add more. Keys are saved to `~/.aegiscode/.env` and the app starts immediately.
+
+**Or configure manually** — create `~/.aegiscode/.env`:
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...
-DEEPSEEK_API_KEY=sk-...
-GROQ_API_KEY=gsk_...
-GEMINI_API_KEY=AIza...
-OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY
+GROQ_API_KEY=YOUR_GROQ_API_KEY
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 ```
+
+Only add the keys for providers you want to use. aegiscode picks them up automatically.
 
 ---
 
@@ -67,37 +87,19 @@ aegis --resume <session-id>  # resume specific session
 
 ## Configuration
 
-Config lives at `~/.aegiscode/config.json`. Create it with:
+Config lives at `~/.aegiscode/config.json`. It is created automatically on first run.
 
-```bash
-aegis --init
+API keys are read from `~/.aegiscode/.env` — you don't need to put them in `config.json`.
+
+To add a custom model inside the app:
+
 ```
-
-Minimal example:
-
-```json
-{
-  "currentModelId": "claude-sonnet-4",
-  "models": [
-    {
-      "id": "claude-sonnet-4",
-      "name": "Claude Sonnet 4",
-      "provider": "anthropic",
-      "model": "claude-sonnet-4-20250514",
-      "baseURL": "https://api.anthropic.com/v1",
-      "apiKey": "sk-ant-..."
-    }
-  ]
-}
+/model add openrouter-mixtral "Mixtral 8x7B" mistralai/mixtral-8x7b-instruct https://openrouter.ai/api/v1 sk-or-...
 ```
-
-API keys go in the model entry, not in `.bashrc` or environment variables — this prevents silent key conflicts across projects.
 
 ---
 
 ## Built-in models
-
-aegiscode ships with pre-configured entries for the following providers. Add your API key to activate them:
 
 | ID | Model | Provider |
 |----|-------|----------|
@@ -146,19 +148,11 @@ Any OpenAI-compatible API can be added as a custom model.
 | `/hooks` | | View and manage hooks |
 | `/version` | `/v` | Show version info |
 
-### Adding a custom model
-
-```
-/model add openrouter-mixtral "Mixtral 8x7B" mistralai/mixtral-8x7b-instruct https://openrouter.ai/api/v1 sk-or-...
-```
-
-Changes are saved to `config.json` immediately.
-
 ---
 
 ## Tools
 
-aegiscode can read, write, and execute files in your project. Tool permissions are configured per-project in `config.json`:
+aegiscode can read, write, and execute files in your project. Tool permissions are configured per-project in `.aegiscode/settings.json`:
 
 ```json
 {
@@ -206,7 +200,7 @@ aegis --resume <session-id>   # resume by ID
 
 ## MCP
 
-aegiscode supports MCP (Model Context Protocol) servers. Configure in `config.json`:
+aegiscode supports MCP (Model Context Protocol) servers. Configure in `~/.aegiscode/config.json`:
 
 ```json
 {
