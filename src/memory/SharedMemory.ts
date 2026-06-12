@@ -68,6 +68,11 @@ const JUNK_PATTERNS = [
   /^\/clear/i, /^\| sid/i, /^\|──/i, /^\| tok/i, /^\s*$/,
 ];
 
+function isExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt).getTime() < Date.now();
+}
+
 function isJunk(content: string): boolean {
   if (content.length < 8) return true;
   return JUNK_PATTERNS.some(p => p.test(content.trim()));
@@ -295,6 +300,8 @@ function parseJsonArr(s: string): string[] {
 
 // ── Cosine similarity between two vectors ───────────────────────────────────
 function cosineSimilarity(a: number[], b: number[]): number {
+  // Guard: mismatched dimensions (e.g. Xenova 384 vs Ollama 768) produce NaN
+  if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
@@ -454,7 +461,8 @@ export class SharedMemory {
     const keywordScored = allEntries.map(e => {
       const text = (e.content + ' ' + e.tags.join(' ')).toLowerCase();
       const keywordScore = words.reduce((s, w) => {
-        const count = (text.match(new RegExp(w, 'g')) || []).length;
+        const safe = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const count = (text.match(new RegExp(safe, 'g')) || []).length;
         return s + count;
       }, 0);
       const importBoost = e.session === 'aegiscloud-import' ? 1.5 : 1;
@@ -716,9 +724,9 @@ export class SharedMemory {
       if (fs.existsSync(MEMORY_TOKEN_FILE)) {
         const fileToken = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
         if (fileToken.length >= 20) {
-          // Token file exists and is valid — sync to config.json
           try {
             const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            if (isExpired(cfg?.memory?.expiresAt)) return false;
             if (!cfg?.memory?.subscribed) {
               const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: fileToken, activatedAt: new Date().toISOString() } };
               fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
@@ -729,7 +737,7 @@ export class SharedMemory {
       }
     } catch {}
 
-    // 2. Check environment variable
+    // 2. Check environment variable (env tokens never expire)
     if (process.env.AEGIS_MEMORY_TOKEN) {
       try {
         const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -744,7 +752,8 @@ export class SharedMemory {
     // 3. Check config.json
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      return cfg?.memory?.subscribed === true;
+      if (cfg?.memory?.subscribed !== true) return false;
+      return !isExpired(cfg?.memory?.expiresAt);
     } catch { return false; }
   }
 
@@ -827,8 +836,7 @@ export class SharedMemory {
     );
 
     for (const e of entries) {
-      if (!merge && existingIds.has(e.id)) continue;
-      if (existingIds.has(e.id)) continue;
+      if (existingIds.has(e.id) && !merge) continue;
 
       let embeddingBuf: Buffer | null = null;
       if (e.embedding && e.embedding.length > 0) {
