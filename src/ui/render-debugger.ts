@@ -478,7 +478,7 @@ function autoReport() {
  * @param options.reportInterval - ms between auto-reports (default 3000)
  * @param options.verbose - console.log every render event (default false)
  */
-export function startRenderDebugger(options?: { reportInterval?: number; verbose?: boolean }): void {
+export async function startRenderDebugger(options?: { reportInterval?: number; verbose?: boolean }): Promise<void> {
   if (state.enabled) {
     console.log('[RenderDebugger] Already running')
     return
@@ -500,14 +500,14 @@ export function startRenderDebugger(options?: { reportInterval?: number; verbose
 
   // Try to patch React if available
   try {
-    const React = require('react')
-    unpatches.push(patchReactCreateElement(React))
+    const React = await import('react')
+    unpatches.push(patchReactCreateElement(React.default || React))
   } catch {
     // React not loaded yet; try again after a tick
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        const React = require('react')
-        unpatches.push(patchReactCreateElement(React))
+        const React = await import('react')
+        unpatches.push(patchReactCreateElement(React.default || React))
       } catch {}
     }, 100)
   }

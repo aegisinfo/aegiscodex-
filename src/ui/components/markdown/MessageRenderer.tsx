@@ -154,17 +154,16 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
                     {isStreaming ? (
                       <>
-                        <ToolSpinner color={theme.colors.text.muted} />
-                        <Text italic> thinking</Text>
-                        {thinkingWordCount > 0 && <Text> · {thinkingWordCount}w</Text>}
-                        <Text>...</Text>
+                        <Text color={theme.colors.primary}>{'□ '}</Text>
+                        <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
+                        {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w...</Text>}
                       </>
                     ) : (
                       <>
-                        <Text>◆ </Text>
-                        <Text italic>thought</Text>
+                        <Text color={theme.colors.primary}>{'□ '}</Text>
+                        <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
                         {thinkingWordCount > 0 && (
-                          <Text> · {thinkingWordCount} {thinkingWordCount === 1 ? 'word' : 'words'}</Text>
+                          <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
                         )}
                       </>
                     )}
@@ -188,13 +187,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
               </>
             ) : (
               <Box marginLeft={prefixOffset}>
-                <Text color={theme.colors.text.muted} dimColor>
-                  <Text>◆ </Text>
-                  <Text italic>thought</Text>
-                  {thinkingWordCount > 0 && (
-                    <Text> · {thinkingWordCount} {thinkingWordCount === 1 ? 'word' : 'words'}</Text>
-                  )}
-                </Text>
+                <Text color={theme.colors.primary}>{'□ '}</Text>
+                <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
+                {thinkingWordCount > 0 && (
+                  <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
+                )}
               </Box>
             )}
           </Box>
@@ -353,6 +350,13 @@ function getToolSummary(name: string, input: string): string {
   }
 }
 
+// Split "Name(path)" into {label, path} for separate coloring
+function splitToolSummary(summary: string): { label: string; path: string } {
+  const m = summary.match(/^([^(]+)(\(.+\))$/)
+  if (m) return { label: m[1], path: m[2] }
+  return { label: summary, path: '' }
+}
+
 function formatElapsed(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
@@ -380,9 +384,9 @@ const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
   prefixOffset,
 }) => {
   const summary = useMemo(() => getToolSummary(name, input), [name, input])
+  const { label, path } = useMemo(() => splitToolSummary(summary), [summary])
   const isRunning = status === 'running'
   const isError = status === 'error'
-  const isDone = status === 'success'
   const elapsed = !isRunning && completedAt ? formatElapsed(completedAt - startedAt) : null
 
   return (
@@ -390,19 +394,22 @@ const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
       {isRunning ? (
         <>
           <ToolSpinner color={theme.colors.primary} />
-          <Text color={theme.colors.text.secondary}>{' '}{summary}</Text>
+          <Text color={theme.colors.text.secondary}>{' '}{label}</Text>
+          {path && <Text color={theme.colors.primary}>{path}</Text>}
         </>
-      ) : isDone ? (
+      ) : isError ? (
         <>
-          <Text color={theme.colors.success} bold>{'✓'}</Text>
-          <Text color={theme.colors.text.muted} dimColor>{' '}{summary}</Text>
-          {elapsed && <Text color={theme.colors.text.muted} dimColor>{'  '}{elapsed}</Text>}
+          <Text color={theme.colors.error}>{'• '}</Text>
+          <Text color={theme.colors.text.muted} dimColor>{label}</Text>
+          {path && <Text color={theme.colors.primary} dimColor>{path}</Text>}
+          {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
         </>
       ) : (
         <>
-          <Text color={theme.colors.error} bold>{'✗'}</Text>
-          <Text color={theme.colors.text.muted} dimColor>{' '}{summary}</Text>
-          {elapsed && <Text color={theme.colors.text.muted} dimColor>{'  '}{elapsed}</Text>}
+          <Text color={theme.colors.success}>{'• '}</Text>
+          <Text color={theme.colors.text.secondary}>{label}</Text>
+          {path && <Text color={theme.colors.primary}>{path}</Text>}
+          {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
         </>
       )}
     </Box>

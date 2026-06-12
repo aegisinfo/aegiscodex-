@@ -5,7 +5,9 @@
  */
 
 import { nanoid } from 'nanoid';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import type {
   ContextData,
   ContextMessage,
@@ -223,7 +225,6 @@ export class ContextManager {
       trigger: 'auto',
       modelName: (() => {
         try {
-          const fs = require('fs'), os = require('os'), path = require('path');
           const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.aegiscode', 'config.json'), 'utf8'));
           return cfg?.default?.model || 'claude-sonnet-4-6';
         } catch { return 'claude-sonnet-4-6'; }

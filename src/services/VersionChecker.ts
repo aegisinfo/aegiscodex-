@@ -12,6 +12,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 
 // ========== 从 package.json 读取配
 
@@ -399,8 +400,6 @@ export async function performUpgrade(): Promise<{ success: boolean; message: str
  * 
  */
 export function restartApp(): void {
-  const { spawn } = require('child_process');
-  
   // 启动新的 aegis 进
   // 使用 detached: true 让子进程独立运
   // 使用 stdio: 'inherit' 让新进程继承终

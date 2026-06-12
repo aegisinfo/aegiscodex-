@@ -16,9 +16,9 @@ interface WelcomeMessageProps {
 }
 
 const LOGO_LINES = [
-  '   ╔═╗╔═╗╔═╗╦╔═╗',
-  '   ╠═╣║╣ ║ ╦║╚═╗',
-  '   ╩ ╩╚═╝╚═╝╩╚═╝',
+  ' ╔═╗  ╔═╗  ╔═╗  ╦  ╔═╗',
+  ' ╠═╣  ║╣   ║ ╦  ║  ╚═╗',
+  ' ╩ ╩  ╚═╝  ╚═╝  ╩  ╚═╝',
 ];
 
 const LINE_LENGTHS = LOGO_LINES.map(l => l.length);
@@ -175,7 +175,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
           <Box flexDirection="column" marginLeft={2}>
             <Box height={1} />
             <Box>
-              <Text color={theme.colors.primary} bold>{'✻ '}</Text>
+              <Text color={theme.colors.primary} bold>{'□ '}</Text>
               <Text color={theme.colors.text.primary} bold>aegiscode</Text>
             </Box>
             <Box>
