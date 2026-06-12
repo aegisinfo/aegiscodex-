@@ -25,7 +25,8 @@ import { CommandSuggestions } from './CommandSuggestions.js';
 
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import { useIsThinking, usePendingCommands } from '../../../store/index.js';
+import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
+import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent } from '../../../store/streaming-buffer.js';
 
 // Electric blue color ramp — cycles fast to simulate voltage/energy
@@ -96,38 +97,41 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
 
-    // Single label state — only re-renders when visible text actually changes.
-    // Eliminates 3 separate states (thinkingSeconds, streamingTokens, hasStreamingMessage)
-    // and the vanillaStore subscription that fired on every streaming delta.
-    const [thinkingLabel, setThinkingLabel] = useState<string | null>(null);
-    const prevLabelRef = useRef<string | null>(null);
-    const secsRef = useRef(0);
+    const [thinkingSeconds, setThinkingSeconds] = useState(0);
+    const [streamingTokens, setStreamingTokens] = useState(0);
     const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     useEffect(() => {
       if (isProcessing) {
-        secsRef.current = 0;
-        prevLabelRef.current = 'thinking';
-        setThinkingLabel('thinking');
+        setThinkingSeconds(0);
+        setStreamingTokens(0);
         thinkingTimerRef.current = setInterval(() => {
-          secsRef.current += 1;
+          setThinkingSeconds(s => s + 1);
           const buf = getStreamingContent();
-          const isStreaming = buf !== null && buf.content.length > 0;
-          const elapsed = secsRef.current >= 2 ? ` · ${secsRef.current}s` : '';
-          const toks = buf && buf.content.length > 0 ? ` · ~${Math.ceil(buf.content.length / 4)}t` : '';
-          const label = isStreaming ? `generating${elapsed}${toks}` : `thinking${elapsed}`;
-          if (label !== prevLabelRef.current) {
-            prevLabelRef.current = label;
-            setThinkingLabel(label);
-          }
+          if (buf) setStreamingTokens(Math.ceil(buf.content.length / 4));
         }, 1000);
       } else {
         if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; }
-        setThinkingLabel(null);
-        prevLabelRef.current = null;
-        secsRef.current = 0;
+        setThinkingSeconds(0);
+        setStreamingTokens(0);
       }
       return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
     }, [isProcessing]);
+
+    const [hasStreamingMessage, setHasStreamingMessage] = useState(
+      () => getState().session.messages.some(m => m.isStreaming)
+    );
+    useEffect(() => {
+      let prev = hasStreamingMessage;
+      const unsubscribe = vanillaStore.subscribe((state) => {
+        const msgs = state.session.messages;
+        const newVal = msgs[msgs.length - 1]?.isStreaming ?? false;
+        if (newVal !== prev) {
+          prev = newVal;
+          setHasStreamingMessage(newVal);
+        }
+      });
+      return unsubscribe;
+    }, []);
 
     // Electric glow animation — 200ms ticks, only active while processing
     const [glowPhase, setGlowPhase] = useState(0);
@@ -145,7 +149,15 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     // Cursor: always visible at idle (no timer = no idle redraws), blinks during generation
     const cursorOn = isProcessing ? Math.floor(glowPhase / 3) % 2 === 0 : true;
-    
+
+    const thinkingLabel = useMemo(() => {
+      if (!isProcessing) return null;
+      const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
+      const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
+      if (hasStreamingMessage) return `generating${elapsed}${tokens}`;
+      return `thinking${elapsed}`;
+    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens]);
+
     // 计
     const placeholder = useMemo(() => {
       if (isProcessing) {
