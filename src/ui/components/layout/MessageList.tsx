@@ -62,7 +62,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   // Track flushed position in the buffer content string per streaming message
   const flushedPosRef = useRef<Record<string, number>>({});
   const chunkCountRef = useRef(0);
-  const lastFlushTimeRef = useRef(0);
+  const lastFlushTimeRef = useRef(Date.now());
   // Track which message IDs were progressively flushed (skip them in committed Static)
   const streamFlushedIdsRef = useRef<Set<string>>(new Set());
 
@@ -74,7 +74,11 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
 
-    const pollBuffer = (now: number) => {
+    const pollBuffer = (_now: number) => {
+      // Use Date.now() instead of the RAF timestamp — the Node.js RAF polyfill
+      // calls cb() with no arguments, making `now` undefined (NaN), which breaks
+      // all time-based comparisons like (now - lastRafTime < FLUSH_INTERVAL_MS).
+      const now = Date.now();
       if (now - lastRafTime < FLUSH_INTERVAL_MS) {
         rafId = requestAnimationFrame(pollBuffer);
         return;
@@ -146,9 +150,27 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
 
       if (messagesChanged) {
         setMessages([...newMessages]);
-        // When streaming finishes, clear chunk state for that message
+        // When streaming finishes, flush any remaining content not yet in chunks.
+        // Short responses (< FLUSH_THRESHOLD, no newlines, fast arrival) may complete
+        // before the RAF loop runs — the committed msg.content has the full text,
+        // so we flush it here as a final chunk to guarantee it appears on screen.
         newMessages.forEach(msg => {
-          if (!msg.isStreaming && flushedPosRef.current[msg.id] !== undefined) {
+          const wasStreaming = prevMessages.find(m => m.id === msg.id)?.isStreaming;
+          if (!msg.isStreaming && wasStreaming && !streamFlushedIdsRef.current.has(msg.id)) {
+            // Mark as flushed immediately to prevent duplicate flushes when the
+            // subscription fires multiple times before React re-renders (e.g.
+            // finishStreamingMessage followed by setThinking in the same tick).
+            streamFlushedIdsRef.current.add(msg.id);
+            const flushedPos = flushedPosRef.current[msg.id] ?? 0;
+            const fullContent = msg.content ?? '';
+            const remaining = fullContent.slice(flushedPos);
+            if (remaining.trim()) {
+              chunkCountRef.current++;
+              const chunkId = `${msg.id}-chunk-${chunkCountRef.current}`;
+              setStreamingChunks(prev => [...prev, { id: chunkId, text: remaining }]);
+            }
+            delete flushedPosRef.current[msg.id];
+          } else if (!msg.isStreaming && flushedPosRef.current[msg.id] !== undefined) {
             resetStreamState(msg.id);
           }
         });
