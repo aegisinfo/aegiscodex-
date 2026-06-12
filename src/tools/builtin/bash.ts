@@ -116,7 +116,7 @@ export const bashTool = createTool({
         return {
           success: false,
           llmContent: `Error: Potentially dangerous command detected: ${command}`,
-          displayContent: `❌ 检测到危险命令，已阻止执行`,
+          displayContent: `blocked: dangerous command`,
           error: {
             type: ToolErrorType.PERMISSION_ERROR,
             message: 'Dangerous command blocked',
@@ -174,9 +174,9 @@ export const bashTool = createTool({
       return {
         success: true,
         llmContent: output || '(no output)',
-        displayContent: description 
-          ? `✅ ${description}` 
-          : `✅ 命令执行成功: ${command.length > 50 ? command.substring(0, 50) + '...' : command}`,
+        displayContent: description
+          ? description
+          : command.length > 60 ? command.substring(0, 60) + '…' : command,
         metadata: {
           command,
           exit_code: 0,
@@ -199,7 +199,7 @@ export const bashTool = createTool({
         return {
           success: false,
           llmContent: `Command timed out after ${timeout}ms: ${command}`,
-          displayContent: `❌ 命令超时 (${timeout}ms)`,
+          displayContent: `error: timeout (${timeout}ms)`,
           error: {
             type: ToolErrorType.TIMEOUT_ERROR,
             message: 'Command timed out',
@@ -209,7 +209,7 @@ export const bashTool = createTool({
 
       // 命令执行失
       const exitCode = typeof execError.code === 'number' ? execError.code : 1;
-      const stderr = execError.stderr || execError.message || '未知错误';
+      const stderr = execError.stderr || execError.message || 'unknown error';
       const stdout = execError.stdout || '';
 
       const output = [
@@ -220,7 +220,7 @@ export const bashTool = createTool({
       return {
         success: false,
         llmContent: `Command failed with exit code ${exitCode}:\n${output}`,
-        displayContent: `❌ 命令执行失败 (exit ${exitCode})`,
+        displayContent: `error: exit ${exitCode}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: stderr,

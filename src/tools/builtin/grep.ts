@@ -142,7 +142,7 @@ Supports full regex syntax and can filter files by glob pattern.`,
         return {
           success: false,
           llmContent: `Invalid regex pattern: ${pattern} — unclosed bracket or parenthesis`,
-          displayContent: `❌ 无效的正则表达式: ${pattern} — 未闭合的括号`,
+          displayContent: `error: invalid regex — unclosed bracket or parenthesis`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'Invalid regex pattern — unclosed bracket or parenthesis',
@@ -157,7 +157,7 @@ Supports full regex syntax and can filter files by glob pattern.`,
         return {
           success: false,
           llmContent: `Invalid regex pattern: ${pattern}`,
-          displayContent: `❌ 无效的正则表达式: ${pattern}`,
+          displayContent: `error: invalid regex: ${pattern}`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'Invalid regex pattern',
@@ -211,7 +211,7 @@ Supports full regex syntax and can filter files by glob pattern.`,
         return {
           success: true,
           llmContent: 'No matches found.',
-          displayContent: `🔍 未找到匹配内容: ${pattern}`,
+          displayContent: `no matches: ${pattern}`,
           metadata: {
             pattern,
             cwd,
@@ -230,9 +230,9 @@ Supports full regex syntax and can filter files by glob pattern.`,
         .join('\n');
 
       const truncated = allMatches.length >= MAX_RESULTS;
-      let summary = `✅ 找到 ${allMatches.length} 个匹配`;
+      let summary = `${allMatches.length} match${allMatches.length === 1 ? '' : 'es'}`;
       if (truncated) {
-        summary += ` (已截断，可能有更多)`;
+        summary += ` (truncated)`;
       }
 
       return {
@@ -248,11 +248,11 @@ Supports full regex syntax and can filter files by glob pattern.`,
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorMessage = error instanceof Error ? error.message : 'unknown error';
       return {
         success: false,
         llmContent: `Grep search failed: ${errorMessage}`,
-        displayContent: `❌ 搜索失败: ${errorMessage}`,
+        displayContent: `error: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

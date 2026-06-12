@@ -86,7 +86,7 @@ If the User provides a path to a file assume that path is valid.`,
         return {
           success: false,
           llmContent: `File not found: ${file_path}`,
-          displayContent: `❌ 文件不存在: ${file_path}`,
+          displayContent: `error: file not found: ${file_path}`,
           error: {
             type: ToolErrorType.EXECUTION_ERROR,
             message: 'File not found',
@@ -102,7 +102,7 @@ If the User provides a path to a file assume that path is valid.`,
         return {
           success: false,
           llmContent: `Path is a directory, not a file: ${file_path}`,
-          displayContent: `❌ 路径是目录而非文件: ${file_path}`,
+          displayContent: `error: ${file_path} is a directory`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'Path is a directory',
@@ -130,15 +130,14 @@ If the User provides a path to a file assume that path is valid.`,
       const hasMore = offset + effectiveLimit < totalLines;
       const fileName = path.basename(file_path);
 
-      // 构建摘要信
-      let summary = `✅ 读取文件: ${fileName}`;
+      let summary = fileName;
       if (offset > 0 || limit) {
-        summary += ` (行 ${offset + 1}-${Math.min(offset + effectiveLimit, totalLines)}/${totalLines})`;
+        summary += `  lines ${offset + 1}–${Math.min(offset + effectiveLimit, totalLines)} of ${totalLines}`;
       } else {
-        summary += ` (${totalLines} 行)`;
+        summary += `  ${totalLines} lines`;
       }
       if (hasMore) {
-        summary += ` [还有更多...]`;
+        summary += ` ···`;
       }
 
       return {
@@ -154,11 +153,11 @@ If the User provides a path to a file assume that path is valid.`,
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorMessage = error instanceof Error ? error.message : 'unknown error';
       return {
         success: false,
         llmContent: `Failed to read file: ${errorMessage}`,
-        displayContent: `❌ 读取文件失败: ${errorMessage}`,
+        displayContent: `error: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

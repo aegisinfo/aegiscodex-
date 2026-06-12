@@ -97,7 +97,7 @@ export const editTool = createTool({
           return {
             success: false,
             llmContent: `Error: ${file_path} is a directory, not a file`,
-            displayContent: `❌ 错误: ${file_path} 是目录而非文件`,
+            displayContent: `error: ${file_path} is a directory`,
             error: {
               type: ToolErrorType.VALIDATION_ERROR,
               message: 'Path is a directory',
@@ -108,7 +108,7 @@ export const editTool = createTool({
         return {
           success: false,
           llmContent: `Error: File not found: ${file_path}`,
-          displayContent: `❌ 文件不存在: ${file_path}`,
+          displayContent: `error: file not found: ${file_path}`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'File not found',
@@ -124,7 +124,7 @@ export const editTool = createTool({
         return {
           success: false,
           llmContent: 'Error: old_string and new_string are identical',
-          displayContent: '❌ old_string 和 new_string 相同',
+          displayContent: 'error: old_string and new_string are identical',
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'old_string and new_string are identical',
@@ -139,7 +139,7 @@ export const editTool = createTool({
         return {
           success: false,
           llmContent: `Error: old_string not found in file. Make sure you have read the file first and the content is up to date.`,
-          displayContent: `❌ 未找到要替换的内容`,
+          displayContent: `error: old_string not found in file`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: 'old_string not found in file',
@@ -154,7 +154,7 @@ export const editTool = createTool({
           llmContent: `Error: Multiple matches (${matchCount}) found for old_string. Either:
 1. Provide more context in old_string to make it unique
 2. Set replace_all=true to replace all occurrences`,
-          displayContent: `❌ 找到 ${matchCount} 个匹配，请提供更多上下文或使用 replace_all`,
+          displayContent: `error: ${matchCount} matches found — use replace_all or add more context`,
           error: {
             type: ToolErrorType.VALIDATION_ERROR,
             message: `Multiple matches (${matchCount}) found`,
@@ -179,7 +179,7 @@ export const editTool = createTool({
       return {
         success: true,
         llmContent: `Successfully edited ${file_path} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
-        displayContent: `✅ 文件已编辑: ${file_path} (${replacements} 处替换)`,
+        displayContent: `${path.basename(file_path)}  ${replacements} edit${replacements > 1 ? 's' : ''}`,
         metadata: {
           file_path,
           replacements,
@@ -190,11 +190,11 @@ export const editTool = createTool({
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorMessage = error instanceof Error ? error.message : 'unknown error';
       return {
         success: false,
         llmContent: `Error editing file: ${errorMessage}`,
-        displayContent: `❌ 编辑文件失败: ${errorMessage}`,
+        displayContent: `error: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

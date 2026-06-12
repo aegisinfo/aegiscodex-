@@ -81,7 +81,7 @@ export const writeTool = createTool({
           return {
             success: false,
             llmContent: `Error: ${file_path} is a directory, cannot write to it`,
-            displayContent: `❌ 错误: ${file_path} 是目录`,
+            displayContent: `error: ${file_path} is a directory`,
             error: {
               type: ToolErrorType.VALIDATION_ERROR,
               message: 'Path is a directory',
@@ -110,7 +110,7 @@ export const writeTool = createTool({
       return {
         success: true,
         llmContent: `Successfully wrote to ${file_path} (${lines} lines, ${bytes} bytes)`,
-        displayContent: `✅ 文件已写入: ${file_path} (${lines} 行)`,
+        displayContent: `${path.basename(file_path)}  ${lines} lines`,
         metadata: {
           file_path,
           lines,
@@ -119,11 +119,11 @@ export const writeTool = createTool({
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorMessage = error instanceof Error ? error.message : 'unknown error';
       return {
         success: false,
         llmContent: `Error writing file: ${errorMessage}`,
-        displayContent: `❌ 写入文件失败: ${errorMessage}`,
+        displayContent: `error: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,

@@ -95,7 +95,7 @@ Use this tool when you need to find files by name patterns.`,
         return {
           success: true,
           llmContent: 'No files found matching the pattern.',
-          displayContent: `🔍 未找到匹配的文件: ${pattern}`,
+          displayContent: `no files: ${pattern}`,
           metadata: {
             pattern,
             cwd,
@@ -112,7 +112,7 @@ Use this tool when you need to find files by name patterns.`,
       return {
         success: true,
         llmContent: formattedFiles,
-        displayContent: `✅ 找到 ${files.length} 个文件`,
+        displayContent: `${files.length} file${files.length === 1 ? '' : 's'}`,
         metadata: {
           pattern,
           cwd,
@@ -125,7 +125,7 @@ Use this tool when you need to find files by name patterns.`,
       return {
         success: false,
         llmContent: `Glob search failed: ${errorMessage}`,
-        displayContent: `❌ 搜索失败: ${errorMessage}`,
+        displayContent: `error: ${errorMessage}`,
         error: {
           type: ToolErrorType.EXECUTION_ERROR,
           message: errorMessage,
