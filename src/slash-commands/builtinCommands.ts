@@ -1399,6 +1399,34 @@ function modeMeta(type: string): { icon: string; label: string } {
   }
 }
 
+// Wraps a confirmation handler so that parallel sub-agent requests are queued
+// and presented to the user one at a time — preventing the single-slot React
+// resolver from being overwritten when multiple agents request confirmation
+// simultaneously (which would deadlock the first pending promise).
+function createSerialConfirmationHandler(
+  inner: { requestConfirmation: (details: any) => Promise<any> } | undefined,
+): { requestConfirmation: (details: any) => Promise<any> } | undefined {
+  if (!inner) return undefined;
+  const queue: Array<() => Promise<void>> = [];
+  let running = false;
+  const drain = async () => {
+    if (running) return;
+    running = true;
+    while (queue.length > 0) await queue.shift()!();
+    running = false;
+  };
+  return {
+    requestConfirmation: (details) =>
+      new Promise((resolve, reject) => {
+        queue.push(async () => {
+          try { resolve(await inner.requestConfirmation(details)); }
+          catch (e) { reject(e); }
+        });
+        void drain();
+      }),
+  };
+}
+
 const multiCommand: SlashCommand = {
   name: 'multi',
   description: 'Orchestrate multiple AI agents on a complex task — /multi <task>',
@@ -1444,19 +1472,19 @@ Flags:
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    // Resolve permission mode for sub-agents.
-    // Parallel agents cannot block on interactive confirmation dialogs — if two agents
-    // call requestConfirmation simultaneously the second call overwrites the React state
-    // resolver and the first promise never resolves (deadlock). Force minimum autoEdit
-    // so read-only tools pass through and write tools run without prompting. If the
-    // user has yolo configured we keep that; default/plan are upgraded to autoEdit.
-    let permissionMode: string = 'autoEdit';
+    // Resolve permission mode for sub-agents — use the user's configured mode.
+    // Parallel agents requesting confirmation simultaneously would deadlock because
+    // the React confirmation UI holds a single resolver slot. We solve this by
+    // wrapping the handler in a serial queue (see createSerialConfirmationHandler).
+    let permissionMode: string = 'default';
     try {
       const { configManager } = await import('../config/ConfigManager.js');
-      const mode = configManager.getDefaultPermissionMode();
-      if (mode === 'yolo') permissionMode = 'yolo';
-      // default/plan → autoEdit (parallel-safe minimum)
-    } catch { /* use autoEdit */ }
+      permissionMode = configManager.getDefaultPermissionMode() || 'default';
+    } catch { /* use default */ }
+
+    // Wrap the real confirmation handler so parallel agents queue their requests
+    // instead of simultaneously overwriting the React resolver state.
+    const serialHandler = createSerialConfirmationHandler(context.confirmationHandler);
 
     try {
       const agentConfig: AgentConfig = {
@@ -1499,12 +1527,14 @@ Flags:
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
-      // Register agents with autoEdit or yolo — never default/plan, which would
-      // deadlock when parallel agents simultaneously request confirmation.
+      // Register agents with the user's permission mode + serialized confirmation handler.
+      // Serialization prevents the parallel-agent deadlock while preserving the normal
+      // accept / accept-always / deny UX — requests are shown one at a time.
       for (const agent of agents) {
         orchestrator.registerAgent({
           ...agent,
           permissionMode: permissionMode as any,
+          confirmationHandler: serialHandler,
         });
       }
 
@@ -1536,7 +1566,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Agents run autonomously in \`${permissionMode}\` mode*\n\n---\n\n`);
+        context.onContentDelta(`*Permission mode: \`${permissionMode}\` · confirmations are serialized*\n\n---\n\n`);
       }
 
       // Run
@@ -1643,7 +1673,173 @@ Flags:
   },
 };
 
+// /multiyolo — same as /multi but runs with yolo permission mode (no confirmation prompts).
+const multiYoloCommand: SlashCommand = {
+  name: 'multiyolo',
+  description: 'Run multi-agent orchestration with yolo mode — no confirmation prompts',
+  category: 'general',
+  usage: '/multiyolo <task>',
+  examples: ['/multiyolo refactor the auth module', '/multiyolo build a REST API for users'],
+  fullDescription: `Same as /multi but runs all sub-agents with permission mode: yolo.
+All tools (Read, Edit, Write, Bash) are executed without confirmation dialogs.
+Use this when you trust the task and want fully autonomous execution.`,
 
+  async handler(args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
+    const trimmed = args?.trim();
+    if (!trimmed) return { success: false, type: 'error', error: 'Usage: /multiyolo <task>' };
+
+    let modelConfig;
+    try { modelConfig = requireModelConfig(); }
+    catch (e) { return { success: false, type: 'error', error: (e as Error).message }; }
+
+    const saveAsMatch = trimmed.match(/--save-as\s+(\S+)/);
+    const templateMatch = trimmed.match(/--template\s+(\S+)/);
+    const saveAs = saveAsMatch ? saveAsMatch[1] : null;
+    const templateId = templateMatch ? templateMatch[1] : null;
+    const task = trimmed.replace(/--save-as\s+\S+/g, '').replace(/--template\s+\S+/g, '').trim();
+    if (!task) return { success: false, type: 'error', error: 'Usage: /multiyolo <task>' };
+
+    try {
+      const agentConfig: AgentConfig = {
+        apiKey: modelConfig.apiKey,
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
+        timeout: 180000,
+      };
+
+      let agents: SubAgentConfig[];
+      let modeType: string;
+      let orchestratorName: string;
+      let synthesizerName: string;
+
+      if (templateId) {
+        const templateApp = getApp(templateId);
+        if (!templateApp) {
+          const available = getRegisteredApps().map(a => a.id).join(', ');
+          return { success: false, type: 'error', error: `Template "${templateId}" not found. Available: ${available}` };
+        }
+        agents = templateApp.agents.map(a => ({ ...a, config: { ...agentConfig, ...a.config } }));
+        modeType = templateId;
+        orchestratorName = templateApp.name;
+        synthesizerName = templateApp.synthesizer || agents[agents.length - 1]?.name;
+      } else {
+        modeType = detectTaskType(task);
+        orchestratorName = modeMeta(modeType).label;
+        agents = buildMultiAgents(modeType as any, agentConfig);
+        synthesizerName = agents[agents.length - 1]?.name;
+      }
+
+      const orchestrator = new OrchestratorAgent(
+        `MultiYolo-${modeType}`,
+        `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
+      );
+
+      for (const agent of agents) {
+        orchestrator.registerAgent({ ...agent, permissionMode: 'yolo' as any });
+      }
+
+      const subTasks: Record<string, string> = {};
+      const subTaskMap: Record<string, string> = {
+        architect:  `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.`,
+        scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.`,
+        reviewer:   `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.`,
+        debugger:   `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.`,
+        scanner:    `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.`,
+        analyzer:   `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.`,
+        planner:    `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.`,
+        implementer:`Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.`,
+        synthesizer:`Focus on synthesis. You will receive all agent responses and produce a final summary. (Synthesis task is handled separately.)`,
+      };
+      for (const agent of agents) {
+        if (agent.name === 'synthesizer') continue;
+        subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.`;
+      }
+
+      if (context.onContentDelta) {
+        const { icon, label } = modeMeta(modeType);
+        context.onContentDelta(`## ${icon} ${label} (yolo)\n`);
+        context.onContentDelta(`**Task:** ${task}\n\n`);
+        context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
+        context.onContentDelta(`*Permission mode: \`yolo\` · no confirmation dialogs*\n\n---\n\n`);
+      }
+
+      const result = await orchestrator.orchestrate(task, subTasks, synthesizerName);
+
+      if (saveAs) {
+        const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+        if (getApp(saveId)) {
+          return { success: false, type: 'error', error: `App "${saveId}" already exists.` };
+        }
+        const builder = new AppBuilder(saveId, `${task.slice(0, 50)}...`)
+          .describe(`Custom app created via /multiyolo: ${task.slice(0, 120)}`)
+          .use(`/${saveId} <task>`)
+          .examples([`/${saveId} ${task.slice(0, 60)}`]);
+        for (const agent of agents) {
+          builder.agent(agent.name, agent.role, agent.systemPrompt, agent.tools);
+        }
+        builder.register();
+      }
+
+      const { icon, label } = modeMeta(modeType);
+      const lines: string[] = [];
+      if (!context.onContentDelta) {
+        lines.push(`## ${icon} ${label} (yolo)`);
+        lines.push(`**Task:** ${task}`);
+        lines.push('');
+      }
+      for (const response of result.responses) {
+        const agentCfg = agents.find(a => a.name === response.agentName);
+        const role = agentCfg?.role || response.agentName;
+        const toolHint = response.metadata?.toolCallsCount ? ` [${response.metadata.toolCallsCount} tool calls]` : '';
+        const header = `### ${role}${toolHint}`;
+        const duration = response.metadata?.durationMs ? `*${(response.metadata.durationMs / 1000).toFixed(1)}s*` : '';
+        if (context.onContentDelta) {
+          context.onContentDelta(`\n${header}\n`);
+          if (duration) context.onContentDelta(`${duration}\n\n`);
+          context.onContentDelta(`${response.content || '*No response*'}\n\n`);
+        } else {
+          lines.push(header);
+          if (duration) lines.push(duration);
+          lines.push('');
+          lines.push(response.content || '*No response*');
+          lines.push('');
+        }
+      }
+      if (!context.onContentDelta) {
+        lines.push('---');
+        lines.push('### Synthesized Summary');
+        lines.push('');
+        lines.push(result.summary);
+      } else {
+        context.onContentDelta(`---\n\n### Synthesized Summary\n\n${result.summary}\n\n`);
+      }
+
+      const statusParts = [
+        `${result.metadata.agentsUsed} agents`,
+        `${(result.metadata.totalDurationMs / 1000).toFixed(1)}s`,
+      ];
+      if (result.metadata.totalTokens) statusParts.push(`${result.metadata.totalTokens} tokens`);
+      if (saveAs) {
+        const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+        statusParts.push(`saved as /${saveId}`);
+      }
+      const statusLine = `*${statusParts.join(' · ')}*`;
+      if (context.onContentDelta) {
+        context.onContentDelta(`\n${statusLine}\n`);
+      } else {
+        lines.push(statusLine);
+        return { success: true, type: 'info', content: lines.join('\n') };
+      }
+      return { success: true, type: 'silent' };
+    } catch (error) {
+      return {
+        success: false,
+        type: 'error',
+        error: `/multiyolo failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  },
+};
 
 const researchCommand: SlashCommand = {
   name: 'research',
@@ -2154,6 +2350,7 @@ export const builtinCommands: SlashCommand[] = [
   billingCommand,
   yoloCommand,
   multiCommand,
+  multiYoloCommand,
   researchCommand,
   ...appCommands,
 ];
