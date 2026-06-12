@@ -85,11 +85,16 @@ export class OpenAIChatService implements IChatService {
         }
       }
 
-      const requestParams: OpenAI.ChatCompletionCreateParams = {
+      const requestParams: OpenAI.ChatCompletionCreateParams & { keep_alive?: number } = {
         model: this.model,
         messages: openaiMessages,
         stream: true,
       };
+
+      // Keep Ollama models loaded in memory between requests — eliminates cold-start latency
+      if (isOllama) {
+        (requestParams as any).keep_alive = -1;
+      }
 
       const includeTools = tools && tools.length > 0 && !isGroq &&
         (!isOllama || ollamaQueryNeedsTools(messages));
