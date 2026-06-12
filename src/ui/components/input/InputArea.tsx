@@ -27,7 +27,6 @@ import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
 import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent } from '../../../store/streaming-buffer.js';
 
 // Electric blue color ramp — cycles fast to simulate voltage/energy
 const ELECTRIC_COLORS = [
@@ -97,25 +96,6 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
 
-    const [thinkingSeconds, setThinkingSeconds] = useState(0);
-    const [streamingTokens, setStreamingTokens] = useState(0);
-    const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    useEffect(() => {
-      if (isProcessing) {
-        setThinkingSeconds(0);
-        setStreamingTokens(0);
-        thinkingTimerRef.current = setInterval(() => {
-          setThinkingSeconds(s => s + 1);
-          const buf = getStreamingContent();
-          if (buf) setStreamingTokens(Math.ceil(buf.content.length / 4));
-        }, 1000);
-      } else {
-        if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; }
-        setThinkingSeconds(0);
-        setStreamingTokens(0);
-      }
-      return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
-    }, [isProcessing]);
 
     const [hasStreamingMessage, setHasStreamingMessage] = useState(
       () => getState().session.messages.some(m => m.isStreaming)
@@ -152,11 +132,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     const thinkingLabel = useMemo(() => {
       if (!isProcessing) return null;
-      const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
-      const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
-      if (hasStreamingMessage) return `generating${elapsed}${tokens}`;
-      return `thinking${elapsed}`;
-    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens]);
+      return hasStreamingMessage ? 'generating' : 'thinking';
+    }, [isProcessing, hasStreamingMessage]);
 
     // 计
     const placeholder = useMemo(() => {
