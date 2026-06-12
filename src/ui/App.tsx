@@ -52,10 +52,11 @@ function mergeRuntimeConfig(baseConfig: ClawdConfig, props: AppProps): RuntimeCo
 function initializeStoreState(config: RuntimeConfig): void {
   configActions().setConfig(config);
 
-  const hasDefaultConfig = config.default?.apiKey;
-  const hasModelsConfig = config.models && config.models.length > 0;
+  const isRealKey = (key?: string) => !!key && !key.startsWith('YOUR_');
+  const hasRealDefault = isRealKey(config.default?.apiKey);
+  const hasRealModel = config.models?.some(m => isRealKey((m as any).apiKey));
 
-  if (!hasDefaultConfig && !hasModelsConfig) {
+  if (!hasRealDefault && !hasRealModel) {
     appActions().setInitializationStatus('needsSetup');
   } else {
     appActions().setInitializationStatus('ready');

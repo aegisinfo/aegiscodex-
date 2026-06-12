@@ -82,6 +82,7 @@ import { WelcomeMessage } from './layout/WelcomeMessage.js';
 import { MessageList } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
+import { SetupWizard } from './dialog/SetupWizard.js';
 import { ExitMessage } from './common/ExitMessage.js';
 import { useConfirmation } from '../hooks/useConfirmation.js';
 
@@ -275,8 +276,51 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   });
 
   // ==================== Agent & Context Initialization ====================
+
+  // Called by SetupWizard after first-run config is saved to disk.
+  const handleSetupComplete = useCallback(async () => {
+    setInitError(null);
+    setIsInitializing(true);
+    try {
+      const { ConfigManager } = await import('../../config/index.js');
+      const cm = ConfigManager.getInstance();
+      await cm.initialize();
+      const newModel = cm.getDefaultModel();
+
+      contextManagerRef.current = new ContextManager({ compressionThreshold: 100000 });
+      const sid = await contextManagerRef.current.createSession();
+      sessionActions().setSessionId(sid);
+
+      agentRef.current = await Agent.create({
+        apiKey: newModel.apiKey!,
+        baseURL: newModel.baseURL,
+        model: newModel.model!,
+      });
+
+      const { initializeCustomCommands } = await import('../../slash-commands/index.js');
+      await initializeCustomCommands(process.cwd());
+
+      import('../../skills/index.js').then(({ initializeSkills }) => {
+        initializeSkills(process.cwd()).catch(() => {});
+      }).catch(() => {});
+
+      try {
+        const { initializeHooks, onSessionStart } = await import('../../hooks/index.js');
+        initializeHooks(cm.getConfig().hooks || {});
+        await onSessionStart(sid, process.cwd());
+      } catch {}
+
+      setIsInitializing(false);
+    } catch (err) {
+      setInitError(err instanceof Error ? err.message : String(err));
+      setIsInitializing(false);
+    }
+  }, []);
+
   useEffect(() => {
     const initAgent = async () => {
+      // Skip init during first-run setup — handleSetupComplete handles this.
+      if (getState().app.initializationStatus === 'needsSetup') return;
       try {
         if (debug) {
           console.log('[DEBUG] Initializing Agent and ContextManager...');
@@ -843,12 +887,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   }
 
   if (initializationStatus === 'needsSetup') {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="yellow">No models configured.</Text>
-        <Text color="gray">Please configure a model in ~/.aegis/config.json</Text>
-      </Box>
-    );
+    return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
   if (selectorState.isVisible) {
