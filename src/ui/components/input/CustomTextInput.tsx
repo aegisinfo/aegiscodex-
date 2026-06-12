@@ -4,7 +4,7 @@
  * 
  */
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { Text, useInput } from 'ink';
 import chalk from 'chalk';
 import { useIsFocused, FocusId, focusManager } from '../../focus/index.js';
@@ -14,6 +14,8 @@ interface CustomTextInputProps {
   value: string;
   /** 光标位置 */
   cursorPosition: number;
+  /** Blink phase from parent — cursor on when even, off when odd (avoids own timer) */
+  cursorPhase?: number;
   /** 值变化回调 */
   onChange: (value: string) => void;
   /** 光标位置变化回调 */
@@ -58,16 +60,14 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
   placeholder = '',
   focusId = FocusId.MAIN_INPUT,
   disabled = false,
+  cursorPhase = 0,
 }) => {
   const isFocused = useIsFocused(focusId);
   const isActive = isFocused && !disabled;
 
-  // Blinking block cursor — 530ms matches standard terminal blink rate
-  const [cursorOn, setCursorOn] = useState(true);
-  useEffect(() => {
-    const t = setInterval(() => setCursorOn(v => !v), 530);
-    return () => clearInterval(t);
-  }, []);
+  // Cursor blink derived from parent's glowPhase tick (100ms) — no own timer.
+  // Every 5 ticks ≈ 500ms half-cycle → ~1 s full blink period.
+  const cursorOn = Math.floor(cursorPhase / 5) % 2 === 0;
 
   // Render text with an animated block cursor.
   // The character at cursor position is shown with a teal bg when visible,

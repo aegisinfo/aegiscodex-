@@ -323,6 +323,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
               placeholder={placeholder}
               focusId={FocusId.MAIN_INPUT}
               disabled={false}
+              cursorPhase={isProcessing ? glowPhase : 0}
             />
           </Box>
         </Box>
