@@ -29,6 +29,13 @@ import { getState, useIsThinking, usePendingCommands } from '../../../store/inde
 import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent } from '../../../store/streaming-buffer.js';
 
+// Electric blue color ramp — cycles fast to simulate voltage/energy
+const ELECTRIC_COLORS = [
+  '#0055FF', '#0077FF', '#0099FF', '#00AAFF',
+  '#00CCFF', '#00EEFF', '#00FFFF', '#00EEFF',
+  '#00CCFF', '#00AAFF', '#0099FF', '#0077FF',
+];
+
 interface InputAreaProps {
   /** 提交回调 */
   onSubmit?: (value: string) => void;
@@ -110,6 +117,20 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         setStreamingTokens(0);
       }
       return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
+    }, [isProcessing]);
+
+    // Electric glow animation — fast color cycle + occasional dim flicker
+    const [glowPhase, setGlowPhase] = useState(0);
+    const glowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+      if (isProcessing) {
+        setGlowPhase(0);
+        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 100);
+      } else {
+        if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
+        setGlowPhase(0);
+      }
+      return () => { if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; } };
     }, [isProcessing]);
     
     // hasStreamingMessage via store subscription to avoid re-render on every delta
@@ -260,7 +281,10 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         <Box paddingX={1} marginBottom={0} height={1}>
           {thinkingLabel ? (
             <>
-              <Text color={theme.colors.text.muted} dimColor> {thinkingLabel}</Text>
+              <Text
+                color={ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]}
+                dimColor={glowPhase % 8 === 0}
+              > {thinkingLabel}</Text>
               {pendingCommands.length > 0 && (
                 <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
               )}
