@@ -59,17 +59,31 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const onScrollRef = useRef(onScroll);
   onScrollRef.current = onScroll;
 
+  // Queued store updates — applied during the RAF tick to prevent dual-path jumping.
+  const pendingMessagesRef = useRef<typeof messages | null>(null);
+
   useEffect(() => {
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
 
-    const pollBuffer = (now: number) => {
+    const flushTick = (now: number) => {
+      // Collated update: apply both buffered streaming content AND any
+      // pending store messages in a SINGLE render cycle. This prevents
+      // the "jumping" caused by store subscription updates (tool calls,
+      // block additions) interleaving with RAF streaming content updates.
       if (now - lastRafTime < RAF_INTERVAL_MS) {
-        rafId = requestAnimationFrame(pollBuffer);
+        rafId = requestAnimationFrame(flushTick);
         return;
       }
       lastRafTime = now;
 
+      // 1. Apply any pending store message changes (tool calls, blocks, etc.)
+      if (pendingMessagesRef.current) {
+        setMessages(pendingMessagesRef.current);
+        pendingMessagesRef.current = null;
+      }
+
+      // 2. Check and apply buffered streaming content
       const buffer = getStreamingContent();
       const state = vanillaStore.getState();
       const streamingMsg = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
@@ -95,10 +109,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      rafId = requestAnimationFrame(pollBuffer);
+      rafId = requestAnimationFrame(flushTick);
     };
 
-    rafId = requestAnimationFrame(pollBuffer);
+    rafId = requestAnimationFrame(flushTick);
 
     const unsub = vanillaStore.subscribe((state) => {
       const newMessages = state.session.messages;
@@ -125,8 +139,16 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      if (messagesChanged) setMessages([...newMessages]);
-      if (newShowAllThinking !== showAllThinkingRef.current) setShowAllThinking(newShowAllThinking);
+      // Don't call setMessages directly — queue for the RAF tick instead.
+      // This prevents dual-path interleaving with the streaming buffer updates.
+      if (messagesChanged) {
+        pendingMessagesRef.current = [...newMessages];
+      }
+
+      // showAllThinking is not streaming-related, safe to apply immediately.
+      if (newShowAllThinking !== showAllThinkingRef.current) {
+        setShowAllThinking(newShowAllThinking);
+      }
 
       newMessages.forEach(msg => {
         if (!msg.isStreaming) delete lastContentLenRef.current[msg.id];
@@ -144,27 +166,40 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
   const buffer = streamingMsg ? getStreamingContent() : null;
 
+  // Skip windowed rendering when there are few messages (common during streaming).
+  // Estimated-height padding causes vertical jitter — render everything directly
+  // since the message count is small enough to fit on screen.
+  const totalMessages = completedMessages.length + (streamingMsg ? 1 : 0);
+  const useWindowing = totalMessages > 20;
+
   const visibleCount = calcVisibleCount(terminalHeight);
   const maxOffset = Math.max(0, messages.length - visibleCount);
   const clampedOffset = Math.min(scrollOffset, maxOffset);
-
-  // Windowed rendering: only show a subset of messages
-  const windowStart = clampedOffset;
-  const windowEnd = Math.min(clampedOffset + visibleCount, completedMessages.length);
-  const visibleMessages = completedMessages.slice(windowStart, windowEnd);
-
-  // Padding to maintain scroll position (simulate lines above viewport)
-  const topPaddingLines = windowStart * ESTIMATED_ITEM_HEIGHT;
-  const bottomPaddingLines = (completedMessages.length - windowEnd) * ESTIMATED_ITEM_HEIGHT;
-
   const isAtBottom = clampedOffset >= maxOffset;
+
+  let topPaddingEl = null;
+  let bottomPaddingEl = null;
+  let visibleMessages = completedMessages;
+  let showLastMsgOutside = false;
+
+  if (useWindowing) {
+    const windowStart = clampedOffset;
+    const windowEnd = Math.min(clampedOffset + visibleCount, completedMessages.length);
+    visibleMessages = completedMessages.slice(windowStart, windowEnd);
+    const topPaddingLines = windowStart * ESTIMATED_ITEM_HEIGHT;
+    const bottomPaddingLines = (completedMessages.length - windowEnd) * ESTIMATED_ITEM_HEIGHT;
+    if (topPaddingLines > 0) {
+      topPaddingEl = <Box height={Math.min(topPaddingLines, terminalHeight - 3)} />;
+    }
+    if (bottomPaddingLines > 0) {
+      bottomPaddingEl = <Box height={Math.min(bottomPaddingLines, terminalHeight - 3)} />;
+    }
+    showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0;
+  }
 
   return (
     <Box flexDirection="column">
-      {/* Top padding — lines scrolled above viewport */}
-      {topPaddingLines > 0 && (
-        <Box height={Math.min(topPaddingLines, terminalHeight - 3)} />
-      )}
+      {topPaddingEl}
 
       {/* Visible messages */}
       {visibleMessages.map((msg) => (
@@ -181,8 +216,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         />
       ))}
 
-      {/* Last completed message if at bottom and no streaming */}
-      {!streamingMsg && !isAtBottom && completedMessages.length > 0 && (
+      {/* Last completed message (pinned at bottom when scrolled up and no streaming) */}
+      {showLastMsgOutside && (
         <MessageRenderer
           key={completedMessages[completedMessages.length - 1].id}
           content={completedMessages[completedMessages.length - 1].content}
@@ -211,19 +246,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         />
       )}
 
-      {/* Bottom padding — lines below viewport */}
-      {bottomPaddingLines > 0 && (
-        <Box height={Math.min(bottomPaddingLines, terminalHeight - 3)} />
-      )}
-
-      {/* Scroll indicator when not at bottom */}
-      {!isAtBottom && (
-        <Box>
-          <Box height={1}>
-            {/* This space intentionally left blank — status bar shows scroll hint */}
-          </Box>
-        </Box>
-      )}
+      {bottomPaddingEl}
     </Box>
   );
 });
