@@ -1,52 +1,81 @@
 /**
  * MessageList — renders messages with RAF-throttled streaming content.
  *
- * KEY DESIGN: Committed messages go into Ink's <Static> component, which
- * permanently writes them to the terminal scrollback buffer. The terminal
- * handles scrolling those natively — no Ink re-renders needed.
+ * SCROLL FIX:
+ *   During streaming, Ink must not render a growing message body in its
+ *   dynamic area. A growing render area forces Ink to erase+redraw more
+ *   lines on every RAF tick, and the cursor movement auto-scrolls the
+ *   terminal back to the bottom — preventing the user from scrolling up.
  *
- * Only the active streaming message lives in the dynamic render area.
- * RAF ticks only touch that one message, not the whole conversation history.
+ *   Solution:
+ *     - Committed messages → <Static> (terminal scrollback, rendered once)
+ *     - Active streaming → a FIXED-HEIGHT 1-line indicator only
+ *     - Streaming text is flushed to a second <Static> list as completed
+ *       lines accumulate, so the user can scroll up to read it
+ *     - When streaming finishes, the full message goes to committed Static
+ *       (with markdown) and the streaming chunks are superseded
  *
- * This eliminates:
- *   - Full message-tree re-renders every 200ms during streaming
- *   - Ink writing large escape-code regions that fight with terminal scroll
- *   - Visible "blink" artifacts from Ink repaints
+ *   Result: Ink's total dynamic area is ~4–5 lines (indicator + input +
+ *   status bar). Cursor movement is minimal; terminal scroll works freely.
  *
- * Streaming content still bypasses the zustand store (see streaming-buffer.ts).
+ * STREAMING TEXT:
+ *   Streaming content bypasses the zustand store (see streaming-buffer.ts).
+ *   The RAF loop polls the buffer and flushes completed lines to
+ *   streamingChunks, which renders via its own <Static> list.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Static } from 'ink';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Box, Text, Static } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent, resetConsumerPosition, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
+import { themeManager } from '../../themes/index.js';
 
 interface MessageListProps {
   terminalWidth: number;
 }
 
-const RAF_INTERVAL_MS = 200; // ~5fps — fewer repaints = less blink
-const CONTENT_THRESHOLD = 5; // min chars before triggering re-render
+// How often to flush streaming chunks to Static (ms)
+const FLUSH_INTERVAL_MS = 400;
+// Min new chars before flushing a chunk to Static
+const FLUSH_THRESHOLD = 80;
+
+interface StreamChunk {
+  id: string;
+  text: string;
+}
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
-  const [streamingVersion, setStreamingVersion] = useState(0);
+  // Chunks of completed streaming lines flushed to Static progressively
+  const [streamingChunks, setStreamingChunks] = useState<StreamChunk[]>([]);
+  // Char count shown in the streaming indicator
+  const [streamedChars, setStreamedChars] = useState(0);
 
-  const lastContentLenRef = useRef<Record<string, { content: number; thinking: number }>>({});
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const showAllThinkingRef = useRef(showAllThinking);
   showAllThinkingRef.current = showAllThinking;
+
+  // Track flushed position in the buffer content string per streaming message
+  const flushedPosRef = useRef<Record<string, number>>({});
+  const chunkCountRef = useRef(0);
+  const lastFlushTimeRef = useRef(0);
+  // Track which message IDs were progressively flushed (skip them in committed Static)
+  const streamFlushedIdsRef = useRef<Set<string>>(new Set());
+
+  const resetStreamState = useCallback((msgId: string) => {
+    delete flushedPosRef.current[msgId];
+  }, []);
 
   useEffect(() => {
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
 
     const pollBuffer = (now: number) => {
-      if (now - lastRafTime < RAF_INTERVAL_MS) {
+      if (now - lastRafTime < FLUSH_INTERVAL_MS) {
         rafId = requestAnimationFrame(pollBuffer);
         return;
       }
@@ -57,24 +86,32 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
       const streamingMsg = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
 
       if (buffer && streamingMsg) {
-        const lastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+        // Full content so far = committed store content + live buffer deltas
+        const fullContent = (streamingMsg.content ?? '') + buffer.content;
+        const flushedPos = flushedPosRef.current[streamingMsg.id] ?? 0;
 
-        if (lastLen.content > buffer.content.length || lastLen.thinking > buffer.thinking.length) {
-          lastContentLenRef.current[streamingMsg.id] = { content: 0, thinking: 0 };
+        // Find the last newline in content after the already-flushed position
+        const unflushed = fullContent.slice(flushedPos);
+        const lastNewline = unflushed.lastIndexOf('\n');
+
+        if (lastNewline >= FLUSH_THRESHOLD || (now - lastFlushTimeRef.current > 2000 && unflushed.length > 0)) {
+          // Flush completed lines (up to and including the last \n)
+          const toFlush = lastNewline >= 0 ? unflushed.slice(0, lastNewline + 1) : unflushed;
+          if (toFlush.trim()) {
+            const newFlushedPos = flushedPos + toFlush.length;
+            flushedPosRef.current[streamingMsg.id] = newFlushedPos;
+            lastFlushTimeRef.current = now;
+            chunkCountRef.current++;
+            const chunkId = `${streamingMsg.id}-chunk-${chunkCountRef.current}`;
+            streamFlushedIdsRef.current.add(streamingMsg.id);
+            setStreamingChunks(prev => [...prev, { id: chunkId, text: toFlush }]);
+          }
         }
 
-        const updatedLastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
-        const deltaContent = buffer.content.length - updatedLastLen.content;
-        const deltaThinking = buffer.thinking.length - updatedLastLen.thinking;
-
-        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= CONTENT_THRESHOLD) {
-          lastContentLenRef.current[streamingMsg.id] = {
-            content: buffer.content.length,
-            thinking: buffer.thinking.length,
-          };
-          resetConsumerPosition();
-          setStreamingVersion(v => v + 1);
-        }
+        // Update char count for the indicator
+        const total = fullContent.length;
+        setStreamedChars(total);
+        resetConsumerPosition();
       }
 
       rafId = requestAnimationFrame(pollBuffer);
@@ -109,16 +146,16 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
 
       if (messagesChanged) {
         setMessages([...newMessages]);
+        // When streaming finishes, clear chunk state for that message
+        newMessages.forEach(msg => {
+          if (!msg.isStreaming && flushedPosRef.current[msg.id] !== undefined) {
+            resetStreamState(msg.id);
+          }
+        });
       }
       if (newShowAllThinking !== showAllThinkingRef.current) {
         setShowAllThinking(newShowAllThinking);
       }
-
-      newMessages.forEach(msg => {
-        if (!msg.isStreaming) {
-          delete lastContentLenRef.current[msg.id];
-        }
-      });
     });
 
     return () => {
@@ -128,16 +165,18 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Split messages: committed go to Static (terminal scrollback, rendered once)
-  // active streaming message stays in the live Ink render area
-  const committedMessages = messages.filter(m => !m.isStreaming);
+  const theme = themeManager.getTheme();
   const streamingMsg = messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
-  const buffer = streamingMsg ? getStreamingContent() : null;
+
+  // Committed messages: exclude ones progressively flushed to streamingChunks Static
+  // (they're already in the scrollback as plain text; adding them again would duplicate)
+  const committedMessages = messages.filter(
+    m => !m.isStreaming && !streamFlushedIdsRef.current.has(m.id)
+  );
 
   return (
     <Box flexDirection="column">
-      {/* Committed messages — rendered once into terminal scrollback.
-          Terminal handles scroll natively; Ink never re-renders these. */}
+      {/* Committed messages — rendered once with full markdown into terminal scrollback */}
       <Static items={committedMessages}>
         {(msg) => (
           <MessageRenderer
@@ -154,19 +193,22 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
         )}
       </Static>
 
-      {/* Active streaming message — RAF loop bumps streamingVersion to update this */}
+      {/* Progressive streaming chunks — plain text lines flushed as they complete */}
+      <Static items={streamingChunks}>
+        {(chunk) => (
+          <Text key={chunk.id} color={theme.colors.text.primary}>{chunk.text}</Text>
+        )}
+      </Static>
+
+      {/* FIXED-HEIGHT streaming indicator — replaces the growing message render.
+          Ink's dynamic area stays ~4–5 lines regardless of response length. */}
       {streamingMsg && (
-        <MessageRenderer
-          key={streamingMsg.id}
-          content={streamingMsg.content + (buffer?.content ?? '')}
-          role={streamingMsg.role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-          thinking={(streamingMsg.thinking ?? '') + (buffer?.thinking ?? '')}
-          isStreaming={true}
-          showAllThinking={showAllThinking}
-          contentBlocks={streamingMsg.contentBlocks}
-        />
+        <Box marginLeft={2} marginBottom={0}>
+          <Text color={theme.colors.primary}>◆</Text>
+          <Text color={theme.colors.text.muted} dimColor>
+            {`  generating${streamedChars > 0 ? `  ${streamedChars.toLocaleString()} chars` : ''}`}
+          </Text>
+        </Box>
       )}
     </Box>
   );
