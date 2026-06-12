@@ -11,6 +11,7 @@ import type {
   ToolCall,
   StreamCallbacks,
 } from '../agent/types.js';
+import { OpenAIEventAdapter } from './streaming/OpenAIEventAdapter.js';
 
 // For local Ollama models, only include tools when the query looks like a coding task.
 // This avoids sending 350+ tokens of tool schemas on every conversational message,
@@ -106,11 +107,21 @@ export class OpenAIChatService implements IChatService {
       );
 
       const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
+      const adapter = streamCallbacks?.onStreamEvent ? new OpenAIEventAdapter() : null;
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;
         if (!delta) continue;
 
+        // Unified event path: convert chunk to AnthropicStreamEvents and emit
+        if (adapter && streamCallbacks?.onStreamEvent) {
+          const events = adapter.adapt(delta as Parameters<typeof adapter.adapt>[0]);
+          for (const event of events) {
+            streamCallbacks.onStreamEvent(event);
+          }
+        }
+
+        // Legacy individual callbacks (still called for backward compat)
         if (delta.content) {
           content += delta.content;
           streamCallbacks?.onContentDelta?.(delta.content);
@@ -161,6 +172,14 @@ export class OpenAIChatService implements IChatService {
             };
           }
         } catch {}
+      }
+
+      // Emit finalize events (content_block_stop + message_stop)
+      if (adapter && streamCallbacks?.onStreamEvent) {
+        const stopReason = (stream as any).finalMessage?.stop_reason;
+        for (const event of adapter.finalize(stopReason)) {
+          streamCallbacks.onStreamEvent(event);
+        }
       }
 
       const result: ChatResponse = {

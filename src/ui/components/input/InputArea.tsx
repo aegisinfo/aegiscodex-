@@ -7,6 +7,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
+import Spinner from 'ink-spinner';
 
 // Static prompt glyph — □ when idle, ■ when processing (no pulse to avoid distraction)
 const PromptGlyph: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => (
@@ -246,7 +247,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         <Box paddingX={1} marginBottom={0} height={1}>
           {thinkingLabel ? (
             <>
-              <Text color={theme.colors.text.muted} dimColor>{thinkingLabel}</Text>
+              <Text color={theme.colors.warning}><Spinner type="dots" /></Text>
+              <Text color={theme.colors.text.muted} dimColor> {thinkingLabel}</Text>
               {pendingCommands.length > 0 && (
                 <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
               )}

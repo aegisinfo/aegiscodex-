@@ -339,6 +339,7 @@ export class Agent {
 
       // 3.4 构建流式回调（onToolCallStart 在执行阶段单独触发，此处不
       const streamCallbacks: StreamCallbacks = {
+        onStreamEvent: options?.onStreamEvent,
         onContentDelta: options?.onContentDelta,
         onThinkingDelta: options?.onThinkingDelta,
         onToolCallDelta: options?.onToolCallDelta,

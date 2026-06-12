@@ -68,7 +68,7 @@ import {
 } from '../../store/index.js';
 
 // Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer, getBufferedToolCalls } from '../../store/streaming-buffer.js';
+import { applyStreamEvent, finishToolCallInBuffer, getBufferedToolCalls } from '../../store/streaming-buffer.js';
 
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
@@ -686,23 +686,18 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
       const result = await agentRef.current.chat(value, chatContext, {
         signal: abortController.signal,
-        onContentDelta: (delta) => {
+        onStreamEvent: (event) => {
           if (!abortController.signal.aborted) {
-            appendToBuffer(delta);
-          }
-        },
-        onThinkingDelta: (delta) => {
-          if (!abortController.signal.aborted) {
-            appendThinkingToBuffer(delta);
+            applyStreamEvent(event);
           }
         },
         onToolCallStart: (toolCall) => {
           if (abortController.signal.aborted) return;
-          // Flush current buffer to capture preceding text before tool call
+          // Flush accumulated text before the tool call block starts
           sessionActions().flushStreamBuffer(streamingMessageId);
           const name = toolCall.function?.name || 'tool';
           const toolId = toolCall.id || `${name}-${Date.now()}`;
-          // Add tool_use content block to message
+          // Add structured tool_use block to the store message (for UI widgets)
           sessionActions().addContentBlock(streamingMessageId, {
             type: 'tool_use',
             id: toolId,
@@ -711,15 +706,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             status: 'running',
             startedAt: Date.now(),
           });
-          startToolCallInBuffer(toolId, name);
-        },
-        onToolCallDelta: (toolCallId, argumentsDelta) => {
-          if (abortController.signal.aborted) return;
-          // Accumulate in mutable buffer only — no store write per delta.
-          // updateToolCallInput was firing 20-100× per tool call (one per arg
-          // character), triggering a store subscription + re-render each time.
-          // The full input is flushed to the store once in onToolResult below.
-          appendToolCallDelta(toolCallId, argumentsDelta);
+          // Note: tool call is already tracked in streamingState.toolCalls via
+          // applyStreamEvent (tool_use_start event from the stream). No manual
+          // startToolCallInBuffer needed.
         },
         onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
           if (abortController.signal.aborted) return;

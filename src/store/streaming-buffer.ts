@@ -12,6 +12,9 @@
  */
 
 import type { SessionMessage, ToolCallStatus } from './types.js';
+import { TranscriptBuffer } from '../services/streaming/TranscriptBuffer.js';
+import { parseStreamEvent } from '../services/streaming/StreamEventParser.js';
+import type { AnthropicStreamEvent } from '../services/streaming/types.js';
 
 // Shared mutable state for the currently streaming message
 interface StreamingState {
@@ -22,6 +25,10 @@ interface StreamingState {
   currentBlockType: 'text' | 'thinking' | null;
   currentBlockAccumulator: string;
   toolCalls: Map<string, { name: string; arguments: string; status: ToolCallStatus }>;
+  /** Canonical rich segment state — single source of truth for streaming content */
+  transcriptBuffer: TranscriptBuffer;
+  /** Maps content block index → tool use ID for input_json_delta accumulation */
+  blockIndexToToolId: Map<number, string>;
 }
 
 const streamingState: StreamingState = {
@@ -31,6 +38,8 @@ const streamingState: StreamingState = {
   currentBlockType: null,
   currentBlockAccumulator: '',
   toolCalls: new Map(),
+  transcriptBuffer: new TranscriptBuffer({ showToolResults: false }),
+  blockIndexToToolId: new Map(),
 };
 
 /**
@@ -54,15 +63,67 @@ export function getStreamingContent(): { content: string; thinking: string } | n
 }
 
 /**
+ * Apply a raw Anthropic-format streaming event.
+ *
+ * This is the primary entry point for the main chat path. It feeds the
+ * TranscriptBuffer (rich segment model) and simultaneously updates the
+ * mutable content/thinking strings (for drain/flush compat) and the
+ * toolCalls map (for arg accumulation before store flush).
+ *
+ * Legacy paths (slash commands) continue using appendToBuffer /
+ * appendThinkingToBuffer directly and bypass the TranscriptBuffer.
+ */
+export function applyStreamEvent(event: AnthropicStreamEvent): void {
+  const parsed = parseStreamEvent(event);
+  for (const e of parsed) {
+    streamingState.transcriptBuffer.apply(e);
+
+    if ((e.type === 'text_delta' || e.type === 'text_chunk') && e.text) {
+      streamingState.content += e.text;
+      streamingState.currentBlockType = 'text';
+      streamingState.currentBlockAccumulator += e.text;
+    }
+    if ((e.type === 'thinking_delta' || e.type === 'thinking_chunk') && e.text) {
+      streamingState.thinking += e.text;
+      streamingState.currentBlockType = 'thinking';
+      streamingState.currentBlockAccumulator += e.text;
+    }
+    if (e.type === 'tool_use_start' && e.id && e.name) {
+      if (!streamingState.toolCalls.has(e.id)) {
+        streamingState.toolCalls.set(e.id, { name: e.name, arguments: '', status: 'running' });
+      }
+      if (e.index !== undefined && e.index >= 0) {
+        streamingState.blockIndexToToolId.set(e.index, e.id);
+      }
+    }
+    if (e.type === 'tool_use_delta' && e.partial_json && e.index !== undefined) {
+      const toolId = streamingState.blockIndexToToolId.get(e.index);
+      if (toolId) {
+        const tc = streamingState.toolCalls.get(toolId);
+        if (tc) tc.arguments += e.partial_json;
+      }
+    }
+  }
+}
+
+/**
  * Initialize buffer for a new streaming message.
+ * When called with the same ID as the current message (flush cycle),
+ * only the content/thinking strings are reset — tool calls are preserved
+ * so arg accumulation survives mid-stream flushes.
  */
 export function initStreamingBuffer(messageId: string): void {
+  const isNewMessage = streamingState.messageId !== messageId;
   streamingState.messageId = messageId;
   streamingState.content = '';
   streamingState.thinking = '';
   streamingState.currentBlockType = null;
   streamingState.currentBlockAccumulator = '';
-  streamingState.toolCalls.clear();
+  if (isNewMessage) {
+    streamingState.toolCalls.clear();
+    streamingState.transcriptBuffer.clear();
+    streamingState.blockIndexToToolId.clear();
+  }
 }
 
 /**
@@ -124,7 +185,7 @@ export function getBufferedToolCalls(): Array<{ id: string; name: string; argume
 }
 
 /**
- * Clear the buffer (e.g., on error/abort).
+ * Clear the buffer (e.g., on error/abort or after finishStreamingMessage).
  */
 export function clearBuffer(): void {
   streamingState.messageId = null;
@@ -133,6 +194,8 @@ export function clearBuffer(): void {
   streamingState.currentBlockType = null;
   streamingState.currentBlockAccumulator = '';
   streamingState.toolCalls.clear();
+  streamingState.transcriptBuffer.clear();
+  streamingState.blockIndexToToolId.clear();
 }
 
 /**
@@ -200,12 +263,12 @@ export function drainBuffer(): { content: string; thinking: string; toolCalls: A
     toolCalls: getBufferedToolCalls(),
   };
 
-  // Clear all content but KEEP messageId so isActiveStreamingMessage still works
+  // Clear content but KEEP messageId (so isActiveStreamingMessage still works)
+  // and KEEP toolCalls (they're still in-flight; cleared by clearBuffer after finish).
   streamingState.content = '';
   streamingState.thinking = '';
   streamingState.currentBlockType = null;
   streamingState.currentBlockAccumulator = '';
-  streamingState.toolCalls.clear();
 
   return result;
 }

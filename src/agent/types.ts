@@ -118,15 +118,18 @@ export interface LoopOptions {
   /** 内容回调（完整内容，用于非流式场景） */
   onContent?: (content: string) => void;
   
+  /** Unified Anthropic-format stream event (preferred over individual delta callbacks) */
+  onStreamEvent?: (event: import('../services/streaming/types.js').AnthropicStreamEvent) => void;
+
   /** 内容增量回调（流式） */
   onContentDelta?: (delta: string) => void;
-  
+
   /** 思考内容回调（完整内容） */
   onThinking?: (content: string) => void;
-  
+
   /** 思考内容增量回调（流式） */
   onThinkingDelta?: (delta: string) => void;
-  
+
   /** 工具调用开始回调 */
   onToolCallStart?: (toolCall: Partial<ToolCall>) => void;
 
@@ -280,6 +283,8 @@ export interface ChatResponse {
  * 
  */
 export interface StreamCallbacks {
+  /** Unified Anthropic-format stream event (preferred over the individual callbacks below) */
+  onStreamEvent?: (event: import('../services/streaming/types.js').AnthropicStreamEvent) => void;
   /** 内容增量回调 */
   onContentDelta?: (delta: string) => void;
   /** 思考内容增量回调 */

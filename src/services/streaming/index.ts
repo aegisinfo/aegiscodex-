@@ -26,6 +26,7 @@ export {
   buildRenderingProfile,
 } from './RenderingProfile.js';
 export { getStatusForEvent, STATUS_MESSAGE_PREFIXES } from './eventStatusMap.js';
+export { OpenAIEventAdapter } from './OpenAIEventAdapter.js';
 export type {
   AnthropicStreamEvent,
   ContentBlockStartEvent,
