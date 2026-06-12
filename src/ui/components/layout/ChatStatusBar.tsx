@@ -121,7 +121,7 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
     segments.unshift({
       content: (
         <>
-          <Text color={theme.colors.warning}>↑ PgDn/End to go back</Text>
+          <Text color={theme.colors.warning}>↑ scrolled up</Text>
         </>
       ),
       dimmed: false,

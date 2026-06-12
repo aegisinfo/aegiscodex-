@@ -200,37 +200,35 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
 
-  // Scroll state for PgUp/PgDn in fullscreen mode
+  // Scroll state for fullscreen mode
   const [scrollOffset, setScrollOffset] = useState(0);
   const pageSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
 
-  // PgUp/PgDn scroll handling — always active, not focus-dependent
+  // Scroll helpers
+  const scrollUp = useCallback((amount: number) => {
+    setScrollOffset(prev => Math.max(0, prev - amount));
+  }, []);
+
+  const scrollDown = useCallback((amount: number) => {
+    setScrollOffset(prev => {
+      const msgs = getState().session.messages;
+      const completedCount = msgs.filter(m => !m.isStreaming).length;
+      const maxOffset = Math.max(0, completedCount - pageSize);
+      return Math.min(maxOffset, prev + amount);
+    });
+  }, [pageSize]);
+
+  // Keyboard scroll: Ctrl+Up/Down (1 msg), PgUp/PgDn (page), Home/End
   useInput((_input, key) => {
-    if (key.pageUp) {
-      setScrollOffset(prev => {
-        const messages = getState().session.messages;
-        const completedCount = messages.filter(m => !m.isStreaming).length;
-        const maxOffset = Math.max(0, completedCount - pageSize);
-        return Math.max(0, prev - pageSize);
-      });
-    }
-    if (key.pageDown) {
-      setScrollOffset(prev => {
-        const messages = getState().session.messages;
-        const completedCount = messages.filter(m => !m.isStreaming).length;
-        const maxOffset = Math.max(0, completedCount - pageSize);
-        return Math.min(maxOffset, prev + pageSize);
-      });
-    }
-    if (key.home) {
-      setScrollOffset(0);
-    }
+    if (key.upArrow && key.ctrl) { scrollUp(1); return; }
+    if (key.downArrow && key.ctrl) { scrollDown(1); return; }
+    if (key.pageUp) { scrollUp(pageSize); return; }
+    if (key.pageDown) { scrollDown(pageSize); return; }
+    if (key.home) { setScrollOffset(0); return; }
     if (key.end) {
-      setScrollOffset(prev => {
-        const messages = getState().session.messages;
-        const completedCount = messages.filter(m => !m.isStreaming).length;
-        return Math.max(0, completedCount - pageSize);
-      });
+      const msgs = getState().session.messages;
+      const completedCount = msgs.filter(m => !m.isStreaming).length;
+      setScrollOffset(Math.max(0, completedCount - pageSize));
     }
   });
 

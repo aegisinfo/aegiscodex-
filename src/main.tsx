@@ -328,7 +328,7 @@ async function main(): Promise<void> {
               patchConsole: true,
               stdin: renderStdin,
               stdout: process.stdout,
-              alternateScreen: true,
+              alternateScreen: false,
             },
           );
         } catch (renderError) {
