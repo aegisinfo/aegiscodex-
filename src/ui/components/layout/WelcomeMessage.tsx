@@ -129,7 +129,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
       {/* Tagline */}
       <FadeInText delayMs={taglineT}>
         <Box marginTop={1} marginLeft={3}>
-          <Text color={theme.colors.text.muted} dimColor>by Anthropic  ·  terminal coding agent</Text>
+          <Text color={theme.colors.primary} bold>ÆGIS  </Text><Text color={theme.colors.text.muted} dimColor>·  terminal coding agent</Text>
         </Box>
       </FadeInText>
 
