@@ -48,14 +48,17 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   // Single store subscription with shallow comparison — avoids cascading
   // re-renders when unrelated store slices change (e.g. isThinking during streaming).
   // The 4 individual selectors were causing 4 separate subscriptions.
-  const { sessionId, tokenUsage, messageCount, queuedCommands } = useClawdStore(
+  const { sessionId, inputTokens, outputTokens, maxContextTokens, messageCount, queuedCommands } = useClawdStore(
     useShallow((state) => ({
-      sessionId: state.session.sessionId,
-      tokenUsage: state.session.tokenUsage,
-      messageCount: state.session.messages.length,
-      queuedCommands: state.command.pendingCommands.length,
+      sessionId:        state.session.sessionId,
+      inputTokens:      state.session.tokenUsage.inputTokens,
+      outputTokens:     state.session.tokenUsage.outputTokens,
+      maxContextTokens: state.session.tokenUsage.maxContextTokens,
+      messageCount:     state.session.messages.length,
+      queuedCommands:   state.command.pendingCommands.length,
     }))
   );
+  const tokenUsage = { inputTokens, outputTokens, maxContextTokens };
 
   if (!isVisible) {
     return null;

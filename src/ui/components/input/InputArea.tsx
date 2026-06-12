@@ -125,7 +125,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     useEffect(() => {
       if (isProcessing) {
         setGlowPhase(0);
-        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 100);
+        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
       } else {
         if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
         setGlowPhase(0);
@@ -140,7 +140,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     useEffect(() => {
       let prev = hasStreamingMessage;
       const unsubscribe = vanillaStore.subscribe((state) => {
-        const newVal = state.session.messages.some(m => m.isStreaming);
+        const msgs = state.session.messages;
+        const newVal = msgs[msgs.length - 1]?.isStreaming ?? false;
         if (newVal !== prev) {
           prev = newVal;
           setHasStreamingMessage(newVal);
