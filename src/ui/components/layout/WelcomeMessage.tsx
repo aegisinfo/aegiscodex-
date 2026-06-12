@@ -14,8 +14,11 @@ interface WelcomeMessageProps {
   terminalWidth: number;
 }
 
-const AEGIS_LETTERS = Array.from('ÆGIS');
-const TOTAL_SWEEP = AEGIS_LETTERS.length;
+const ASCII_LOGO = [
+  '╔═╗╔═╗╔═╗╦╔═╗',
+  '╠═╣║╣ ║ ╦║╚═╗',
+  '╩ ╩╚═╝╚═╝╩╚═╝',
+];
 
 const COMMANDS = [
   { cmd: '/help',    desc: 'all commands' },
@@ -79,64 +82,47 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
   const theme = themeManager.getTheme();
   const dividerWidth = Math.min(terminalWidth - 6, 34);
 
-  // ◆ glow phase: 0 = dim, 1 = white, 2 = coral (settled)
-  const [logoPhase, setLogoPhase] = useState(0);
-
-  // Sweep position for "claude" letters (-1 = none revealed)
-  const [sweepPos, setSweepPos] = useState(-1);
+  // Logo lines reveal one by one
+  const [visibleLines, setVisibleLines] = useState(0);
 
   useEffect(() => {
-    // ◆ glow sequence
-    const t1 = setTimeout(() => setLogoPhase(1), 80);
-    const t2 = setTimeout(() => setLogoPhase(2), 240);
-
-    // Start sweeping letters after glow settles
-    let pos = -1;
-    const id = setInterval(() => {
-      pos += 1;
-      setSweepPos(pos);
-      if (pos >= TOTAL_SWEEP + 2) clearInterval(id);
-    }, 55);
-
-    return () => { clearTimeout(t1); clearTimeout(t2); clearInterval(id); };
+    const timers = ASCII_LOGO.map((_, i) =>
+      setTimeout(() => setVisibleLines(i + 1), 80 + i * 120)
+    );
+    return () => timers.forEach(clearTimeout);
   }, []);
 
-  const logoColor = logoPhase === 0 ? theme.colors.text.muted
-                  : logoPhase === 1 ? '#ffffff'
-                  : theme.colors.primary;
-
-  // After sweep ends, content phases in
-  const sweepEndMs = 240 + (TOTAL_SWEEP + 2) * 55;
-  const taglineT  = sweepEndMs + 60;
-  const dividerT  = sweepEndMs + 180;
-  const cmdBaseT  = sweepEndMs + 320;
-  const footerT   = cmdBaseT + COMMANDS.length * 100 + 80;
+  const logoColor = theme.colors.primary;
+  const logoRevealMs = 80 + (ASCII_LOGO.length - 1) * 120 + 80;
+  const taglineT = logoRevealMs + 60;
+  const dividerT = logoRevealMs + 180;
+  const cmdBaseT = logoRevealMs + 320;
+  const footerT  = cmdBaseT + COMMANDS.length * 100 + 80;
 
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
 
-      {/* Logo row: ◆  claude  vX.X.X */}
-      <Box flexDirection="row" alignItems="flex-end">
-        {/* The ◆ diamond */}
-        <Text color={logoColor} bold>{'◆  '}</Text>
-
-        {/* "claude" swept char by char */}
-        {AEGIS_LETTERS.map((ch, i) => {
-          const revealed = sweepPos >= i;
-          const isNib    = sweepPos === i;
-          const color    = !revealed    ? 'transparent'
-                         : isNib        ? '#ffffff'
-                         : theme.colors.text.primary;
-          return (
-            <Text key={i} color={revealed ? color : theme.colors.text.muted} bold dimColor={!revealed}>
-              {revealed ? ch : ' '}
-            </Text>
-          );
-        })}
-
-        {/* Version — fades in after sweep */}
-        <FadeInText delayMs={sweepEndMs}>
-          <Text color={theme.colors.text.muted} dimColor>{'  v' + pkg.version}</Text>
+      {/* ASCII logo — lines reveal top to bottom */}
+      <Box flexDirection="column" marginBottom={1}>
+        {ASCII_LOGO.map((line, i) => (
+          <Box key={i} flexDirection="row">
+            {i === 0 && (
+              <Text color={theme.colors.text.muted} dimColor>{'  '}</Text>
+            )}
+            {i !== 0 && (
+              <Text color={theme.colors.text.muted} dimColor>{'  '}</Text>
+            )}
+            {visibleLines > i ? (
+              <Text color={logoColor} bold>{line}</Text>
+            ) : (
+              <Text>{' '.repeat(line.length)}</Text>
+            )}
+          </Box>
+        ))}
+        <FadeInText delayMs={logoRevealMs}>
+          <Box marginLeft={2}>
+            <Text color={theme.colors.text.muted} dimColor>{'  v' + pkg.version}</Text>
+          </Box>
         </FadeInText>
       </Box>
 
