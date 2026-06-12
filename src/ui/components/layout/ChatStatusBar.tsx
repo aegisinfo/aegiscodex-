@@ -17,6 +17,8 @@ interface ChatStatusBarProps {
   model?: string;
   /** 是否显示 */
   isVisible?: boolean;
+  /** Whether user has scrolled up (show hint to scroll back down) */
+  isScrolledUp?: boolean;
 }
 
 /**
@@ -38,6 +40,7 @@ function formatTokens(count: number): string {
 export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   model,
   isVisible = true,
+  isScrolledUp = false,
 }) => {
   const theme = themeManager.getTheme();
   const displayModel = model;
@@ -112,6 +115,18 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   }
 
 
+
+  // Scroll hint when scrolled up
+  if (isScrolledUp) {
+    segments.unshift({
+      content: (
+        <>
+          <Text color={theme.colors.warning}>↑ PgDn/End to go back</Text>
+        </>
+      ),
+      dimmed: false,
+    });
+  }
 
   // Session ID
   if (sessionId) {

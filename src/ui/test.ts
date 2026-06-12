@@ -81,7 +81,7 @@ async function runTests() {
   // 3. MessageList renders welcome when empty
   try {
     const { unmount } = render(
-      React.createElement(MessageList, { terminalWidth: 80 }),
+      React.createElement(MessageList, { terminalWidth: 80, terminalHeight: 24, scrollOffset: 0, onScroll: () => {} }),
     );
     pass('renders without messages');
     unmount();
@@ -100,7 +100,7 @@ async function runTests() {
     });
 
     const { unmount, rerender } = render(
-      React.createElement(MessageList, { terminalWidth: 80 }),
+      React.createElement(MessageList, { terminalWidth: 80, terminalHeight: 24, scrollOffset: 0, onScroll: () => {} }),
     );
 
     pass('renders with messages');

@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 
 import { Agent } from '../../agent/Agent.js';
@@ -198,6 +198,40 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [initError, setInitError] = useState<string | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
+
+  // Scroll state for PgUp/PgDn in fullscreen mode
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const pageSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
+
+  // PgUp/PgDn scroll handling — always active, not focus-dependent
+  useInput((_input, key) => {
+    if (key.pageUp) {
+      setScrollOffset(prev => {
+        const messages = getState().session.messages;
+        const completedCount = messages.filter(m => !m.isStreaming).length;
+        const maxOffset = Math.max(0, completedCount - pageSize);
+        return Math.max(0, prev - pageSize);
+      });
+    }
+    if (key.pageDown) {
+      setScrollOffset(prev => {
+        const messages = getState().session.messages;
+        const completedCount = messages.filter(m => !m.isStreaming).length;
+        const maxOffset = Math.max(0, completedCount - pageSize);
+        return Math.min(maxOffset, prev + pageSize);
+      });
+    }
+    if (key.home) {
+      setScrollOffset(0);
+    }
+    if (key.end) {
+      setScrollOffset(prev => {
+        const messages = getState().session.messages;
+        const completedCount = messages.filter(m => !m.isStreaming).length;
+        return Math.max(0, completedCount - pageSize);
+      });
+    }
+  });
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -823,7 +857,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   // streaming message + input stay in the dynamic area at the bottom.
   return (
     <Box flexDirection="column" width="100%">
-      <MessageList terminalWidth={terminalWidth - 2} />
+      <MessageList
+        terminalWidth={terminalWidth - 2}
+        terminalHeight={terminalHeight}
+        scrollOffset={scrollOffset}
+        onScroll={setScrollOffset}
+      />
       <QueuedCommands />
 
       {confirmationState.isVisible && confirmationState.details && (
@@ -834,7 +873,15 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       )}
 
       <InputArea onSubmit={handleSubmit} />
-      <ChatStatusBar model={currentModel} />
+      <ChatStatusBar
+        model={currentModel}
+        isScrolledUp={(() => {
+          const msgs = getState().session.messages;
+          const completedCount = msgs.filter(m => !m.isStreaming).length;
+          const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
+          return scrollOffset < Math.max(0, completedCount - pgSize);
+        })()}
+      />
 
       {isExiting && exitSessionId && (
         <ExitMessage sessionId={exitSessionId} />
