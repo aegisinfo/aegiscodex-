@@ -890,32 +890,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  if (selectorState.isVisible) {
-    return (
-      <Box flexDirection="column" width="100%">
-        <Box flexDirection="column" marginBottom={1}>
-          <Box>
-            <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
-            <Text bold color={theme.colors.primary}> \u25C6 </Text>
-            <Text bold color={theme.colors.primary}>\u00C6GIS </Text>
-          </Box>
-        </Box>
-
-        <RecentMessagesPreview terminalWidth={terminalWidth - 2} count={3} />
-
-        <InteractiveSelector
-          title={selectorState.title}
-          options={selectorState.options}
-          onSelect={handleSelectorSelect}
-          onCancel={handleSelectorCancel}
-          focusId={FocusId.SELECTOR}
-        />
-      </Box>
-    );
-  }
-
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
-  const isWelcome = messages.length === 0 && !hasPendingInitialMessage;
 
   const isScrolledUp = (() => {
     const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
@@ -924,33 +899,49 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   return (
     <Box flexDirection="column" width="100%">
-      {/* Welcome message always pinned to the top */}
+      {/* Welcome message stays mounted throughout \u2014 never use an early return above
+          this point that bypasses it, or the animations will restart on every modal open */}
       <WelcomeMessage terminalWidth={terminalWidth - 2} />
 
-      {messages.length > 0 && (
+      {selectorState.isVisible ? (
         <>
-          <MessageList
-            terminalWidth={terminalWidth - 2}
-            terminalHeight={terminalHeight}
-            scrollOffset={scrollOffset}
-            onScroll={setScrollOffset}
+          <RecentMessagesPreview terminalWidth={terminalWidth - 2} count={3} />
+          <InteractiveSelector
+            title={selectorState.title}
+            options={selectorState.options}
+            onSelect={handleSelectorSelect}
+            onCancel={handleSelectorCancel}
+            focusId={FocusId.SELECTOR}
           />
-          <QueuedCommands />
+        </>
+      ) : (
+        <>
+          {messages.length > 0 && (
+            <>
+              <MessageList
+                terminalWidth={terminalWidth - 2}
+                terminalHeight={terminalHeight}
+                scrollOffset={scrollOffset}
+                onScroll={setScrollOffset}
+              />
+              <QueuedCommands />
+            </>
+          )}
+
+          {confirmationState.isVisible && confirmationState.details && (
+            <ConfirmationPrompt
+              details={confirmationState.details}
+              onResponse={handleResponse}
+            />
+          )}
+
+          <InputArea onSubmit={handleSubmit} />
+          <ChatStatusBar
+            model={currentModel}
+            isScrolledUp={messages.length > 0 && isScrolledUp}
+          />
         </>
       )}
-
-      {confirmationState.isVisible && confirmationState.details && (
-        <ConfirmationPrompt
-          details={confirmationState.details}
-          onResponse={handleResponse}
-        />
-      )}
-
-      <InputArea onSubmit={handleSubmit} />
-      <ChatStatusBar
-        model={currentModel}
-        isScrolledUp={messages.length > 0 && isScrolledUp}
-      />
 
       {isExiting && exitSessionId && (
         <ExitMessage sessionId={exitSessionId} />
