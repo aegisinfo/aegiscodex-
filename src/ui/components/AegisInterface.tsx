@@ -68,10 +68,7 @@ import {
 } from '../../store/index.js';
 
 // Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer, startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore } from '../../store/streaming-buffer.js';
-
-// Vanilla store — imported statically to avoid microtask breaks in processCommand
-import { vanillaStore } from '../../store/vanilla.js';
+import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer } from '../../store/streaming-buffer.js';
 
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
@@ -444,12 +441,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
    * This prevents cascading re-renders when props or state change.
    */
   const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
-    // Only slash-commands remain as a dynamic import (lazy-loaded, not on the hot path before Phase 1)
     const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
+    const { vanillaStore } = await import('../../store/vanilla.js');
+    const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
 
     if (isSlashCommand(value)) {
-      // Phase 1: flush user message + thinking=true in a single store update so
-      // clearInput() (which already ran synchronously) and Phase 1 land in fewer renders.
+      // Phase 1: flush user message + thinking=true immediately so the UI
+      // shows feedback (spinner) during long-running commands like /multi.
       startBatch();
       batchAddUserMessage(value);
       batchSetThinking(true);
@@ -465,10 +463,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         });
 
         if (result.type === 'selector' && result.selector) {
-          // Batch thinking=false into the finally flush — avoids a separate store
-          // update that would trigger an extra Ink repaint before the selector appears.
-          startBatch();
-          batchSetThinking(false);
+          sessionActions().setThinking(false);
           setSelectorState({
             isVisible: true,
             title: result.selector.title,
@@ -476,13 +471,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             handler: result.selector.handler,
           });
           focusActions.setFocus(FocusId.SELECTOR);
-          return; // finally runs and flushes {isThinking: false} in one store update
+          return;
         }
 
         if (result.sendToAgent && result.content) {
-          startBatch();
-          batchSetThinking(false);
-          flushBatchWithStore(vanillaStore);
+          sessionActions().setThinking(false);
           await processCommand(result.content, { silent: true });
           return;
         }
@@ -804,21 +797,25 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const messageCount = getState().session.messages.length;
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
-  return (
-    <Box flexDirection="column" width="100%" height={terminalHeight}>
-
-      {messageCount === 0 && !hasPendingInitialMessage ? (
-        /* Start screen: WelcomeMessage fills remaining space, input at bottom */
-        <WelcomeMessage terminalWidth={terminalWidth - 2} />
-      ) : (
-        /* spacer grows to fill empty space above messages */
+  // Welcome screen: no messages yet — anchor content to bottom via height+flexGrow
+  if (messageCount === 0 && !hasPendingInitialMessage) {
+    return (
+      <Box flexDirection="column" width="100%" height={terminalHeight}>
         <Box flexGrow={1} />
-      )}
-
-      <Box flexDirection="column" marginBottom={1}>
-        <MessageList terminalWidth={terminalWidth - 2} terminalHeight={terminalHeight} />
-        <QueuedCommands />
+        <WelcomeMessage terminalWidth={terminalWidth - 2} />
+        <InputArea onSubmit={handleSubmit} />
+        <ChatStatusBar model={currentModel} />
+        {isExiting && exitSessionId && <ExitMessage sessionId={exitSessionId} />}
       </Box>
+    );
+  }
+
+  // Chat screen: completed messages go into Static (terminal scrollback),
+  // streaming message + input stay in the dynamic area at the bottom.
+  return (
+    <Box flexDirection="column" width="100%">
+      <MessageList terminalWidth={terminalWidth - 2} />
+      <QueuedCommands />
 
       {confirmationState.isVisible && confirmationState.details && (
         <ConfirmationPrompt
@@ -827,10 +824,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         />
       )}
 
-      <InputArea
-        onSubmit={handleSubmit}
-      />
-
+      <InputArea onSubmit={handleSubmit} />
       <ChatStatusBar model={currentModel} />
 
       {isExiting && exitSessionId && (

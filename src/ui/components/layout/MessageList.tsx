@@ -1,132 +1,157 @@
 /**
- * MessageList — renders messages directly in Ink's layout (no Static).
+ * MessageList - renders messages with RAF-throttled streaming content.
  *
- * Layout model: AegisInterface wraps everything in a fixed height={terminalHeight}
- * box. A flexGrow spacer above MessageList pushes content to the bottom.
- * This gives two screens:
- *   - Start (0 messages): WelcomeMessage fills space above input
- *   - Chat: spacer fills space above messages; messages + input pin to bottom
+ * Completed messages go into Ink's <Static> (terminal scrollback, rendered once).
+ * The active streaming message stays in the dynamic area so it updates live.
+ * Input area is always visible at the bottom of the terminal.
  *
- * Streaming: a 100ms interval polls the mutable buffer and updates streamContent
- * state, re-rendering the active streaming message inline.
+ * Why bypass the store for streaming content?
+ *   vanillaStore.setState() triggers the subscription on every delta, forcing
+ *   full Ink reconciliation and a visible terminal "blink" at every tick.
+ *   The RAF loop polls the mutable buffer directly and only bumps a LOCAL
+ *   counter (streamingVersion) — only MessageList re-renders, nothing else.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Text } from 'ink';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Static } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
-import { themeManager } from '../../themes/index.js';
+import { getStreamingContent, resetConsumerPosition, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
 
 interface MessageListProps {
   terminalWidth: number;
-  terminalHeight?: number;
 }
 
-// Animated ✻ spinner for the streaming indicator
-const STAR_FRAMES = ['✻', '✼', '✽', '✾', '✽', '✼'];
-const STAR_INTERVAL = 150;
+const RAF_INTERVAL_MS = 200;
+const CONTENT_THRESHOLD = 5;
 
-const AsterixSpinner: React.FC<{ color: string }> = React.memo(({ color }) => {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setFrame(f => (f + 1) % STAR_FRAMES.length), STAR_INTERVAL);
-    return () => clearInterval(id);
-  }, []);
-  return <Text color={color}>{STAR_FRAMES[frame]}</Text>;
-});
-AsterixSpinner.displayName = 'AsterixSpinner';
-
-export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth, terminalHeight = 24 }) => {
+export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
-  const [streamContent, setStreamContent] = useState('');
+  const [streamingVersion, setStreamingVersion] = useState(0);
 
+  const lastContentLenRef = useRef<Record<string, { content: number; thinking: number }>>({});
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const showAllThinkingRef = useRef(showAllThinking);
+  showAllThinkingRef.current = showAllThinking;
 
-  // Subscribe to store changes
   useEffect(() => {
+    let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
+    let lastRafTime = 0;
+
+    const pollBuffer = (now: number) => {
+      if (now - lastRafTime < RAF_INTERVAL_MS) {
+        rafId = requestAnimationFrame(pollBuffer);
+        return;
+      }
+      lastRafTime = now;
+
+      const buffer = getStreamingContent();
+      const state = vanillaStore.getState();
+      const streamingMsg = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
+
+      if (buffer && streamingMsg) {
+        const lastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+
+        if (lastLen.content > buffer.content.length || lastLen.thinking > buffer.thinking.length) {
+          lastContentLenRef.current[streamingMsg.id] = { content: 0, thinking: 0 };
+        }
+
+        const updatedLastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
+        const deltaContent = buffer.content.length - updatedLastLen.content;
+        const deltaThinking = buffer.thinking.length - updatedLastLen.thinking;
+
+        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= CONTENT_THRESHOLD) {
+          lastContentLenRef.current[streamingMsg.id] = {
+            content: buffer.content.length,
+            thinking: buffer.thinking.length,
+          };
+          resetConsumerPosition();
+          setStreamingVersion(v => v + 1);
+        }
+      }
+
+      rafId = requestAnimationFrame(pollBuffer);
+    };
+
+    rafId = requestAnimationFrame(pollBuffer);
+
     const unsub = vanillaStore.subscribe((state) => {
       const newMessages = state.session.messages;
       const newShowAllThinking = state.app.showAllThinking;
+      const prevMessages = messagesRef.current;
 
-      // Shallow diff to avoid unnecessary re-renders
-      const prev = messagesRef.current;
-      let changed = newMessages.length !== prev.length;
-      if (!changed) {
+      let messagesChanged = false;
+      if (newMessages.length !== prevMessages.length) {
+        messagesChanged = true;
+      } else {
         for (let i = 0; i < newMessages.length; i++) {
-          const a = prev[i], b = newMessages[i];
-          if (a.id !== b.id || a.isStreaming !== b.isStreaming ||
-              a.content !== b.content || a.thinking !== b.thinking ||
-              a.contentBlocks !== b.contentBlocks) {
-            changed = true; break;
+          const a = prevMessages[i];
+          const b = newMessages[i];
+          if (a.id !== b.id || a.isStreaming !== b.isStreaming || a.content !== b.content || a.thinking !== b.thinking || a.contentBlocks !== b.contentBlocks) {
+            messagesChanged = true;
+            break;
           }
         }
       }
-      if (changed) setMessages([...newMessages]);
-      if (newShowAllThinking !== showAllThinking) setShowAllThinking(newShowAllThinking);
+
+      if (messagesChanged) setMessages([...newMessages]);
+      if (newShowAllThinking !== showAllThinkingRef.current) setShowAllThinking(newShowAllThinking);
+
+      newMessages.forEach(msg => {
+        if (!msg.isStreaming) delete lastContentLenRef.current[msg.id];
+      });
     });
-    return unsub;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll streaming buffer at 100ms for live content updates
-  useEffect(() => {
-    const id = setInterval(() => {
-      const buf = getStreamingContent();
-      setStreamContent(buf ? buf.content : '');
-    }, 100);
-    return () => clearInterval(id);
-  }, []);
-
-  const theme = themeManager.getTheme();
-
-  const completedMessages = messages.filter(m => !m.isStreaming);
-  const streamingMsg = messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
-
-  // Limit visible messages to avoid overflowing the fixed-height box.
-  // Rough estimate: each message averages ~3 rows + 1 separator.
-  // Reserve ~6 rows for input+status+streaming indicator.
-  const maxVisible = Math.max(3, Math.floor((terminalHeight - 6) / 4));
-  const visibleMessages = completedMessages.slice(-maxVisible);
+  // Split: completed messages go to Static (scrollback), streaming stays dynamic
+  const completedMessages = messages.filter(msg => !msg.isStreaming);
+  const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
+  const buffer = streamingMsg ? getStreamingContent() : null;
 
   return (
     <Box flexDirection="column">
-      {visibleMessages.map((msg) => (
+      <Static items={completedMessages}>
+        {(msg, index) => (
+          <MessageRenderer
+            key={msg.id || index}
+            content={msg.content}
+            role={msg.role}
+            terminalWidth={terminalWidth}
+            showPrefix={true}
+            thinking={msg.thinking}
+            isStreaming={false}
+            showAllThinking={showAllThinking}
+            contentBlocks={msg.contentBlocks}
+          />
+        )}
+      </Static>
+
+      {streamingMsg && (
         <MessageRenderer
-          key={msg.id}
-          content={msg.content}
-          role={msg.role}
+          key={streamingMsg.id}
+          content={buffer ? streamingMsg.content + buffer.content : streamingMsg.content}
+          role={streamingMsg.role}
           terminalWidth={terminalWidth}
           showPrefix={true}
-          thinking={msg.thinking}
-          isStreaming={false}
+          thinking={buffer ? (streamingMsg.thinking || '') + buffer.thinking : streamingMsg.thinking}
+          isStreaming={true}
           showAllThinking={showAllThinking}
-          contentBlocks={msg.contentBlocks}
+          contentBlocks={streamingMsg.contentBlocks}
         />
-      ))}
-
-      {/* Active streaming message */}
-      {streamingMsg && (
-        <Box flexDirection="column">
-          {streamContent.trim() && (
-            <Box marginLeft={2} marginBottom={0}>
-              <Text color={theme.colors.text.primary}>{streamContent}</Text>
-            </Box>
-          )}
-          <Box marginLeft={2} marginBottom={0}>
-            <AsterixSpinner color={theme.colors.primary} />
-            <Text color={theme.colors.text.muted} dimColor>
-              {`  generating${streamContent.length > 0 ? `  ${streamContent.length.toLocaleString()} chars` : ''}`}
-            </Text>
-          </Box>
-        </Box>
       )}
     </Box>
   );
 });
 
 MessageList.displayName = 'MessageList';
+
 export default MessageList;
