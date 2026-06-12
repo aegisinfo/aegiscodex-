@@ -1,251 +1,202 @@
-/**
- * CustomTextInput - 自定义文本输入组件
- * 
- * 
- */
-
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef, memo } from 'react';
 import { Text, useInput } from 'ink';
 import chalk from 'chalk';
 import { useIsFocused, FocusId, focusManager } from '../../focus/index.js';
 
 interface CustomTextInputProps {
-  /** 输入值 */
   value: string;
-  /** 光标位置 */
   cursorPosition: number;
   /** Cursor visibility — computed by parent so this component doesn't re-render every tick */
   cursorOn?: boolean;
-  /** 值变化回调 */
   onChange: (value: string) => void;
-  /** 光标位置变化回调 */
   onChangeCursorPosition: (pos: number) => void;
-  /** 提交回调 */
   onSubmit?: (value: string) => void;
-  /** 粘贴回调 */
   onPaste?: (text: string) => { prompt?: string } | void;
-  /** 上箭头回调（浏览历史） */
   onArrowUp?: () => void;
-  /** 下箭头回调（浏览历史） */
   onArrowDown?: () => void;
-  /** 占位符 */
   placeholder?: string;
-  /** 焦点 ID */
   focusId?: FocusId;
-  /** 是否禁用 */
   disabled?: boolean;
 }
 
-/**
- * 
- */
 const PASTE_CONFIG = {
   TIMEOUT_MS: 100,
   RAPID_INPUT_THRESHOLD_MS: 150,
   LARGE_INPUT_THRESHOLD: 300,
 };
 
-/**
- * 
- */
-export const CustomTextInput: React.FC<CustomTextInputProps> = ({
-  value,
-  cursorPosition,
-  onChange,
-  onChangeCursorPosition,
-  onSubmit,
-  onPaste,
-  onArrowUp,
-  onArrowDown,
-  placeholder = '',
-  focusId = FocusId.MAIN_INPUT,
-  disabled = false,
-  cursorOn = true,
-}) => {
-  const isFocused = useIsFocused(focusId);
-  const isActive = isFocused && !disabled;
+export const CustomTextInput: React.FC<CustomTextInputProps> = memo(
+  ({
+    value,
+    cursorPosition,
+    onChange,
+    onChangeCursorPosition,
+    onSubmit,
+    onPaste,
+    onArrowUp,
+    onArrowDown,
+    placeholder = '',
+    focusId = FocusId.MAIN_INPUT,
+    disabled = false,
+    cursorOn = true,
+  }) => {
+    const isFocused = useIsFocused(focusId);
+    const isActive = isFocused && !disabled;
 
-  // Render text with an animated block cursor.
-  // The character at cursor position is shown with a teal bg when visible,
-  // or as plain text when the cursor blinks off — no layout shift.
-  const renderedValue = useMemo(() => {
-    if (!isActive) return value || chalk.dim(placeholder);
+    // Refs for all values accessed inside the stable useInput handler.
+    // Updated on every render — never trigger re-renders themselves.
+    const valueRef = useRef(value);
+    const cursorPositionRef = useRef(cursorPosition);
+    const onChangeRef = useRef(onChange);
+    const onChangeCursorPositionRef = useRef(onChangeCursorPosition);
+    const onSubmitRef = useRef(onSubmit);
+    const onPasteRef = useRef(onPaste);
+    const onArrowUpRef = useRef(onArrowUp);
+    const onArrowDownRef = useRef(onArrowDown);
+    const isActiveRef = useRef(isActive);
 
-    if (value.length === 0) {
-      const block = cursorOn
-        ? chalk.bgHex('#1a4a38').hex('#00e5c0')(' ')
-        : ' ';
-      return block + chalk.dim(placeholder);
-    }
+    valueRef.current = value;
+    cursorPositionRef.current = cursorPosition;
+    onChangeRef.current = onChange;
+    onChangeCursorPositionRef.current = onChangeCursorPosition;
+    onSubmitRef.current = onSubmit;
+    onPasteRef.current = onPaste;
+    onArrowUpRef.current = onArrowUp;
+    onArrowDownRef.current = onArrowDown;
+    isActiveRef.current = isActive;
 
-    const before = value.slice(0, cursorPosition);
-    const charUnder = value[cursorPosition] ?? ' ';
-    const after = value.slice(cursorPosition + 1);
+    const renderedValue = useMemo(() => {
+      if (!isActive) return value || chalk.dim(placeholder);
 
-    const cursorChar = cursorOn
-      ? chalk.bgHex('#1a4a38').hex('#00e5c0').underline(charUnder)
-      : charUnder;
+      if (value.length === 0) {
+        const block = cursorOn
+          ? chalk.bgHex('#1a4a38').hex('#00e5c0')(' ')
+          : ' ';
+        return block + chalk.dim(placeholder);
+      }
 
-    return before + cursorChar + after;
-  }, [value, cursorPosition, isActive, placeholder, cursorOn]);
+      const before = value.slice(0, cursorPosition);
+      const charUnder = value[cursorPosition] ?? ' ';
+      const after = value.slice(cursorPosition + 1);
 
-  // 粘贴检测状
-  const pasteStateRef = React.useRef({
-    chunks: [] as string[],
-    timeoutId: null as NodeJS.Timeout | null,
-    firstInputTime: null as number | null,
-  });
+      const cursorChar = cursorOn
+        ? chalk.bgHex('#1a4a38').hex('#00e5c0').underline(charUnder)
+        : charUnder;
 
-  // 处理粘
-  const handlePaste = useCallback(
-    (text: string) => {
-      if (onPaste) {
-        const result = onPaste(text);
+      return before + cursorChar + after;
+    }, [value, cursorPosition, isActive, placeholder, cursorOn]);
+
+    const pasteStateRef = useRef({
+      chunks: [] as string[],
+      timeoutId: null as NodeJS.Timeout | null,
+      firstInputTime: null as number | null,
+    });
+
+    // Stable — accesses all mutable values via refs
+    const handlePasteStable = useCallback((text: string) => {
+      const val = valueRef.current;
+      const pos = cursorPositionRef.current;
+      if (onPasteRef.current) {
+        const result = onPasteRef.current(text);
         if (result?.prompt) {
-          // 显示粘贴提
-          onChange(value + result.prompt);
-          onChangeCursorPosition(value.length + result.prompt.length);
+          onChangeRef.current(val + result.prompt);
+          onChangeCursorPositionRef.current(val.length + result.prompt.length);
           return;
         }
       }
+      const newValue = val.slice(0, pos) + text + val.slice(pos);
+      onChangeRef.current(newValue);
+      onChangeCursorPositionRef.current(pos + text.length);
+    }, []);
 
-      // 默认行为：插入粘贴的文
-      const newValue = value.slice(0, cursorPosition) + text + value.slice(cursorPosition);
-      onChange(newValue);
-      onChangeCursorPosition(cursorPosition + text.length);
-    },
-    [value, cursorPosition, onChange, onChangeCursorPosition, onPaste]
-  );
+    // Stable — Ink registers this once and never re-registers unless focusId changes.
+    // All mutable state is read from refs at call time.
+    const inputHandler = useCallback(
+      (input: string, key: Parameters<Parameters<typeof useInput>[0]>[1]) => {
+        if (focusManager.getCurrentFocus() !== focusId || !isActiveRef.current) return;
 
-  // 键盘输入处
-  useInput(
-    (input, key) => {
-      // Imperative focus check — avoids stale React closure
-      if (focusManager.getCurrentFocus() !== focusId || disabled) return;
-      if (!isActive) return;
+        const val = valueRef.current;
+        const pos = cursorPositionRef.current;
+        const now = Date.now();
+        const pasteState = pasteStateRef.current;
+        const timeSinceFirst = pasteState.firstInputTime
+          ? now - pasteState.firstInputTime
+          : 0;
 
-      const now = Date.now();
-      const pasteState = pasteStateRef.current;
-      const timeSinceFirst = pasteState.firstInputTime
-        ? now - pasteState.firstInputTime
-        : 0;
+        const isPaste =
+          input.length > PASTE_CONFIG.LARGE_INPUT_THRESHOLD ||
+          input.includes('\n') ||
+          (timeSinceFirst < PASTE_CONFIG.RAPID_INPUT_THRESHOLD_MS &&
+            pasteState.chunks.length > 0);
 
-      // 检查是否是粘贴操
-      const isPaste =
-        input.length > PASTE_CONFIG.LARGE_INPUT_THRESHOLD ||
-        input.includes('\n') ||
-        (timeSinceFirst < PASTE_CONFIG.RAPID_INPUT_THRESHOLD_MS &&
-          pasteState.chunks.length > 0);
-
-      if (isPaste && input.length > 1) {
-        // 收集粘贴分
-        pasteState.chunks.push(input);
-        if (!pasteState.firstInputTime) {
-          pasteState.firstInputTime = now;
+        if (isPaste && input.length > 1) {
+          pasteState.chunks.push(input);
+          if (!pasteState.firstInputTime) pasteState.firstInputTime = now;
+          if (pasteState.timeoutId) clearTimeout(pasteState.timeoutId);
+          pasteState.timeoutId = setTimeout(() => {
+            const mergedText = pasteState.chunks.join('');
+            handlePasteStable(mergedText);
+            pasteState.chunks = [];
+            pasteState.timeoutId = null;
+            pasteState.firstInputTime = null;
+          }, PASTE_CONFIG.TIMEOUT_MS);
+          return;
         }
 
-        // 重置超
-        if (pasteState.timeoutId) {
-          clearTimeout(pasteState.timeoutId);
+        if (key.return) { onSubmitRef.current?.(val); return; }
+        if (key.leftArrow) { if (pos > 0) onChangeCursorPositionRef.current(pos - 1); return; }
+        if (key.rightArrow) { if (pos < val.length) onChangeCursorPositionRef.current(pos + 1); return; }
+        if (key.upArrow) { onArrowUpRef.current?.(); return; }
+        if (key.downArrow) { onArrowDownRef.current?.(); return; }
+        if (key.backspace || key.delete) {
+          if (pos > 0) {
+            const newValue = val.slice(0, pos - 1) + val.slice(pos);
+            onChangeRef.current(newValue);
+            onChangeCursorPositionRef.current(pos - 1);
+          }
+          return;
         }
-
-        pasteState.timeoutId = setTimeout(() => {
-          const mergedText = pasteState.chunks.join('');
-          handlePaste(mergedText);
-          // 重置状
-          pasteState.chunks = [];
-          pasteState.timeoutId = null;
-          pasteState.firstInputTime = null;
-        }, PASTE_CONFIG.TIMEOUT_MS);
-
-        return;
-      }
-
-      // 普通键盘输
-      if (key.return) {
-        onSubmit?.(value);
-        return;
-      }
-
-      if (key.leftArrow) {
-        if (cursorPosition > 0) {
-          onChangeCursorPosition(cursorPosition - 1);
+        if (key.ctrl && input === 'a') { onChangeCursorPositionRef.current(0); return; }
+        if (key.ctrl && input === 'e') { onChangeCursorPositionRef.current(val.length); return; }
+        if (key.ctrl && input === 'k') { onChangeRef.current(val.slice(0, pos)); return; }
+        if (key.ctrl && input === 'u') {
+          onChangeRef.current(val.slice(pos));
+          onChangeCursorPositionRef.current(0);
+          return;
         }
-        return;
-      }
-
-      if (key.rightArrow) {
-        if (cursorPosition < value.length) {
-          onChangeCursorPosition(cursorPosition + 1);
+        if (input && !key.ctrl && !key.meta) {
+          const newValue = val.slice(0, pos) + input + val.slice(pos);
+          onChangeRef.current(newValue);
+          onChangeCursorPositionRef.current(pos + input.length);
         }
-        return;
-      }
+      },
+      [focusId, handlePasteStable] // both stable — focusId is a constant, handlePasteStable has empty deps
+    );
 
-      // 上箭头：浏览历史（上一条命
-      if (key.upArrow) {
-        onArrowUp?.();
-        return;
-      }
+    useInput(inputHandler, { isActive });
 
-      // 下箭头：浏览历史（下一条命
-      if (key.downArrow) {
-        onArrowDown?.();
-        return;
-      }
+    return (
+      <Text>
+        {!isActive && value.length === 0 ? (
+          <Text dimColor>{placeholder}</Text>
+        ) : (
+          renderedValue
+        )}
+      </Text>
+    );
+  },
+  // Only re-render when the displayed output would actually change.
+  // Callbacks are accessed via refs so they never need to cause a re-render.
+  // focus changes trigger re-renders via useIsFocused internally (bypasses this comparator).
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.cursorPosition === next.cursorPosition &&
+    prev.cursorOn === next.cursorOn &&
+    prev.placeholder === next.placeholder &&
+    prev.disabled === next.disabled &&
+    prev.focusId === next.focusId
+);
 
-      if (key.backspace || key.delete) {
-        if (cursorPosition > 0) {
-          const newValue = value.slice(0, cursorPosition - 1) + value.slice(cursorPosition);
-          onChange(newValue);
-          onChangeCursorPosition(cursorPosition - 1);
-        }
-        return;
-      }
-
-      // Ctrl+A: 移动到行
-      if (key.ctrl && input === 'a') {
-        onChangeCursorPosition(0);
-        return;
-      }
-
-      // Ctrl+E: 移动到行
-      if (key.ctrl && input === 'e') {
-        onChangeCursorPosition(value.length);
-        return;
-      }
-
-      // Ctrl+K: 删除光标后的内
-      if (key.ctrl && input === 'k') {
-        onChange(value.slice(0, cursorPosition));
-        return;
-      }
-
-      // Ctrl+U: 删除光标前的内
-      if (key.ctrl && input === 'u') {
-        onChange(value.slice(cursorPosition));
-        onChangeCursorPosition(0);
-        return;
-      }
-
-      // 普通字符输
-      if (input && !key.ctrl && !key.meta) {
-        const newValue = value.slice(0, cursorPosition) + input + value.slice(cursorPosition);
-        onChange(newValue);
-        onChangeCursorPosition(cursorPosition + input.length);
-      }
-    },
-    { isActive }
-  );
-
-  return (
-    <Text>
-      {!isActive && value.length === 0 ? (
-        <Text dimColor>{placeholder}</Text>
-      ) : (
-        renderedValue
-      )}
-    </Text>
-  );
-};
+CustomTextInput.displayName = 'CustomTextInput';
 
 export default CustomTextInput;

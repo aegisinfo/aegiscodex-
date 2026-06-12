@@ -180,7 +180,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const handleChange = useCallback((newValue: string) => {
       inputRef.current.value = newValue;
       setInput(newValue);
-      setCursorPosition(prev => Math.min(prev, newValue.length));
+      // cursor is always set immediately after via onChangeCursorPosition — no guard needed
     }, []);
     
     // 设置光标位
