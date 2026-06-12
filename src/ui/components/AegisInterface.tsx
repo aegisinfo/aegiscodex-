@@ -853,8 +853,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         <Box flexDirection="column" marginBottom={1}>
           <Box>
             <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
-            <Text bold color={theme.colors.primary}> aegis</Text>
-            <Text color={theme.colors.text.secondary}>code </Text>
+            <Text bold color={theme.colors.primary}> \u25C6 </Text>
+            <Text bold color={theme.colors.text.primary}>claude </Text>
           </Box>
         </Box>
 

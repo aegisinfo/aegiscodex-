@@ -297,7 +297,7 @@ export class ThemeManager {
       case 'assistant':
         return {
           color: colors.primary,
-          prefix: '□ ',
+          prefix: '◆ ',
           bold: false,
         };
       case 'system':

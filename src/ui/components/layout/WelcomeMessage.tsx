@@ -1,9 +1,8 @@
 /**
- * WelcomeMessage - animated ink-flow reveal on startup
+ * WelcomeMessage — claude-branded welcome with animated reveal.
  *
- * The ASCII logo is swept character-by-character (left→right, top→bottom)
- * with a colour gradient: dim (unwritten) → white nib → wet teal → dry primary.
- * After the sweep, content phases in sequentially.
+ * ◆ pulses from dim → white → coral, then "claude" sweeps char-by-char,
+ * then tagline, divider and commands phase in sequentially.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -15,14 +14,8 @@ interface WelcomeMessageProps {
   terminalWidth: number;
 }
 
-const LOGO_LINES = [
-  ' ╔═╗  ╔═╗  ╔═╗  ╦  ╔═╗',
-  ' ╠═╣  ║╣   ║ ╦  ║  ╚═╗',
-  ' ╩ ╩  ╚═╝  ╚═╝  ╩  ╚═╝',
-];
-
-const LINE_LENGTHS = LOGO_LINES.map(l => l.length);
-const TOTAL_LOGO_CHARS = LINE_LENGTHS.reduce((s, l) => s + l, 0);
+const CLAUDE_LETTERS = Array.from('claude');
+const TOTAL_SWEEP = CLAUDE_LETTERS.length;
 
 const COMMANDS = [
   { cmd: '/help',    desc: 'all commands' },
@@ -30,43 +23,6 @@ const COMMANDS = [
   { cmd: '/theme',   desc: 'change appearance' },
   { cmd: '/compact', desc: 'compress context' },
 ];
-
-// Colour at each character relative to the sweep nib position
-function charColor(
-  globalPos: number,
-  sweepPos: number,
-  primary: string,
-  muted: string,
-): { color: string; dim: boolean; bold: boolean } {
-  if (sweepPos < 0) return { color: muted, dim: true, bold: false };
-  if (globalPos > sweepPos)   return { color: muted, dim: true,  bold: false }; // unwritten
-  if (globalPos === sweepPos) return { color: '#ffffff', dim: false, bold: true  }; // nib
-  if (globalPos >= sweepPos - 2) return { color: '#7dffd9', dim: false, bold: true  }; // wet ink
-  return { color: primary, dim: false, bold: true }; // dry ink
-}
-
-// A single logo line rendered char-by-char so each gets its own colour
-const LogoLine: React.FC<{
-  line: string;
-  lineStart: number;
-  sweepPos: number;
-}> = React.memo(({ line, lineStart, sweepPos }) => {
-  const theme = themeManager.getTheme();
-  return (
-    <Box flexDirection="row">
-      {Array.from(line).map((ch, ci) => {
-        const gp = lineStart + ci;
-        const { color, dim, bold } = charColor(gp, sweepPos, theme.colors.primary, theme.colors.text.muted);
-        return (
-          <Text key={ci} color={color} dimColor={dim} bold={bold}>
-            {ch}
-          </Text>
-        );
-      })}
-    </Box>
-  );
-});
-LogoLine.displayName = 'LogoLine';
 
 // Divider that draws itself from width 0 to full
 const DrawingDivider: React.FC<{ targetWidth: number }> = ({ targetWidth }) => {
@@ -79,26 +35,23 @@ const DrawingDivider: React.FC<{ targetWidth: number }> = ({ targetWidth }) => {
         if (w + 3 >= targetWidth) { clearInterval(id); return targetWidth; }
         return w + 3;
       });
-    }, 12);
+    }, 10);
     return () => clearInterval(id);
   }, [targetWidth]);
   return (
     <Box>
-      <Text color={theme.colors.border.light} dimColor>
-        {'─'.repeat(width)}
-      </Text>
+      <Text color={theme.colors.border.light} dimColor>{'─'.repeat(width)}</Text>
     </Box>
   );
 };
 
-// A command row that fades in (dim → normal)
 const FadeInCommand: React.FC<{ cmd: string; desc: string; delayMs: number }> = ({ cmd, desc, delayMs }) => {
   const theme = themeManager.getTheme();
   const [visible, setVisible] = useState(false);
   const [bright, setBright] = useState(false);
   useEffect(() => {
     const t1 = setTimeout(() => setVisible(true), delayMs);
-    const t2 = setTimeout(() => setBright(true), delayMs + 120);
+    const t2 = setTimeout(() => setBright(true), delayMs + 100);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [delayMs]);
   if (!visible) return null;
@@ -112,7 +65,6 @@ const FadeInCommand: React.FC<{ cmd: string; desc: string; delayMs: number }> = 
   );
 };
 
-// A text row that fades in after a delay
 const FadeInText: React.FC<{ children: React.ReactNode; delayMs: number }> = ({ children, delayMs }) => {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -125,70 +77,73 @@ const FadeInText: React.FC<{ children: React.ReactNode; delayMs: number }> = ({ 
 
 export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ terminalWidth }) => {
   const theme = themeManager.getTheme();
-  const dividerWidth = Math.min(terminalWidth - 6, 38);
+  const dividerWidth = Math.min(terminalWidth - 6, 34);
 
-  // sweepPos: which global char index the "nib" is currently at (-1 = not started)
+  // ◆ glow phase: 0 = dim, 1 = white, 2 = coral (settled)
+  const [logoPhase, setLogoPhase] = useState(0);
+
+  // Sweep position for "claude" letters (-1 = none revealed)
   const [sweepPos, setSweepPos] = useState(-1);
 
-  // Start sweep on mount
   useEffect(() => {
+    // ◆ glow sequence
+    const t1 = setTimeout(() => setLogoPhase(1), 80);
+    const t2 = setTimeout(() => setLogoPhase(2), 240);
+
+    // Start sweeping letters after glow settles
     let pos = -1;
     const id = setInterval(() => {
       pos += 1;
       setSweepPos(pos);
-      if (pos >= TOTAL_LOGO_CHARS + 3) clearInterval(id);
-    }, 15);
-    return () => clearInterval(id);
+      if (pos >= TOTAL_SWEEP + 2) clearInterval(id);
+    }, 55);
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearInterval(id); };
   }, []);
 
-  // After sweep, content phases in via individual FadeIn components.
-  // sweepEnd ≈ 15ms × (54 + 3) = ~855ms from mount.
-  const sweepEndMs = (TOTAL_LOGO_CHARS + 3) * 15;
-  const nameT    = sweepEndMs + 80;
-  const taglineT = sweepEndMs + 220;
-  const dividerT = sweepEndMs + 380;
-  const cmdBaseT = sweepEndMs + 540;
-  const footerT  = cmdBaseT + COMMANDS.length * 120 + 100;
+  const logoColor = logoPhase === 0 ? theme.colors.text.muted
+                  : logoPhase === 1 ? '#ffffff'
+                  : theme.colors.primary;
 
-  // Precompute line start positions
-  let lineStarts: number[] = [];
-  let acc = 0;
-  for (const len of LINE_LENGTHS) { lineStarts.push(acc); acc += len; }
+  // After sweep ends, content phases in
+  const sweepEndMs = 240 + (TOTAL_SWEEP + 2) * 55;
+  const taglineT  = sweepEndMs + 60;
+  const dividerT  = sweepEndMs + 180;
+  const cmdBaseT  = sweepEndMs + 320;
+  const footerT   = cmdBaseT + COMMANDS.length * 100 + 80;
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1}>
+    <Box flexDirection="column" paddingX={2} paddingY={1}>
 
-      {/* Logo + name row */}
-      <Box>
-        <Box flexDirection="column">
-          {LOGO_LINES.map((line, i) => (
-            <LogoLine
-              key={i}
-              line={line}
-              lineStart={lineStarts[i]}
-              sweepPos={sweepPos}
-            />
-          ))}
-        </Box>
+      {/* Logo row: ◆  claude  vX.X.X */}
+      <Box flexDirection="row" alignItems="flex-end">
+        {/* The ◆ diamond */}
+        <Text color={logoColor} bold>{'◆  '}</Text>
 
-        <FadeInText delayMs={nameT}>
-          <Box flexDirection="column" marginLeft={2}>
-            <Box height={1} />
-            <Box>
-              <Text color={theme.colors.primary} bold>{'□ '}</Text>
-              <Text color={theme.colors.text.primary} bold>aegiscode</Text>
-            </Box>
-            <Box>
-              <Text color={theme.colors.text.muted} dimColor>{'  '}v{pkg.version}</Text>
-            </Box>
-          </Box>
+        {/* "claude" swept char by char */}
+        {CLAUDE_LETTERS.map((ch, i) => {
+          const revealed = sweepPos >= i;
+          const isNib    = sweepPos === i;
+          const color    = !revealed    ? 'transparent'
+                         : isNib        ? '#ffffff'
+                         : theme.colors.text.primary;
+          return (
+            <Text key={i} color={revealed ? color : theme.colors.text.muted} bold dimColor={!revealed}>
+              {revealed ? ch : ' '}
+            </Text>
+          );
+        })}
+
+        {/* Version — fades in after sweep */}
+        <FadeInText delayMs={sweepEndMs}>
+          <Text color={theme.colors.text.muted} dimColor>{'  v' + pkg.version}</Text>
         </FadeInText>
       </Box>
 
       {/* Tagline */}
       <FadeInText delayMs={taglineT}>
         <Box marginTop={1} marginLeft={3}>
-          <Text color={theme.colors.text.muted} dimColor>AI-powered terminal coding agent</Text>
+          <Text color={theme.colors.text.muted} dimColor>by Anthropic  ·  terminal coding agent</Text>
         </Box>
       </FadeInText>
 
@@ -206,7 +161,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
             key={cmd}
             cmd={cmd}
             desc={desc}
-            delayMs={cmdBaseT + i * 120}
+            delayMs={cmdBaseT + i * 100}
           />
         ))}
       </Box>
@@ -221,6 +176,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
     </Box>
   );
 });
+
 WelcomeMessage.displayName = 'WelcomeMessage';
 
 export default WelcomeMessage;

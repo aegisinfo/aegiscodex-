@@ -291,7 +291,7 @@ const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
 
     return (
       <Box marginLeft={prefixOffset}>
-        <Text color="#4488ff">{visible ? CURSOR_FRAMES[0] : CURSOR_FRAMES[1]}</Text>
+        <Text color={theme.colors.primary}>{visible ? CURSOR_FRAMES[0] : CURSOR_FRAMES[1]}</Text>
       </Box>
     )
   }

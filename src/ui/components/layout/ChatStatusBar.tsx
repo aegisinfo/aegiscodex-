@@ -151,7 +151,7 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
       paddingX={0}
       marginTop={0}
     >
-      <Text color={theme.colors.text.muted} dimColor>─ </Text>
+      <Text color={theme.colors.primary} dimColor>◆ </Text>
       {segments.map((seg, index) => (
         <React.Fragment key={index}>
           {index > 0 && (

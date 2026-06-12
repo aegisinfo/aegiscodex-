@@ -1,12 +1,12 @@
 import type { Theme, BaseColors, Spacing } from './types.js';
 const aegisColors: BaseColors = {
-  primary: '#00e5c0',
-  secondary: '#7c6fd4',
-  accent: '#00e5c0',
+  primary: '#D97757',    // Anthropic coral
+  secondary: '#b85c3a',
+  accent: '#D97757',
   success: '#22c55e',
   warning: '#f59e0b',
   error: '#ef4444',
-  info: '#00e5c0',
+  info: '#7dd3fc',
   text: {
     primary: '#e8e6f4',
     secondary: '#8882a4',
@@ -23,7 +23,7 @@ const aegisColors: BaseColors = {
     dark: '#1a1a2a',
   },
   syntax: {
-    keyword: '#00e5c0',
+    keyword: '#D97757',
     string: '#7c6fd4',
     number: '#f59e0b',
     comment: '#44405a',
