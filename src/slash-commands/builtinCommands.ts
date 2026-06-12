@@ -547,6 +547,144 @@ export const statusCommand: SlashCommand = {
   },
 };
 
+// ─── /tokens helpers ────────────────────────────────────────────────
+
+function tokFmt(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function tokBar(ratio: number, width: number): string {
+  const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
+}
+
+function tokCost(model: string, inputTok: number, outputTok: number): number | null {
+  const m = model.toLowerCase();
+  // per-MTok prices
+  let ip: number, op: number;
+  if      (m.includes('opus-4'))    { ip = 15;   op = 75;  }
+  else if (m.includes('sonnet-4'))  { ip = 3;    op = 15;  }
+  else if (m.includes('haiku-4'))   { ip = 0.8;  op = 4;   }
+  else if (m.includes('claude'))    { ip = 3;    op = 15;  }
+  else if (m.includes('gpt-4o'))    { ip = 2.5;  op = 10;  }
+  else if (m.includes('gpt-4'))     { ip = 30;   op = 60;  }
+  else if (m.includes('gpt-3.5'))   { ip = 0.5;  op = 1.5; }
+  else return null;
+  return (inputTok * ip + outputTok * op) / 1_000_000;
+}
+
+function tokShortModel(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes('claude-sonnet-4-6')) return 'claude-sonnet-4.6';
+  if (m.includes('claude-sonnet-4'))   return 'claude-sonnet-4';
+  if (m.includes('claude-opus-4'))     return 'claude-opus-4';
+  if (m.includes('claude-haiku-4'))    return 'claude-haiku-4';
+  return model.length > 24 ? model.slice(0, 21) + '...' : model;
+}
+
+/**
+ * /tokens - token usage graph and estimated cost
+ */
+export const tokensCommand: SlashCommand = {
+  name: 'tokens',
+  aliases: ['tok'],
+  description: 'Show token usage graph and estimated spend',
+  category: 'session',
+  usage: '/tokens',
+  fullDescription: 'Visualises token consumption for this session as an ASCII bar chart, including input/output split, context-window usage, estimated USD cost, and a per-turn breakdown.',
+
+  async handler(_args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
+    const state = getState();
+    const { session, config } = state;
+    const usage   = session.tokenUsage;
+    const messages = session.messages.filter(m => !m.isStreaming);
+    const runtimeConfig = config.config;
+    const maxCtx  = (runtimeConfig as any)?.maxContextTokens ?? 200_000;
+    const model   = context.modelName || runtimeConfig?.currentModelId || 'claude-sonnet-4-6';
+
+    const totalIn  = usage.inputTokens  || 0;
+    const totalOut = usage.outputTokens || 0;
+    const total    = totalIn + totalOut;
+
+    const BAR = 28;
+
+    // ── context meter ──
+    const ctxTokens = context.contextManager?.getTokenCount?.() ?? 0;
+    const ctxRatio  = maxCtx > 0 ? Math.min(1, ctxTokens / maxCtx) : 0;
+
+    // ── per-turn estimates (content.length / 4 ≈ tokens) ──
+    const turns = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map((m, i) => ({
+        n:    i + 1,
+        role: m.role as 'user' | 'assistant',
+        est:  Math.max(1, Math.ceil((m.content?.length ?? 0) / 4)),
+      }));
+
+    const maxTurnEst = turns.reduce((a, t) => Math.max(a, t.est), 1);
+
+    // ── cost ──
+    const cost = tokCost(model, totalIn, totalOut);
+
+    // ── build output ──
+    const L: string[] = [];
+
+    L.push('## ◆ token usage');
+    L.push('');
+
+    // context meter
+    if (ctxTokens > 0) {
+      const pct = `${Math.round(ctxRatio * 100)}%`;
+      L.push(`context  ${tokBar(ctxRatio, BAR)}  ${pct} · ${tokFmt(ctxTokens)} / ${tokFmt(maxCtx)}`);
+      L.push('');
+    }
+
+    // in / out bars
+    const maxIO = Math.max(totalIn, totalOut, 1);
+    L.push(`in       ${tokBar(totalIn  / maxIO, BAR)}  ${tokFmt(totalIn)}`);
+    L.push(`out      ${tokBar(totalOut / maxIO, BAR)}  ${tokFmt(totalOut)}`);
+    L.push(`         ${'─'.repeat(BAR + 2)}`);
+    L.push(`total    ${' '.repeat(BAR)}  ${tokFmt(total)}`);
+
+    if (cost !== null) {
+      const costStr = cost < 0.01
+        ? `<$0.01`
+        : `$${cost.toFixed(cost < 1 ? 4 : 2)}`;
+      L.push(`cost     ${' '.repeat(BAR)}  ~${costStr}  ·  ${tokShortModel(model)}`);
+    }
+
+    // per-turn chart
+    if (turns.length > 0) {
+      L.push('');
+      L.push(`${'─'.repeat(BAR + 12)}`);
+      L.push('');
+      L.push('turn-by-turn  (est. from content length)');
+      L.push('');
+
+      const TBAR = 20;
+      const shown = turns.slice(-25);
+      const skipped = turns.length - shown.length;
+
+      if (skipped > 0) {
+        L.push(`  ··· ${skipped} earlier turns not shown`);
+        L.push('');
+      }
+
+      for (const t of shown) {
+        const prefix = t.role === 'user' ? '›' : '◆';
+        const ratio  = t.est / maxTurnEst;
+        const bar    = tokBar(ratio, TBAR);
+        const label  = String(t.n).padStart(3);
+        L.push(`  ${label}  ${prefix}  ${bar}  ~${tokFmt(t.est)}`);
+      }
+    }
+
+    return { success: true, type: 'info', content: L.join('\n') };
+  },
+};
+
 /**
  * /skills - Skills 管理
  */
@@ -1978,6 +2116,7 @@ export const builtinCommands: SlashCommand[] = [
   modelCommand,
   themeCommand,
   statusCommand,
+  tokensCommand,
   skillsCommand,
   hooksCommand,
   thinkingCommand,
