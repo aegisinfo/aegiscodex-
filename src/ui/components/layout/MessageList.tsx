@@ -157,9 +157,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const topPaddingLines = windowStart * ESTIMATED_ITEM_HEIGHT;
   const bottomPaddingLines = (completedMessages.length - windowEnd) * ESTIMATED_ITEM_HEIGHT;
 
-  // Streaming message always at the bottom (if present)
-  const showStreamingSeparately = streamingMsg && windowEnd >= completedMessages.length;
-
   const isAtBottom = clampedOffset >= maxOffset;
 
   return (

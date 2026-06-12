@@ -169,6 +169,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const initializationStatus = useInitializationStatus();
   const activeModal = useActiveModal();
   const sessionId = useSessionId();
+  const messages = useMessages();
 
   // Stable getMessages
   const getMessages = useCallback(() => getState().session.messages, []);
@@ -870,33 +871,34 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     );
   }
 
-  const messageCount = getState().session.messages.length;
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
+  const isWelcome = messages.length === 0 && !hasPendingInitialMessage;
 
-  // Welcome screen: no messages yet — anchor content to bottom via height+flexGrow
-  if (messageCount === 0 && !hasPendingInitialMessage) {
-    return (
-      <Box flexDirection="column" width="100%" height={terminalHeight}>
-        <Box flexGrow={1} />
-        <WelcomeMessage terminalWidth={terminalWidth - 2} />
-        <InputArea onSubmit={handleSubmit} />
-        <ChatStatusBar model={currentModel} />
-        {isExiting && exitSessionId && <ExitMessage sessionId={exitSessionId} />}
-      </Box>
-    );
-  }
+  const isScrolledUp = (() => {
+    const completedCount = messages.filter(m => !m.isStreaming).length;
+    const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
+    return scrollOffset < Math.max(0, completedCount - pgSize);
+  })();
 
-  // Chat screen: completed messages go into Static (terminal scrollback),
-  // streaming message + input stay in the dynamic area at the bottom.
   return (
-    <Box flexDirection="column" width="100%">
-      <MessageList
-        terminalWidth={terminalWidth - 2}
-        terminalHeight={terminalHeight}
-        scrollOffset={scrollOffset}
-        onScroll={setScrollOffset}
-      />
-      <QueuedCommands />
+    <Box flexDirection="column" width="100%" {...(isWelcome ? { height: terminalHeight } : {})}>
+      {isWelcome ? (
+        <Box flexGrow={1} />
+      ) : (
+        <>
+          <MessageList
+            terminalWidth={terminalWidth - 2}
+            terminalHeight={terminalHeight}
+            scrollOffset={scrollOffset}
+            onScroll={setScrollOffset}
+          />
+          <QueuedCommands />
+        </>
+      )}
+
+      {isWelcome && (
+        <WelcomeMessage terminalWidth={terminalWidth - 2} />
+      )}
 
       {confirmationState.isVisible && confirmationState.details && (
         <ConfirmationPrompt
@@ -908,12 +910,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       <InputArea onSubmit={handleSubmit} />
       <ChatStatusBar
         model={currentModel}
-        isScrolledUp={(() => {
-          const msgs = getState().session.messages;
-          const completedCount = msgs.filter(m => !m.isStreaming).length;
-          const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
-          return scrollOffset < Math.max(0, completedCount - pgSize);
-        })()}
+        isScrolledUp={!isWelcome && isScrolledUp}
       />
 
       {isExiting && exitSessionId && (
