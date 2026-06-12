@@ -4,7 +4,7 @@
  * 
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { Text, useInput } from 'ink';
 import chalk from 'chalk';
 import { useIsFocused, FocusId, focusManager } from '../../focus/index.js';
@@ -62,23 +62,39 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
   const isFocused = useIsFocused(focusId);
   const isActive = isFocused && !disabled;
 
-  // 渲染带光标的文
+  // Blinking block cursor — 530ms matches standard terminal blink rate
+  const [cursorOn, setCursorOn] = useState(true);
+  useEffect(() => {
+    const t = setInterval(() => setCursorOn(v => !v), 530);
+    return () => clearInterval(t);
+  }, []);
+
+  // Render text with an animated block cursor.
+  // The character at cursor position is shown with a teal bg when visible,
+  // or as plain text when the cursor blinks off — no layout shift.
   const renderedValue = useMemo(() => {
-    if (!isActive) {
-      return value || placeholder;
-    }
+    if (!isActive) return value || chalk.dim(placeholder);
+
+    const CURSOR_BG = '#00e5c0';
+    const CURSOR_FG = '#04040c';
 
     if (value.length === 0) {
-      // 空输入，显示光标和占位
-      return chalk.hex('#4488ff')('▏') + chalk.dim(placeholder);
+      const block = cursorOn
+        ? chalk.bgHex(CURSOR_BG).hex(CURSOR_FG)(' ')
+        : ' ';
+      return block + chalk.dim(placeholder);
     }
 
     const before = value.slice(0, cursorPosition);
-    const after = value.slice(cursorPosition);
+    const charUnder = value[cursorPosition] ?? ' ';
+    const after = value.slice(cursorPosition + 1);
 
-    // Thin bar cursor sits at the cursor position — no blue block, no pulsing
-    return `${before}${chalk.hex('#4488ff')('▏')}${after}`;
-  }, [value, cursorPosition, isActive, placeholder]);
+    const cursorChar = cursorOn
+      ? chalk.bgHex(CURSOR_BG).hex(CURSOR_FG)(charUnder)
+      : charUnder;
+
+    return before + cursorChar + after;
+  }, [value, cursorPosition, isActive, placeholder, cursorOn]);
 
   // 粘贴检测状
   const pasteStateRef = React.useRef({
