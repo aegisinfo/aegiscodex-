@@ -382,26 +382,28 @@ const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
   const summary = useMemo(() => getToolSummary(name, input), [name, input])
   const isRunning = status === 'running'
   const isError = status === 'error'
+  const isDone = status === 'success'
   const elapsed = !isRunning && completedAt ? formatElapsed(completedAt - startedAt) : null
 
   return (
-    <Box marginLeft={prefixOffset} marginY={0}>
-      <Text color={isRunning ? theme.colors.primary : isError ? theme.colors.error : theme.colors.text.muted} bold>
-        {'● '}
-      </Text>
-      {isRunning && (
+    <Box marginLeft={prefixOffset + 2} marginY={0}>
+      {isRunning ? (
         <>
-          <ToolSpinner color={theme.colors.warning} />
-          <Text>{' '}</Text>
+          <ToolSpinner color={theme.colors.primary} />
+          <Text color={theme.colors.text.secondary}>{' '}{summary}</Text>
         </>
-      )}
-      <Text color={isRunning ? theme.colors.text.primary : theme.colors.text.muted} dimColor={!isRunning}>
-        {summary}
-      </Text>
-      {elapsed && (
-        <Text color={theme.colors.text.muted} dimColor>
-          {'  '}{elapsed}
-        </Text>
+      ) : isDone ? (
+        <>
+          <Text color={theme.colors.success} bold>{'✓'}</Text>
+          <Text color={theme.colors.text.muted} dimColor>{' '}{summary}</Text>
+          {elapsed && <Text color={theme.colors.text.muted} dimColor>{'  '}{elapsed}</Text>}
+        </>
+      ) : (
+        <>
+          <Text color={theme.colors.error} bold>{'✗'}</Text>
+          <Text color={theme.colors.text.muted} dimColor>{' '}{summary}</Text>
+          {elapsed && <Text color={theme.colors.text.muted} dimColor>{'  '}{elapsed}</Text>}
+        </>
       )}
     </Box>
   )
@@ -431,11 +433,11 @@ const ToolResultBlockRenderer: React.FC<ToolResultBlockRendererProps> = ({
   if (lines.length === 0) return null
 
   return (
-    <Box flexDirection="column" marginLeft={prefixOffset} marginBottom={0}>
+    <Box flexDirection="column" marginLeft={prefixOffset + 2} marginBottom={0}>
       {lines.map((line, i) => (
         <Box key={i}>
           <Text color={theme.colors.text.muted} dimColor>
-            {i === 0 ? (isError ? '└ ✗ ' : '└ ') : '  '}
+            {i === 0 ? '⎿  ' : '   '}
           </Text>
           <Text color={isError ? theme.colors.error : theme.colors.text.muted} dimColor wrap="wrap">
             {line.length > 120 ? line.slice(0, 117) + '…' : line}
