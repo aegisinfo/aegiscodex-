@@ -77,7 +77,7 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
 
     if (value.length === 0) {
       const block = cursorOn
-        ? chalk.bgHex('#0d2e24').hex('#00e5c0')(' ')
+        ? chalk.bgHex('#1a4a38').hex('#00e5c0')(' ')
         : ' ';
       return block + chalk.dim(placeholder);
     }
@@ -87,7 +87,7 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
     const after = value.slice(cursorPosition + 1);
 
     const cursorChar = cursorOn
-      ? chalk.bgHex('#0d2e24').hex('#00e5c0').underline(charUnder)
+      ? chalk.bgHex('#1a4a38').hex('#00e5c0').underline(charUnder)
       : charUnder;
 
     return before + cursorChar + after;
