@@ -36,6 +36,20 @@ interface MessageListProps {
   terminalWidth: number;
 }
 
+// Animated ✻ spinner for the streaming indicator
+const STAR_FRAMES = ['✻', '✼', '✽', '✾', '✽', '✼'];
+const STAR_INTERVAL = 150;
+
+const AsterixSpinner: React.FC<{ color: string }> = React.memo(({ color }) => {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setFrame(f => (f + 1) % STAR_FRAMES.length), STAR_INTERVAL);
+    return () => clearInterval(id);
+  }, []);
+  return <Text color={color}>{STAR_FRAMES[frame]}</Text>;
+});
+AsterixSpinner.displayName = 'AsterixSpinner';
+
 // How often to flush streaming chunks to Static (ms)
 const FLUSH_INTERVAL_MS = 400;
 // Min new chars before flushing a chunk to Static
@@ -226,7 +240,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
           Ink's dynamic area stays ~4–5 lines regardless of response length. */}
       {streamingMsg && (
         <Box marginLeft={2} marginBottom={0}>
-          <Text color={theme.colors.primary}>◆</Text>
+          <AsterixSpinner color={theme.colors.primary} />
           <Text color={theme.colors.text.muted} dimColor>
             {`  generating${streamedChars > 0 ? `  ${streamedChars.toLocaleString()} chars` : ''}`}
           </Text>

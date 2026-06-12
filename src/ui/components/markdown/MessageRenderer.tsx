@@ -248,6 +248,10 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
         {isStreaming && (
           <StreamingCursor prefixOffset={prefixOffset} />
         )}
+
+        {!isStreaming && (
+          <MessageSeparator width={terminalWidth} />
+        )}
       </Box>
     )
   },
@@ -255,6 +259,19 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 )
 
 MessageRenderer.displayName = 'MessageRenderer'
+
+// ===== Message Separator =====
+
+const MessageSeparator: React.FC<{ width: number }> = React.memo(({ width }) => {
+  const theme = themeManager.getTheme()
+  const lineWidth = Math.max(4, Math.min(width - 2, 78))
+  return (
+    <Box marginTop={0}>
+      <Text color={theme.colors.text.muted} dimColor>{'─'.repeat(lineWidth)}</Text>
+    </Box>
+  )
+})
+MessageSeparator.displayName = 'MessageSeparator'
 
 // ===== Streaming Cursor Component (animated) =====
 
