@@ -597,10 +597,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           return;
         }
 
-        // 'silent' type = content already streamed via onContentDelta
+        // 'silent' type = content already streamed via onContentDelta.
+        // finishStreamingMessage drains the buffer itself — no separate
+        // flushStreamBuffer needed (that would create a stale intermediate
+        // store update that the RAF loop could apply after finish).
         if (streamingResult.type === 'silent') {
           if (streamingMsgId) {
-            sessionActions().flushStreamBuffer(streamingMsgId);
             sessionActions().finishStreamingMessage(streamingMsgId);
           }
           sessionActions().setThinking(false);

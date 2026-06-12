@@ -152,6 +152,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         const wasStreaming = prevMessages[prevMessages.length - 1]?.isStreaming ?? false;
         const nowStreaming = newMessages[newMessages.length - 1]?.isStreaming ?? false;
         if (wasStreaming && !nowStreaming) {
+          // Also discard any pending RAF update — it may hold a stale intermediate
+          // state (e.g. from a flushStreamBuffer call that fired just before finish)
+          // that would overwrite the correct final state on the next RAF tick.
+          pendingMessagesRef.current = null;
           setMessages([...newMessages]);
         } else {
           // Queue for the RAF tick to prevent dual-path interleaving during streaming.
