@@ -1,0 +1,1 @@
+{"version":3,"file":"FormattingStage.d.ts","sourceRoot":"","sources":["../../../../src/tools/execution/stages/FormattingStage.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAEH,OAAO,KAAK,EAAE,aAAa,EAAE,aAAa,EAAE,MAAM,aAAa,CAAC;AAEhE,qBAAa,eAAgB,YAAW,aAAa;IACnD,QAAQ,CAAC,IAAI,gBAAgB;IAEvB,OAAO,CAAC,SAAS,EAAE,aAAa,GAAG,OAAO,CAAC,IAAI,CAAC;CAiCvD"}

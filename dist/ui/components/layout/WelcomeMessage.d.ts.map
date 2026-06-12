@@ -1,0 +1,1 @@
+{"version":3,"file":"WelcomeMessage.d.ts","sourceRoot":"","sources":["../../../../src/ui/components/layout/WelcomeMessage.tsx"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,OAAO,KAA8B,MAAM,OAAO,CAAC;AAKnD,UAAU,mBAAmB;IAC3B,aAAa,EAAE,MAAM,CAAC;CACvB;AA8GD,eAAO,MAAM,cAAc,EAAE,KAAK,CAAC,EAAE,CAAC,mBAAmB,CAiGvD,CAAC;AAGH,eAAe,cAAc,CAAC"}

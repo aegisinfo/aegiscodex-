@@ -1058,9 +1058,21 @@ function detectTaskType(task: string): 'scaffold' | 'refactor' | 'review' | 'def
 /**
  * Build agent configs dynamically based on task type.
  * Scaffold mode agents get full Write/Edit/Bash access for building new apps.
+ * Each mode ends with a synthesizer agent for result fusion.
  */
 function buildMultiAgents(type: 'scaffold' | 'refactor' | 'review' | 'default', config: AgentConfig): SubAgentConfig[] {
   const agentConfig = { ...config, timeout: 180000 };
+
+  // Shared synthesizer used by all modes
+  const synthesizer: SubAgentConfig = {
+    name: 'synthesizer',
+    role: 'Technical Lead',
+    systemPrompt: `You are a senior technical lead. Given analysis from multiple specialist agents, synthesize their findings into a clear, actionable summary.
+Structure your response as: key findings, recommended approach, top action items.
+Be direct, concrete, and avoid repeating everything the agents said.
+Focus on delivering a decision-ready synthesis.`,
+    config: agentConfig,
+  };
 
   switch (type) {
     case 'scaffold':
@@ -1102,6 +1114,7 @@ Report issues with specific file paths and fix suggestions. Be concise.`,
           config: agentConfig,
           tools: ['Read', 'Grep', 'Glob'],
         },
+        synthesizer,
       ];
 
     case 'refactor':
@@ -1134,6 +1147,7 @@ Run build commands to ensure nothing is broken.`,
           config: agentConfig,
           tools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'],
         },
+        synthesizer,
       ];
 
     case 'review':
@@ -1165,6 +1179,7 @@ Suggest testing strategies for each risk area.`,
           config: agentConfig,
           tools: ['Read', 'Grep', 'Glob', 'Bash'],
         },
+        synthesizer,
       ];
 
     default:
@@ -1206,6 +1221,7 @@ Think about what could go wrong and how to prevent it.`,
           config: agentConfig,
           tools: ['Read', 'Grep', 'Glob', 'Bash'],
         },
+        synthesizer,
       ];
   }
 }
@@ -1312,10 +1328,26 @@ Flags:
         orchestrator.registerAgent(agent);
       }
 
-      // Build sub-tasks
+      // Build sub-tasks — each agent gets a focused assignment matching their role
       const subTasks: Record<string, string> = {};
+
+      // Mapping of agent names to focused sub-task descriptions
+      const subTaskMap: Record<string, string> = {
+        architect:  `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.`,
+        scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.`,
+        reviewer:   `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.`,
+        debugger:   `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.`,
+        scanner:    `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.`,
+        analyzer:   `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.`,
+        planner:    `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.`,
+        implementer:`Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.`,
+        synthesizer:`Focus on synthesis. You will receive all agent responses and produce a final summary. (Synthesis task is handled separately.)`,
+      };
+
+      // Exclude the synthesizer from parallel sub-tasks — it only runs during synthesis phase
       for (const agent of agents) {
-        subTasks[agent.name] = agent.systemPrompt.split('\n')[0];
+        if (agent.name === 'synthesizer') continue;
+        subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.`;
       }
 
       // Run

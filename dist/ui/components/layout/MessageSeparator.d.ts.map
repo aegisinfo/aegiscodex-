@@ -1,0 +1,1 @@
+{"version":3,"file":"MessageSeparator.d.ts","sourceRoot":"","sources":["../../../../src/ui/components/layout/MessageSeparator.tsx"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAAK,MAAM,OAAO,CAAC;AAI1B,UAAU,qBAAqB;IAC7B,MAAM,EAAE,OAAO,CAAC;CACjB;AAED,eAAO,MAAM,gBAAgB,EAAE,KAAK,CAAC,EAAE,CAAC,qBAAqB,CAU3D,CAAC;AAGH,eAAe,gBAAgB,CAAC"}

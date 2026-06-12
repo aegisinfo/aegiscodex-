@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/prompts/index.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,EAAE,qBAAqB,EAAE,MAAM,cAAc,CAAC;AACrD,OAAO,EAAE,uBAAuB,EAAE,sBAAsB,EAAE,MAAM,WAAW,CAAC;AAC5E,OAAO,EACL,iBAAiB,EACjB,cAAc,GACf,MAAM,cAAc,CAAC;AAEtB,YAAY,EACV,YAAY,EACZ,wBAAwB,EACxB,uBAAuB,GACxB,MAAM,cAAc,CAAC"}
