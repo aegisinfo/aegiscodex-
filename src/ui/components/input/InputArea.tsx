@@ -8,12 +8,17 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-// Static prompt glyph — □ when idle, ■ when processing (no pulse to avoid distraction)
-const PromptGlyph: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => (
-  <Text color={isProcessing ? color : idleColor} bold>
-    {isProcessing ? '■' : '□'}
-  </Text>
-));
+// Pulsing * when processing, □ when idle
+const PromptGlyph: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (!isProcessing) { setPulse(false); return; }
+    const timer = setInterval(() => setPulse(p => !p), 500);
+    return () => clearInterval(timer);
+  }, [isProcessing]);
+  if (!isProcessing) return <Text color={idleColor} bold>□</Text>;
+  return <Text color={color} bold dimColor={pulse}>*</Text>;
+});
 PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
 import { CommandSuggestions } from './CommandSuggestions.js';
@@ -262,7 +267,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           borderStyle="single"
           borderColor={isProcessing ? theme.colors.warning : theme.colors.border.light}
         >
-          {/* Prompt glyph — static ■ while AI works, □ when idle */}
+          {/* Pulsing * while AI works, □ when idle */}
           <Box marginRight={1}>
             <PromptGlyph
               isProcessing={isProcessing}
