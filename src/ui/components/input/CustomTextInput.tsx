@@ -48,7 +48,7 @@ const PASTE_CONFIG = {
 /**
  * 
  */
-const CustomTextInputInner: React.FC<CustomTextInputProps> = ({
+export const CustomTextInput: React.FC<CustomTextInputProps> = ({
   value,
   cursorPosition,
   onChange,
@@ -248,5 +248,4 @@ const CustomTextInputInner: React.FC<CustomTextInputProps> = ({
   );
 };
 
-export const CustomTextInput = React.memo(CustomTextInputInner);
 export default CustomTextInput;
