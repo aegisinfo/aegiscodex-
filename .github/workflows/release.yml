@@ -30,14 +30,14 @@ jobs:
           cp package-lock.json release/package-lock.json
           cp .env.example release/.env.example 2>/dev/null || true
           cd release && npm ci --omit=dev
-          cd .. && zip -r aegiscode-release.zip release/
+          cd .. && zip -r aegiscode.zip release/
       - uses: actions/upload-artifact@v4
         with:
-          name: aegiscode-release
-          path: aegiscode-release.zip
+          name: aegiscode
+          path: aegiscode.zip
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: aegiscode-release.zip
+          files: aegiscode.zip
           generate_release_notes: true
