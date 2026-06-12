@@ -5,7 +5,7 @@
  * 
  */
 
-import React, { useCallback, useState, useEffect, useRef, memo } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 // Pulsing * when processing, □ when idle
