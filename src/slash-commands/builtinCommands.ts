@@ -1472,19 +1472,22 @@ Flags:
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    // Resolve permission mode for sub-agents — use the user's configured mode.
-    // Parallel agents requesting confirmation simultaneously would deadlock because
-    // the React confirmation UI holds a single resolver slot. We solve this by
-    // wrapping the handler in a serial queue (see createSerialConfirmationHandler).
-    let permissionMode: string = 'default';
-    try {
-      const { configManager } = await import('../config/ConfigManager.js');
-      permissionMode = configManager.getDefaultPermissionMode() || 'default';
-    } catch { /* use default */ }
-
-    // Wrap the real confirmation handler so parallel agents queue their requests
-    // instead of simultaneously overwriting the React resolver state.
-    const serialHandler = createSerialConfirmationHandler(context.confirmationHandler);
+    // Show a single pre-flight confirmation before spawning agents.
+    // This gives the user accept / accept-always / deny (the normal confirmation UX)
+    // without the parallel-deadlock problem (only one dialog, shown before agents start).
+    // Once the user approves, all agents run in yolo mode — no per-tool interruptions.
+    if (context.confirmationHandler) {
+      const preflightResp = await context.confirmationHandler.requestConfirmation({
+        title: 'Multi-Agent Execution',
+        message: `This will spawn parallel AI agents that can read, edit, and run commands in your workspace.\n\nTask: ${task.slice(0, 120)}${task.length > 120 ? '…' : ''}`,
+        details: `Agents will run autonomously with full tool access (Read, Edit, Write, Bash). Once approved they will not ask again during this run.`,
+        risks: ['Agents may modify files', 'Agents may execute shell commands'],
+        affectedFiles: [],
+      });
+      if (!preflightResp.approved) {
+        return { success: false, type: 'error', error: 'Cancelled.' };
+      }
+    }
 
     try {
       const agentConfig: AgentConfig = {
@@ -1527,14 +1530,12 @@ Flags:
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
-      // Register agents with the user's permission mode + serialized confirmation handler.
-      // Serialization prevents the parallel-agent deadlock while preserving the normal
-      // accept / accept-always / deny UX — requests are shown one at a time.
+      // Run agents in yolo mode — the user already approved via the pre-flight dialog.
+      // Parallel agents must not show per-tool dialogs (single React resolver slot → deadlock).
       for (const agent of agents) {
         orchestrator.registerAgent({
           ...agent,
-          permissionMode: permissionMode as any,
-          confirmationHandler: serialHandler,
+          permissionMode: 'yolo' as any,
         });
       }
 
@@ -1566,7 +1567,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Permission mode: \`${permissionMode}\` · confirmations are serialized*\n\n---\n\n`);
+        context.onContentDelta(`*Running autonomously — agents use \`yolo\` mode after pre-flight approval*\n\n---\n\n`);
       }
 
       // Run
