@@ -8,16 +8,12 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-// Pulsing * when processing, □ when idle
-const PromptGlyph: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
-  const [pulse, setPulse] = useState(false);
-  useEffect(() => {
-    if (!isProcessing) { setPulse(false); return; }
-    const timer = setInterval(() => setPulse(p => !p), 500);
-    return () => clearInterval(timer);
-  }, [isProcessing]);
+// Ink-style spinner when processing, □ when idle.
+// Derives frame from glowPhase (150ms ticks) — no own timer, no extra Ink redraws.
+const GLYPH_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, glowPhase, color, idleColor }) => {
   if (!isProcessing) return <Text color={idleColor} bold>□</Text>;
-  return <Text color={color} bold dimColor={pulse}>*</Text>;
+  return <Text color={color}>{GLYPH_FRAMES[glowPhase % GLYPH_FRAMES.length]}</Text>;
 });
 PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
@@ -301,11 +297,12 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           borderStyle="single"
           borderColor={isProcessing ? theme.colors.warning : theme.colors.border.light}
         >
-          {/* Pulsing * while AI works, □ when idle */}
+          {/* Spinner while AI works, □ when idle — frame driven by glowPhase (no own timer) */}
           <Box marginRight={1}>
             <PromptGlyph
               isProcessing={isProcessing}
-              color={theme.colors.warning}
+              glowPhase={glowPhase}
+              color={theme.colors.primary}
               idleColor={theme.colors.primary}
             />
           </Box>

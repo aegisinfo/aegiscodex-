@@ -302,7 +302,7 @@ StreamingCursor.displayName = 'StreamingCursor'
 // ===== Tool Call Visual Components =====
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const SPINNER_INTERVAL = 80
+const SPINNER_INTERVAL = 150
 
 const ToolSpinner: React.FC<{ color: string }> = React.memo(({ color }) => {
   const [frame, setFrame] = useState(0)

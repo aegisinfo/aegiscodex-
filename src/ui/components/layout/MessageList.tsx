@@ -126,7 +126,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         if (scrollOffsetRef.current >= maxOffset) {
           onScrollRef.current(maxOffset);
         }
-      } else if (newMessages.some(m => m.isStreaming)) {
+      } else if (newMessages[newMessages.length - 1]?.isStreaming) {
         // Also auto-scroll during streaming content growth (message count unchanged,
         // but content appended). Without this, scrolling freezes once user is "at bottom"
         // during a /multi or any streaming response that uses onContentDelta.
@@ -149,8 +149,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       if (messagesChanged) {
         // When streaming transitions to complete, apply immediately — no more buffer
         // interleaving risk, and the cursor/thinking must vanish without delay.
-        const wasStreaming = prevMessages.some(m => m.isStreaming);
-        const nowStreaming = newMessages.some(m => m.isStreaming);
+        const wasStreaming = prevMessages[prevMessages.length - 1]?.isStreaming ?? false;
+        const nowStreaming = newMessages[newMessages.length - 1]?.isStreaming ?? false;
         if (wasStreaming && !nowStreaming) {
           setMessages([...newMessages]);
         } else {
