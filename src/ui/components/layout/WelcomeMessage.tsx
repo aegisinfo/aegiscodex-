@@ -1,7 +1,7 @@
 /**
- * WelcomeMessage — animated welcome screen.
+ * WelcomeMessage — claude-branded welcome with animated reveal.
  *
- * ◆ pulses from dim → white → coral, then "ÆGIS" sweeps char-by-char,
+ * ◆ pulses from dim → white → coral, then "claude" sweeps char-by-char,
  * then tagline, divider and commands phase in sequentially.
  */
 
@@ -14,8 +14,8 @@ interface WelcomeMessageProps {
   terminalWidth: number;
 }
 
-const AEGIS_LETTERS = Array.from('ÆGIS');
-const TOTAL_SWEEP = AEGIS_LETTERS.length;
+const CLAUDE_LETTERS = Array.from('claude');
+const TOTAL_SWEEP = CLAUDE_LETTERS.length;
 
 const COMMANDS = [
   { cmd: '/help',    desc: 'all commands' },
@@ -115,13 +115,13 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
 
-      {/* Logo row: ◆  ÆGIS  vX.X.X */}
+      {/* Logo row: ◆  claude  vX.X.X */}
       <Box flexDirection="row" alignItems="flex-end">
         {/* The ◆ diamond */}
         <Text color={logoColor} bold>{'◆  '}</Text>
 
-        {/* "ÆGIS" swept char by char */}
-        {AEGIS_LETTERS.map((ch, i) => {
+        {/* "claude" swept char by char */}
+        {CLAUDE_LETTERS.map((ch, i) => {
           const revealed = sweepPos >= i;
           const isNib    = sweepPos === i;
           const color    = !revealed    ? 'transparent'
@@ -143,7 +143,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
       {/* Tagline */}
       <FadeInText delayMs={taglineT}>
         <Box marginTop={1} marginLeft={3}>
-          <Text color={theme.colors.text.muted} dimColor>aegiscode  ·  terminal coding agent</Text>
+          <Text color={theme.colors.text.muted} dimColor>by Anthropic  ·  terminal coding agent</Text>
         </Box>
       </FadeInText>
 
