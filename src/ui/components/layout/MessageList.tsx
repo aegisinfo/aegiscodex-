@@ -28,13 +28,12 @@ interface MessageListProps {
 
 const RAF_INTERVAL_MS = 80;  // ~12fps redraws — fast enough to feel live, slow enough to avoid blink
 const CONTENT_THRESHOLD = 1; // show every buffered delta at each RAF tick
-const ESTIMATED_ITEM_HEIGHT = 3; // rows per message average
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
 
 // How many messages fit on screen (rough estimate)
 function calcVisibleCount(terminalHeight: number): number {
   const available = Math.max(terminalHeight - UI_OVERHEAD, 5);
-  return Math.max(3, Math.ceil(available / ESTIMATED_ITEM_HEIGHT));
+  return Math.max(3, Math.ceil(available / 3));
 }
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({
@@ -180,8 +179,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const clampedOffset = Math.min(scrollOffset, maxOffset);
   const isAtBottom = clampedOffset >= maxOffset;
 
-  let topPaddingEl = null;
-  let bottomPaddingEl = null;
   let visibleMessages = completedMessages;
   let showLastMsgOutside = false;
 
@@ -189,21 +186,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
     const windowStart = clampedOffset;
     const windowEnd = Math.min(clampedOffset + visibleCount, completedMessages.length);
     visibleMessages = completedMessages.slice(windowStart, windowEnd);
-    const topPaddingLines = windowStart * ESTIMATED_ITEM_HEIGHT;
-    const bottomPaddingLines = (completedMessages.length - windowEnd) * ESTIMATED_ITEM_HEIGHT;
-    if (topPaddingLines > 0) {
-      topPaddingEl = <Box height={Math.min(topPaddingLines, terminalHeight - 3)} />;
-    }
-    if (bottomPaddingLines > 0) {
-      bottomPaddingEl = <Box height={Math.min(bottomPaddingLines, terminalHeight - 3)} />;
-    }
+    // No padding — padding boxes push content off-screen in Ink's layout model.
+    // The windowed slice always renders at the top of the available area.
     showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0;
   }
 
   return (
     <Box flexDirection="column">
-      {topPaddingEl}
-
       {/* Visible messages */}
       {visibleMessages.map((msg) => (
         <MessageRenderer
@@ -218,21 +207,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           contentBlocks={msg.contentBlocks}
         />
       ))}
-
-      {/* Last completed message (pinned at bottom when scrolled up and no streaming) */}
-      {showLastMsgOutside && (
-        <MessageRenderer
-          key={completedMessages[completedMessages.length - 1].id}
-          content={completedMessages[completedMessages.length - 1].content}
-          role={completedMessages[completedMessages.length - 1].role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-          thinking={completedMessages[completedMessages.length - 1].thinking}
-          isStreaming={false}
-          showAllThinking={showAllThinking}
-          contentBlocks={completedMessages[completedMessages.length - 1].contentBlocks}
-        />
-      )}
 
       {/* Streaming message */}
       {streamingMsg && (
@@ -249,7 +223,20 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         />
       )}
 
-      {bottomPaddingEl}
+      {/* Last completed message pinned at bottom when scrolled up */}
+      {showLastMsgOutside && (
+        <MessageRenderer
+          key={'last-' + completedMessages[completedMessages.length - 1].id}
+          content={completedMessages[completedMessages.length - 1].content}
+          role={completedMessages[completedMessages.length - 1].role}
+          terminalWidth={terminalWidth}
+          showPrefix={true}
+          thinking={completedMessages[completedMessages.length - 1].thinking}
+          isStreaming={false}
+          showAllThinking={showAllThinking}
+          contentBlocks={completedMessages[completedMessages.length - 1].contentBlocks}
+        />
+      )}
     </Box>
   );
 });
