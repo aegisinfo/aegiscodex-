@@ -1444,13 +1444,19 @@ Flags:
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    // Resolve permission mode from user config (like the main model does)
-    let permissionMode: string = 'default';
+    // Resolve permission mode for sub-agents.
+    // Parallel agents cannot block on interactive confirmation dialogs — if two agents
+    // call requestConfirmation simultaneously the second call overwrites the React state
+    // resolver and the first promise never resolves (deadlock). Force minimum autoEdit
+    // so read-only tools pass through and write tools run without prompting. If the
+    // user has yolo configured we keep that; default/plan are upgraded to autoEdit.
+    let permissionMode: string = 'autoEdit';
     try {
       const { configManager } = await import('../config/ConfigManager.js');
       const mode = configManager.getDefaultPermissionMode();
-      if (mode) permissionMode = mode;
-    } catch { /* use default */ }
+      if (mode === 'yolo') permissionMode = 'yolo';
+      // default/plan → autoEdit (parallel-safe minimum)
+    } catch { /* use autoEdit */ }
 
     try {
       const agentConfig: AgentConfig = {
@@ -1493,12 +1499,11 @@ Flags:
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
-      // Attach user's confirmation handler and permission mode to every agent
-      // so sub-agent tool calls go through the interactive accept/reject flow
+      // Register agents with autoEdit or yolo — never default/plan, which would
+      // deadlock when parallel agents simultaneously request confirmation.
       for (const agent of agents) {
         orchestrator.registerAgent({
           ...agent,
-          confirmationHandler: context.confirmationHandler,
           permissionMode: permissionMode as any,
         });
       }
@@ -1531,7 +1536,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Permission mode: \`${permissionMode}\` — tool edits will ask for confirmation*\n\n---\n\n`);
+        context.onContentDelta(`*Agents run autonomously in \`${permissionMode}\` mode*\n\n---\n\n`);
       }
 
       // Run
