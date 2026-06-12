@@ -478,6 +478,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
     const { vanillaStore } = await import('../../store/vanilla.js');
     const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
+    const streamingBuf = await import('../../store/streaming-buffer.js');
 
     if (isSlashCommand(value)) {
       // Phase 1: flush user message + thinking=true immediately so the UI
@@ -487,41 +488,70 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       batchSetThinking(true);
       flushBatchWithStore(vanillaStore);
 
+      // Determine if this command supports streaming (has content delta callback)
+      // Start a streaming message so /multi can stream results in real-time
+      let streamingMsgId: string | null = null;
+      let streamingResult: any = null;
       try {
-        const result = await executeSlashCommand(value, {
+        streamingMsgId = sessionActions().startStreamingMessage();
+      } catch { /* streaming not available */ }
+
+      const onContentDelta = streamingMsgId
+        ? (delta: string) => { streamingBuf.appendToBuffer(delta); }
+        : undefined;
+
+      try {
+        streamingResult = await executeSlashCommand(value, {
           cwd: process.cwd(),
           sessionId: sessionIdRef.current,
           messages: getMessagesRef.current(),
           contextManager: contextManagerRef.current,
           modelName: modelRef.current,
+          onContentDelta,
+          onThinkingDelta: streamingMsgId
+            ? (delta: string) => { streamingBuf.appendThinkingToBuffer(delta); }
+            : undefined,
+          confirmationHandler: confirmationHandlerRef.current,
         });
 
-        if (result.type === 'selector' && result.selector) {
+        if (streamingResult.type === 'selector' && streamingResult.selector) {
           sessionActions().setThinking(false);
+          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
           setSelectorState({
             isVisible: true,
-            title: result.selector.title,
-            options: result.selector.options,
-            handler: result.selector.handler,
+            title: streamingResult.selector.title,
+            options: streamingResult.selector.options,
+            handler: streamingResult.selector.handler,
           });
           focusActions.setFocus(FocusId.SELECTOR);
           return;
         }
 
-        if (result.sendToAgent && result.content) {
+        if (streamingResult.sendToAgent && streamingResult.content) {
           sessionActions().setThinking(false);
-          await processCommand(result.content, { silent: true });
+          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          await processCommand(streamingResult.content, { silent: true });
+          return;
+        }
+
+        // 'silent' type = content already streamed via onContentDelta
+        if (streamingResult.type === 'silent') {
+          if (streamingMsgId) {
+            sessionActions().flushStreamBuffer(streamingMsgId);
+            sessionActions().finishStreamingMessage(streamingMsgId);
+          }
+          sessionActions().setThinking(false);
           return;
         }
 
         // Phase 2: batch the command result and flush it
         startBatch();
-        if (result.content) {
-          batchAddAssistantMessage(result.content);
-        } else if (result.message) {
-          batchAddAssistantMessage(result.message);
-        } else if (result.error) {
-          batchAddAssistantMessage('error: ' + result.error);
+        if (streamingResult.content) {
+          batchAddAssistantMessage(streamingResult.content);
+        } else if (streamingResult.message) {
+          batchAddAssistantMessage(streamingResult.message);
+        } else if (streamingResult.error) {
+          batchAddAssistantMessage('error: ' + streamingResult.error);
         }
       } catch (error) {
         startBatch();
@@ -529,6 +559,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           'error: ' + (error instanceof Error ? error.message : String(error))
         );
       } finally {
+        if (streamingMsgId && streamingResult?.type !== 'silent') {
+          try { sessionActions().finishStreamingMessage(streamingMsgId); } catch {}
+        }
         batchSetThinking(false);
         flushBatchWithStore(vanillaStore);
       }

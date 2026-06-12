@@ -14,6 +14,7 @@ import { createChatService } from '../../services/ChatService.js';
 import { sharedMemory } from '../../memory/SharedMemory.js';
 import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
+import { configManager } from '../../config/ConfigManager.js';
 import {
   createToolRegistry,
   getBuiltinTools,
@@ -21,6 +22,7 @@ import {
   PermissionMode,
   type ToolRegistry,
   type PipelineExecutionContext,
+  type ConfirmationHandler,
 } from '../../tools/index.js';
 
 // ========== Types ==========
@@ -31,6 +33,8 @@ export interface SubAgentConfig {
   systemPrompt: string;
   config: AgentConfig;
   tools?: string[]; // tool names this agent can use
+  permissionMode?: PermissionMode; // defaults to user's configured mode
+  confirmationHandler?: ConfirmationHandler; // for interactive tool approval
 }
 
 export interface TaskDelegation {
@@ -97,8 +101,10 @@ class SubAgentRunner {
         }
       }
       this.toolRegistry = registry;
+      // Use configured permission mode, or read from user's settings (default: ask for confirm)
+      const mode = config.permissionMode || resolvePermissionMode();
       this.executionPipeline = new ExecutionPipeline(registry, {
-        defaultMode: PermissionMode.AUTO_EDIT, // no confirm prompts for sub-agents
+        defaultMode: mode,
       });
     }
   }
@@ -249,8 +255,9 @@ class SubAgentRunner {
       const pipelineContext: PipelineExecutionContext = {
         sessionId,
         workspaceRoot: process.cwd(),
-        permissionMode: PermissionMode.AUTO_EDIT,
+        permissionMode: this.config.permissionMode || resolvePermissionMode(),
         messageId: tc.id,
+        confirmationHandler: this.config.confirmationHandler,
       };
 
       const execResult = await this.executionPipeline.execute(
@@ -502,6 +509,23 @@ export class OrchestratorAgent {
 }
 
 // ========== Factory ==========
+
+/**
+ * Resolve the user's configured permission mode, falling back to DEFAULT (ask for confirmation).
+ */
+function resolvePermissionMode(): PermissionMode {
+  try {
+    const mode = configManager.getDefaultPermissionMode();
+    switch (mode) {
+      case 'autoEdit': return PermissionMode.AUTO_EDIT;
+      case 'yolo':     return PermissionMode.YOLO;
+      case 'plan':     return PermissionMode.PLAN;
+      default:         return PermissionMode.DEFAULT;
+    }
+  } catch {
+    return PermissionMode.DEFAULT;
+  }
+}
 
 export function createDefaultOrchestrator(
   config: AgentConfig

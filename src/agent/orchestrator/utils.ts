@@ -114,7 +114,7 @@ export function requireModelConfig(): ResolvedModelConfig {
  * When `allowAllBuiltins` is true the agent gets Read/Edit/Write/Grep/Glob/Bash.
  * Otherwise you can pass a list of tool names.
  */
-export function createSubAgentToolkit(allowedTools?: string[]) {
+export function createSubAgentToolkit(allowedTools?: string[], options?: { permissionMode?: PermissionMode }) {
   const registry = createToolRegistry();
   const builtins = getBuiltinTools();
 
@@ -125,11 +125,29 @@ export function createSubAgentToolkit(allowedTools?: string[]) {
     }
   }
 
+  const mode = options?.permissionMode || resolveDefaultPermissionMode();
   const pipeline = new ExecutionPipeline(registry, {
-    defaultMode: PermissionMode.AUTO_EDIT, // sub-agents run without confirm prompts
+    defaultMode: mode,
   });
 
   return { registry, pipeline };
+}
+
+/**
+ * Read the user's configured permission mode, falling back to DEFAULT (ask for confirmation).
+ */
+function resolveDefaultPermissionMode(): PermissionMode {
+  try {
+    const mode = configManager.getDefaultPermissionMode();
+    switch (mode) {
+      case 'autoEdit': return PermissionMode.AUTO_EDIT;
+      case 'yolo':     return PermissionMode.YOLO;
+      case 'plan':     return PermissionMode.PLAN;
+      default:         return PermissionMode.DEFAULT;
+    }
+  } catch {
+    return PermissionMode.DEFAULT;
+  }
 }
 
 /**

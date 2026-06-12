@@ -1261,7 +1261,7 @@ Flags:
   --save-as <name>    Save this agent configuration as a reusable app (e.g. /myapp <task>)
   --template <id>     Start from a template (audit, refactor, test-gen)`,
 
-  async handler(args: string, _context: SlashCommandContext): Promise<SlashCommandResult> {
+  async handler(args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
     const trimmed = args?.trim();
     if (!trimmed) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
@@ -1282,6 +1282,14 @@ Flags:
       .trim();
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
+
+    // Resolve permission mode from user config (like the main model does)
+    let permissionMode: string = 'default';
+    try {
+      const { configManager } = await import('../config/ConfigManager.js');
+      const mode = configManager.getDefaultPermissionMode();
+      if (mode) permissionMode = mode;
+    } catch { /* use default */ }
 
     try {
       const agentConfig: AgentConfig = {
@@ -1324,8 +1332,14 @@ Flags:
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
+      // Attach user's confirmation handler and permission mode to every agent
+      // so sub-agent tool calls go through the interactive accept/reject flow
       for (const agent of agents) {
-        orchestrator.registerAgent(agent);
+        orchestrator.registerAgent({
+          ...agent,
+          confirmationHandler: context.confirmationHandler,
+          permissionMode: permissionMode as any,
+        });
       }
 
       // Build sub-tasks — each agent gets a focused assignment matching their role
@@ -1348,6 +1362,15 @@ Flags:
       for (const agent of agents) {
         if (agent.name === 'synthesizer') continue;
         subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.`;
+      }
+
+      // Stream progress in real-time if context supports it
+      if (context.onContentDelta) {
+        const { icon, label } = modeMeta(modeType);
+        context.onContentDelta(`## ${icon} ${label}\n`);
+        context.onContentDelta(`**Task:** ${task}\n\n`);
+        context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
+        context.onContentDelta(`*Permission mode: \`${permissionMode}\` — tool edits will ask for confirmation*\n\n---\n\n`);
       }
 
       // Run
@@ -1378,12 +1401,16 @@ Flags:
         builder.register();
       }
 
-      // Format output
+      // Format output — stream each agent result if possible
       const { icon, label } = modeMeta(modeType);
       const lines: string[] = [];
-      lines.push(`## ${icon} ${label}`);
-      lines.push(`**Task:** ${task}`);
-      lines.push('');
+
+      if (!context.onContentDelta) {
+        // Non-streaming: build full text as before
+        lines.push(`## ${icon} ${label}`);
+        lines.push(`**Task:** ${task}`);
+        lines.push('');
+      }
 
       for (const response of result.responses) {
         const agentCfg = agents.find(a => a.name === response.agentName);
@@ -1391,20 +1418,33 @@ Flags:
         const toolHint = response.metadata?.toolCallsCount
           ? ` [${response.metadata.toolCallsCount} tool calls]`
           : '';
-        lines.push(`### ${role}${toolHint}`);
-        if (response.metadata?.durationMs) {
-          lines.push(`*${(response.metadata.durationMs / 1000).toFixed(1)}s*`);
+        const header = `### ${role}${toolHint}`;
+        const duration = response.metadata?.durationMs
+          ? `*${(response.metadata.durationMs / 1000).toFixed(1)}s*`
+          : '';
+
+        if (context.onContentDelta) {
+          context.onContentDelta(`\n${header}\n`);
+          if (duration) context.onContentDelta(`${duration}\n\n`);
+          context.onContentDelta(`${response.content || '*No response*'}\n\n`);
+        } else {
+          lines.push(header);
+          if (duration) lines.push(duration);
+          lines.push('');
+          lines.push(response.content || '*No response*');
+          lines.push('');
         }
-        lines.push('');
-        lines.push(response.content || '*No response*');
-        lines.push('');
       }
 
-      lines.push('---');
-      lines.push('### Synthesized Summary');
-      lines.push('');
-      lines.push(result.summary);
-      lines.push('');
+      if (!context.onContentDelta) {
+        lines.push('---');
+        lines.push('### Synthesized Summary');
+        lines.push('');
+        lines.push(result.summary);
+        lines.push('');
+      } else {
+        context.onContentDelta(`---\n\n### Synthesized Summary\n\n${result.summary}\n\n`);
+      }
 
       const statusParts = [
         `${result.metadata.agentsUsed} agents`,
@@ -1417,9 +1457,16 @@ Flags:
         const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
         statusParts.push(`saved as /${saveId}`);
       }
-      lines.push(`*${statusParts.join(' \u00b7 ')}*`);
+      const statusLine = `*${statusParts.join(' \u00b7 ')}*`;
 
-      return { success: true, type: 'info', content: lines.join('\n') };
+      if (context.onContentDelta) {
+        context.onContentDelta(`\n${statusLine}\n`);
+      } else {
+        lines.push(statusLine);
+        return { success: true, type: 'info', content: lines.join('\n') };
+      }
+
+      return { success: true, type: 'silent' };
     } catch (error) {
       return {
         success: false,
