@@ -1,179 +1,223 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  aegiscode demo animation
-  10s looping cycle:
-    0-82%  elements reveal sequentially
-    83-90% everything holds visible
-    91-99% everything fades out
-    100%   restart
+  aegiscode demo — v2.2.1
+  12s looping cycle:
+    0–45%  welcome + input reveal sequentially
+    45–82% tool calls + response stream in
+    82–91% hold
+    91–99% fade out
+    99–0%  gap → restart
 -->
-<svg width="860" height="520" viewBox="0 0 860 520"
-     xmlns="http://www.w3.org/2000/svg">
+<svg width="860" height="520" viewBox="0 0 860 520" xmlns="http://www.w3.org/2000/svg">
 <defs>
   <style>
-    /* Reveal at N%, hold until 83%, fade out 91%→99%, gap→restart */
-    @keyframes f03  {0%,2%{opacity:0}  4%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f05  {0%,4%{opacity:0}  6%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f07  {0%,6%{opacity:0}  8%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f09  {0%,8%{opacity:0} 10%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f11  {0%,10%{opacity:0}12%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f14  {0%,13%{opacity:0}15%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f17  {0%,16%{opacity:0}18%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f20  {0%,19%{opacity:0}21%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f23  {0%,22%{opacity:0}24%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f26  {0%,25%{opacity:0}27%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f29  {0%,28%{opacity:0}30%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f32  {0%,31%{opacity:0}33%,83%{opacity:1} 91%,100%{opacity:0}}
-    @keyframes f36  {0%,35%{opacity:0}37%,83%{opacity:1} 91%,100%{opacity:0}}
+    /* ── Fade-in reveals ── */
+    @keyframes f03  {0%,2%  {opacity:0}  4%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f06  {0%,5%  {opacity:0}  7%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f09  {0%,8%  {opacity:0} 10%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f13  {0%,12% {opacity:0} 14%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f17  {0%,16% {opacity:0} 18%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f21  {0%,20% {opacity:0} 22%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f25  {0%,24% {opacity:0} 26%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f29  {0%,28% {opacity:0} 30%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f33  {0%,32% {opacity:0} 34%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f37  {0%,36% {opacity:0} 38%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f41  {0%,40% {opacity:0} 42%,82%{opacity:1} 91%,100%{opacity:0}}
+    @keyframes f45  {0%,44% {opacity:0} 46%,82%{opacity:1} 91%,100%{opacity:0}}
 
-    /* Slide-in variants for AI output lines */
-    @keyframes s44  {0%,43%{opacity:0;transform:translateY(5px)} 46%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
-    @keyframes s49  {0%,48%{opacity:0;transform:translateY(5px)} 51%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
-    @keyframes s54  {0%,53%{opacity:0;transform:translateY(5px)} 56%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
-    @keyframes s60  {0%,59%{opacity:0;transform:translateY(5px)} 62%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
-    @keyframes s66  {0%,65%{opacity:0;transform:translateY(5px)} 68%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
-    @keyframes s72  {0%,71%{opacity:0;transform:translateY(5px)} 74%,83%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
+    /* ── Slide-up reveals for AI output ── */
+    @keyframes s52  {0%,51%{opacity:0;transform:translateY(6px)} 54%,82%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes s58  {0%,57%{opacity:0;transform:translateY(6px)} 60%,82%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes s64  {0%,63%{opacity:0;transform:translateY(6px)} 66%,82%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes s70  {0%,69%{opacity:0;transform:translateY(5px)} 72%,82%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes s76  {0%,75%{opacity:0;transform:translateY(5px)} 78%,82%{opacity:1;transform:translateY(0)} 91%,100%{opacity:0;transform:translateY(0)}}
 
-    /* Cursor blink — independent of the main cycle */
+    /* ── Cursor blink ── */
     @keyframes blink {0%,49%{opacity:1} 50%,100%{opacity:0}}
 
-    .l1  {animation:f03 10s linear infinite}
-    .l2  {animation:f05 10s linear infinite}
-    .l3  {animation:f07 10s linear infinite}
-    .l4  {animation:f09 10s linear infinite}
-    .l5  {animation:f11 10s linear infinite}
-    .l6  {animation:f14 10s linear infinite}
-    .l7  {animation:f17 10s linear infinite}
-    .l8  {animation:f20 10s linear infinite}
-    .l9  {animation:f23 10s linear infinite}
-    .l10 {animation:f26 10s linear infinite}
-    .l11 {animation:f29 10s linear infinite}
-    .l12 {animation:f32 10s linear infinite}
-    .inp {animation:f36 10s linear infinite}
-    .t1  {animation:s44 10s linear infinite}
-    .t2  {animation:s49 10s linear infinite}
-    .t3  {animation:s54 10s linear infinite}
-    .r1  {animation:s60 10s linear infinite}
-    .r2  {animation:s66 10s linear infinite}
-    .r3  {animation:s72 10s linear infinite}
-    .cur {animation:f36 10s linear infinite, blink 0.9s step-end infinite}
+    /* ── Electric blue color ramp ── */
+    @keyframes eblue {
+      0%   {fill:#0044EE}  8%  {fill:#0066FF}
+      17%  {fill:#0088FF}  25% {fill:#00AAFF}
+      33%  {fill:#00CCFF}  42% {fill:#00EEFF}
+      50%  {fill:#00FFFF}  58% {fill:#00EEFF}
+      67%  {fill:#00CCFF}  75% {fill:#00AAFF}
+      83%  {fill:#0088FF}  92% {fill:#0066FF}
+      100% {fill:#0044EE}
+    }
+    /* ── Electric opacity flicker (separate from the reveal envelope) ── */
+    @keyframes eflicker {
+      0%,9%,11%,100%{opacity:1} 10%{opacity:0.15}
+      44%,46%{opacity:1}        45%{opacity:0.35}
+    }
+
+    /* ── Class assignments ── */
+    .l1  {animation:f03 12s linear infinite}
+    .l2  {animation:f06 12s linear infinite}
+    .l3  {animation:f09 12s linear infinite}
+    .l4  {animation:f13 12s linear infinite}
+    .l5  {animation:f17 12s linear infinite}
+    .l6  {animation:f21 12s linear infinite}
+    .l7  {animation:f25 12s linear infinite}
+    .l8  {animation:f29 12s linear infinite}
+    .l9  {animation:f33 12s linear infinite}
+    .l10 {animation:f37 12s linear infinite}
+    .l11 {animation:f41 12s linear infinite}
+    .inp {animation:f45 12s linear infinite}
+    .t1  {animation:s52 12s linear infinite}
+    .t2  {animation:s58 12s linear infinite}
+    .t3  {animation:s64 12s linear infinite}
+    .r1  {animation:s70 12s linear infinite}
+    .r2  {animation:s76 12s linear infinite}
+    .cur {animation:f45 12s linear infinite, blink 0.9s step-end infinite}
+    /* gen-wrap: fade-in envelope; gen-txt: electric color+flicker on top */
+    .gen-wrap {animation:f45 12s linear infinite}
+    .gen-txt  {animation:eblue 1.1s linear infinite, eflicker 7.7s linear infinite}
   </style>
+
   <clipPath id="win"><rect width="860" height="520" rx="10"/></clipPath>
+
+  <!-- Teal glow on ASCII logo -->
+  <filter id="tealglow" x="-15%" y="-25%" width="130%" height="150%">
+    <feGaussianBlur stdDeviation="2.5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Soft glow on ✻ sparkle -->
+  <filter id="sparkglow" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+
+  <!-- Teal gradient fill behind tool-call rows -->
+  <linearGradient id="toolbg" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%"   stop-color="#00e5c0" stop-opacity="0.07"/>
+    <stop offset="60%"  stop-color="#00e5c0" stop-opacity="0.02"/>
+    <stop offset="100%" stop-color="#00e5c0" stop-opacity="0"/>
+  </linearGradient>
+
+  <!-- Dot grid -->
+  <pattern id="dp" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+    <circle cx="14" cy="14" r="0.65" fill="#00e5c0" opacity="0.055"/>
+  </pattern>
 </defs>
 
-<!-- Window background -->
+<!-- ── Background ── -->
 <rect width="860" height="520" rx="10" fill="#04040c"/>
+<rect width="860" height="520" rx="10" fill="url(#dp)"/>
 
-<!-- Title bar -->
-<rect width="860" height="38" rx="10" fill="#08080f" clip-path="url(#win)"/>
-<rect y="28" width="860" height="10" fill="#08080f"/>
-<rect y="37" width="860" height="1" fill="#12121e"/>
-
+<!-- ── Title bar ── -->
+<rect width="860" height="38" rx="10" fill="#07070f" clip-path="url(#win)"/>
+<rect y="28" width="860" height="10" fill="#07070f"/>
+<rect y="37" width="860" height="1" fill="#101020"/>
 <!-- Traffic lights -->
 <circle cx="18" cy="19" r="5.5" fill="#ff5f57"/>
 <circle cx="36" cy="19" r="5.5" fill="#febc2e"/>
 <circle cx="54" cy="19" r="5.5" fill="#28c840"/>
-
-<!-- Window title -->
+<!-- Title -->
 <text x="430" y="24" text-anchor="middle"
       font-family="'SF Mono','JetBrains Mono','Fira Mono',monospace"
-      font-size="12" fill="#2a2a40">aegiscode — ~/project</text>
+      font-size="12" fill="#242438">aegis — ~/project</text>
 
-<!-- Terminal content -->
+<!-- ── Terminal content ── -->
 <g font-family="'SF Mono','JetBrains Mono','Fira Mono','Courier New',monospace"
    font-size="13" clip-path="url(#win)">
 
-  <!-- ASCII logo (ink-flow: each line staggers in) -->
-  <text class="l1" x="28" y="76"  fill="#7c6fd4">   ╔═╗╔═╗╔═╗╦╔═╗</text>
-  <text class="l2" x="28" y="93"  fill="#7c6fd4">   ╠═╣║╣ ║ ╦║╚═╗</text>
-  <text class="l3" x="28" y="110" fill="#7c6fd4">   ╩ ╩╚═╝╚═╝╩╚═╝</text>
+  <!-- ASCII logo — teal with glow -->
+  <text class="l1" x="32" y="76"  fill="#00e5c0" filter="url(#tealglow)">  ╔═╗╔═╗╔═╗╦╔═╗</text>
+  <text class="l2" x="32" y="93"  fill="#00e5c0" filter="url(#tealglow)">  ╠═╣║╣ ║ ╦║╚═╗</text>
+  <text class="l3" x="32" y="110" fill="#00e5c0" filter="url(#tealglow)">  ╩ ╩╚═╝╚═╝╩╚═╝</text>
 
-  <!-- Name + version beside logo rows 2-3 -->
-  <text class="l4" x="200" y="93"  fill="#00e5c0" font-weight="bold">✻ </text>
-  <text class="l4" x="218" y="93"  fill="#e8e6f4" font-weight="bold">aegiscode</text>
-  <text class="l5" x="218" y="110" fill="#44405a">  v2.0.0</text>
+  <!-- ✻ sparkle + wordmark -->
+  <text class="l4" x="204" y="93" fill="#00e5c0" font-weight="bold" filter="url(#sparkglow)">✻</text>
+  <text class="l4" x="222" y="93" fill="#e8e6f4" font-weight="bold">ÆGIS</text>
+  <!-- Version -->
+  <text class="l5" x="204" y="110" fill="#2e2b42">  v2.2.1</text>
 
   <!-- Tagline -->
-  <text class="l6" x="42" y="132" fill="#44405a">AI-powered terminal coding agent</text>
+  <text class="l6" x="42" y="132" fill="#44405a" letter-spacing="0.5">terminal coding agent</text>
 
   <!-- Divider -->
   <text class="l7" x="42" y="150" fill="#1a1a28">────────────────────────────────────────</text>
 
-  <!-- Commands list -->
-  <text class="l8"  x="42" y="170">
-    <tspan fill="#00e5c0">/help       </tspan><tspan fill="#44405a">all commands</tspan>
+  <!-- Commands -->
+  <text class="l8" x="42" y="170">
+    <tspan fill="#00e5c0" font-weight="bold">/help      </tspan><tspan fill="#44405a">all commands</tspan>
   </text>
-  <text class="l9"  x="42" y="188">
-    <tspan fill="#00e5c0">/model      </tspan><tspan fill="#44405a">switch AI model</tspan>
+  <text class="l9" x="42" y="188">
+    <tspan fill="#00e5c0" font-weight="bold">/model     </tspan><tspan fill="#44405a">switch AI model</tspan>
   </text>
   <text class="l10" x="42" y="206">
-    <tspan fill="#00e5c0">/theme      </tspan><tspan fill="#44405a">change appearance</tspan>
+    <tspan fill="#00e5c0" font-weight="bold">/theme     </tspan><tspan fill="#44405a">change appearance</tspan>
   </text>
   <text class="l11" x="42" y="224">
-    <tspan fill="#00e5c0">/compact    </tspan><tspan fill="#44405a">compress context</tspan>
+    <tspan fill="#00e5c0" font-weight="bold">/compact   </tspan><tspan fill="#44405a">compress context</tspan>
   </text>
 
-  <!-- Footer -->
-  <text class="l12" x="42" y="244" fill="#44405a">Ctrl+C exit  ·  Ctrl+F search</text>
+  <!-- Footer hint -->
+  <text class="l11" x="42" y="244" fill="#28243c">Ctrl+C exit  ·  Ctrl+F search</text>
 
-  <!-- Input box (border + ◆ nib) -->
-  <rect class="l12" x="14" y="256" width="832" height="36" rx="6"
-        fill="#060610" stroke="#1a1a2a" stroke-width="1"/>
-  <text class="l12" x="28" y="280" fill="#00e5c0" font-weight="bold">◆</text>
+  <!-- ── Input box (idle) ── -->
+  <rect class="l11" x="14" y="254" width="832" height="36" rx="5"
+        fill="#05050d" stroke="#15152a" stroke-width="1"/>
+  <text class="l11" x="28" y="277" fill="#00e5c0" font-weight="bold">□</text>
 
   <!-- Status bar -->
-  <text class="l12" x="28" y="302" fill="#1e1c30">─ model:</text>
-  <text class="l12" x="91" y="302" fill="#1e1c30" font-weight="bold">claude-sonnet-4-6</text>
-  <text class="l12" x="264" y="302" fill="#1e1c30"> · msgs:2 · sid:aX7k ─</text>
-
-  <!-- User types a message + cursor -->
-  <text class="inp" x="48" y="280" fill="#e8e6f4">add semantic memory to the auth flow</text>
-  <!-- Cursor: appears with input text, then blinks -->
-  <rect class="cur" x="332" y="267" width="2" height="16" fill="#00e5c0"/>
-
-  <!-- Separator after submit -->
-  <text class="inp" x="28" y="322" fill="#12121e">──────────────────────────────────────────────────────────────────────────────────────────</text>
-
-  <!-- Thinking indicator -->
-  <text class="inp" x="28" y="344">
-    <tspan fill="#00e5c0">⠸ </tspan>
-    <tspan fill="#44405a" font-style="italic">thinking</tspan>
-    <tspan fill="#44405a"> · 38w...</tspan>
+  <text class="l11" x="28" y="300">
+    <tspan fill="#00e5c0" opacity="0.4">◆ </tspan>
+    <tspan fill="#1d1b2e">model:</tspan>
+    <tspan fill="#1d1b2e" font-weight="bold">claude-sonnet-4-6</tspan>
+    <tspan fill="#1d1b2e"> · msgs:0 · sid:aX7k ─</tspan>
   </text>
 
-  <!-- Tool call 1: Read -->
-  <rect class="t1" x="14" y="354" width="832" height="22" rx="4" fill="#060820"/>
-  <text class="t1" x="28" y="370">
-    <tspan fill="#22c55e">● </tspan>
-    <tspan fill="#8882a4">Read(</tspan><tspan fill="#44405a">src/auth/middleware.ts</tspan><tspan fill="#8882a4">)</tspan>
-    <tspan fill="#1e1e3a">  0.9s</tspan>
+  <!-- ── User types message + blinking cursor ── -->
+  <text class="inp" x="48" y="277" fill="#e8e6f4">add JWT auth to the middleware</text>
+  <rect class="cur" x="336" y="264" width="2" height="16" fill="#00e5c0"/>
+
+  <!-- Post-submit separator -->
+  <text class="inp" x="28" y="320" fill="#0e0e1e">──────────────────────────────────────────────────────────────────────────────────────────</text>
+
+  <!-- ── Electric blue generating indicator ── -->
+  <g class="gen-wrap">
+    <text class="gen-txt" x="28" y="342" font-style="italic"> generating · 2s · ~89t</text>
+  </g>
+
+  <!-- ── Tool call 1: Read ── -->
+  <rect class="t1" x="14" y="350" width="3"   height="22" rx="1" fill="#00e5c0" opacity="0.6"/>
+  <rect class="t1" x="17" y="350" width="829" height="22" fill="url(#toolbg)"/>
+  <text class="t1" x="28" y="366">
+    <tspan fill="#22c55e" font-weight="bold">✓ </tspan>
+    <tspan fill="#7c78a0">Read(</tspan><tspan fill="#44405a">src/auth/middleware.ts</tspan><tspan fill="#7c78a0">)</tspan>
+    <tspan fill="#1c1a2e" font-size="11">  0.9s</tspan>
   </text>
 
-  <!-- Tool call 2: Edit -->
-  <rect class="t2" x="14" y="380" width="832" height="22" rx="4" fill="#060820"/>
-  <text class="t2" x="28" y="396">
-    <tspan fill="#22c55e">● </tspan>
-    <tspan fill="#8882a4">Edit(</tspan><tspan fill="#44405a">src/auth/middleware.ts</tspan><tspan fill="#8882a4">)</tspan>
-    <tspan fill="#1e1e3a">  1.1s</tspan>
+  <!-- ── Tool call 2: Edit ── -->
+  <rect class="t2" x="14" y="376" width="3"   height="22" rx="1" fill="#00e5c0" opacity="0.6"/>
+  <rect class="t2" x="17" y="376" width="829" height="22" fill="url(#toolbg)"/>
+  <text class="t2" x="28" y="392">
+    <tspan fill="#22c55e" font-weight="bold">✓ </tspan>
+    <tspan fill="#7c78a0">Edit(</tspan><tspan fill="#44405a">src/auth/middleware.ts</tspan><tspan fill="#7c78a0">)</tspan>
+    <tspan fill="#1c1a2e" font-size="11">  1.2s</tspan>
   </text>
 
-  <!-- Tool call 3: Edit -->
-  <rect class="t3" x="14" y="406" width="832" height="22" rx="4" fill="#060820"/>
-  <text class="t3" x="28" y="422">
-    <tspan fill="#22c55e">● </tspan>
-    <tspan fill="#8882a4">Edit(</tspan><tspan fill="#44405a">src/auth/session.ts</tspan><tspan fill="#8882a4">)</tspan>
-    <tspan fill="#1e1e3a">  0.8s</tspan>
+  <!-- ── Tool call 3: Edit ── -->
+  <rect class="t3" x="14" y="402" width="3"   height="22" rx="1" fill="#00e5c0" opacity="0.6"/>
+  <rect class="t3" x="17" y="402" width="829" height="22" fill="url(#toolbg)"/>
+  <text class="t3" x="28" y="418">
+    <tspan fill="#22c55e" font-weight="bold">✓ </tspan>
+    <tspan fill="#7c78a0">Edit(</tspan><tspan fill="#44405a">src/auth/session.ts</tspan><tspan fill="#7c78a0">)</tspan>
+    <tspan fill="#1c1a2e" font-size="11">  0.8s</tspan>
   </text>
 
-  <!-- Response -->
-  <text class="r1" x="28" y="448" fill="#e8e6f4">✓ Done. Auth middleware now injects semantic context on each</text>
-  <text class="r2" x="28" y="466" fill="#e8e6f4">request and stores session embeddings on logout.</text>
+  <!-- ── Response lines ── -->
+  <text class="r1" x="28" y="446" fill="#e8e6f4">✓  JWT middleware wired. Tokens validated on every request —</text>
+  <text class="r2" x="28" y="464" fill="#e8e6f4">   sessions stored as signed cookies with a 24h TTL.</text>
 
-  <!-- New prompt ready -->
-  <rect class="r3" x="14" y="478" width="832" height="36" rx="6"
-        fill="#060610" stroke="#1a1a2a" stroke-width="1"/>
-  <text class="r3" x="28" y="502" fill="#00e5c0" font-weight="bold">◆</text>
-  <text class="r3" x="48" y="502" fill="#2a2a40">Type a message... (Ctrl+C to exit)</text>
+  <!-- ── New input prompt (ready) ── -->
+  <rect class="r2" x="14" y="476" width="832" height="36" rx="5"
+        fill="#05050d" stroke="#15152a" stroke-width="1"/>
+  <text class="r2" x="28" y="499" fill="#00e5c0" font-weight="bold">□</text>
+  <text class="r2" x="48" y="499" fill="#28243c">Type a message... (Ctrl+C to exit)</text>
 
 </g>
 </svg>
