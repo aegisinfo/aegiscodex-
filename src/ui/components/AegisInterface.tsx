@@ -68,7 +68,10 @@ import {
 } from '../../store/index.js';
 
 // Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer } from '../../store/streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer, startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore } from '../../store/streaming-buffer.js';
+
+// Vanilla store — imported statically to avoid microtask breaks in processCommand
+import { vanillaStore } from '../../store/vanilla.js';
 
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
@@ -440,13 +443,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
    * This prevents cascading re-renders when props or state change.
    */
   const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
+    // Only slash-commands remain as a dynamic import (lazy-loaded, not on the hot path before Phase 1)
     const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
-    const { vanillaStore } = await import('../../store/vanilla.js');
-    const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
 
     if (isSlashCommand(value)) {
-      // Phase 1: flush user message + thinking=true immediately so the UI
-      // shows feedback (spinner) during long-running commands like /multi.
+      // Phase 1: flush user message + thinking=true in a single store update so
+      // clearInput() (which already ran synchronously) and Phase 1 land in fewer renders.
       startBatch();
       batchAddUserMessage(value);
       batchSetThinking(true);
@@ -462,7 +464,10 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         });
 
         if (result.type === 'selector' && result.selector) {
-          sessionActions().setThinking(false);
+          // Batch thinking=false into the finally flush — avoids a separate store
+          // update that would trigger an extra Ink repaint before the selector appears.
+          startBatch();
+          batchSetThinking(false);
           setSelectorState({
             isVisible: true,
             title: result.selector.title,
@@ -470,11 +475,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             handler: result.selector.handler,
           });
           focusActions.setFocus(FocusId.SELECTOR);
-          return;
+          return; // finally runs and flushes {isThinking: false} in one store update
         }
 
         if (result.sendToAgent && result.content) {
-          sessionActions().setThinking(false);
+          startBatch();
+          batchSetThinking(false);
+          flushBatchWithStore(vanillaStore);
           await processCommand(result.content, { silent: true });
           return;
         }
