@@ -51,6 +51,10 @@ export interface AppRunOptions {
   sessionId?: string;
   /** Abort signal */
   signal?: AbortSignal;
+  /** Permission mode for tool execution */
+  permissionMode?: string;
+  /** Confirmation handler for interactive tool approval */
+  confirmationHandler?: { requestConfirmation: (details: any) => Promise<any> };
 }
 
 export interface AppRunResult {
@@ -360,6 +364,13 @@ export async function runApp(
     timeout: modelCfg.timeout,
   };
 
+  // Resolve permission mode
+  let permissionMode: string = options.permissionMode || 'default';
+  try {
+    const mode = configManager.getDefaultPermissionMode();
+    if (mode) permissionMode = mode;
+  } catch { /* use default */ }
+
   const orchestrator = new OrchestratorAgent(
     `App-${appId}`,
     `You are ${app.name}. ${app.description}`,
@@ -370,6 +381,8 @@ export async function runApp(
     orchestrator.registerAgent({
       ...agent,
       config: { ...agentConfig, ...agent.config },
+      confirmationHandler: options.confirmationHandler,
+      permissionMode: permissionMode as any,
     });
   }
 

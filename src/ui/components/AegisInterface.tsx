@@ -212,8 +212,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const scrollDown = useCallback((amount: number) => {
     setScrollOffset(prev => {
       const msgs = getState().session.messages;
-      const completedCount = msgs.filter(m => !m.isStreaming).length;
-      const maxOffset = Math.max(0, completedCount - pageSize);
+      const maxOffset = Math.max(0, msgs.length - pageSize);
       return Math.min(maxOffset, prev + amount);
     });
   }, [pageSize]);
@@ -227,8 +226,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     if (key.home) { setScrollOffset(0); return; }
     if (key.end) {
       const msgs = getState().session.messages;
-      const completedCount = msgs.filter(m => !m.isStreaming).length;
-      setScrollOffset(Math.max(0, completedCount - pageSize));
+      setScrollOffset(Math.max(0, msgs.length - pageSize));
     }
   });
 
@@ -881,9 +879,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const isWelcome = messages.length === 0 && !hasPendingInitialMessage;
 
   const isScrolledUp = (() => {
-    const completedCount = messages.filter(m => !m.isStreaming).length;
     const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
-    return scrollOffset < Math.max(0, completedCount - pgSize);
+    return scrollOffset < Math.max(0, messages.length - pgSize);
   })();
 
   return (

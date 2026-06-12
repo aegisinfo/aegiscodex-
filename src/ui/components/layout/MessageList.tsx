@@ -126,6 +126,15 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         if (scrollOffsetRef.current >= maxOffset) {
           onScrollRef.current(maxOffset);
         }
+      } else if (newMessages.some(m => m.isStreaming)) {
+        // Also auto-scroll during streaming content growth (message count unchanged,
+        // but content appended). Without this, scrolling freezes once user is "at bottom"
+        // during a /multi or any streaming response that uses onContentDelta.
+        const visibleCount = calcVisibleCount(terminalHeightRef.current);
+        const maxOffset = Math.max(0, newMessages.length - visibleCount);
+        if (scrollOffsetRef.current >= maxOffset) {
+          onScrollRef.current(maxOffset);
+        }
       } else {
         for (let i = 0; i < newMessages.length; i++) {
           const a = prevMessages[i];

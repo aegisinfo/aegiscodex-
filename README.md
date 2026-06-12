@@ -19,6 +19,8 @@ Multi-model terminal coding assistant. Works with Claude, DeepSeek, Groq and Oll
 
 > Requires **Node.js >= 22**. Install via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`
 
+> **Important:** Use [Kitty](https://sw.kovidgoyal.net/kitty/) (recommended) or a modern terminal emulator (Ghostty, WezTerm, Alacritty, iTerm2, Windows Terminal) for the best experience. Older terminals may have rendering issues with scrolling and alternate-screen mode.
+
 **From npm:**
 
 ```bash
