@@ -72,22 +72,12 @@ jobs:
       - name: Build bundle (esm)
         run: node esbuild.mjs
 
-      # Build a CJS entry for SEA (Node Single Executable Application)
+      # Build CJS entry for Node Single Executable Application (SEA)
       - name: Prepare SEA entry
         shell: bash
         run: |
-          node -e "
-          const fs = require('fs');
-          const blob = fs.readFileSync('dist/main.js', 'utf-8');
-          // Wrap in CJS for SEA compatibility
-          const cjs = [
-            '// AEGIS standalone SEA entry',
-            'const { createRequire } = require(\"module\");',
-            'const require = createRequire(import.meta.url);',
-            blob,
-          ].join('\\n');
-          fs.writeFileSync('dist/sea-entry.cjs', cjs);
-          " && ls -la dist/sea-entry.cjs
+          node esbuild.mjs --cjs
+          ls -la dist/sea-entry.cjs
 
       - name: Generate SEA blob
         shell: bash
