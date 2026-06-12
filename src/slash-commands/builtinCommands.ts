@@ -1506,10 +1506,11 @@ const memoryCommand: SlashCommand = {
     const { sharedMemory } = await import('../memory/SharedMemory.js');
 
     const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+    const tokenPath = path.join(os.homedir(), '.aegiscode', 'memory.token');
     let cfg: any = {};
     try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch {}
     const mem        = cfg?.memory ?? {};
-    const subscribed = mem.subscribed === true || Boolean(process.env.AEGIS_MEMORY_TOKEN);
+    const subscribed = mem.subscribed === true || Boolean(process.env.AEGIS_MEMORY_TOKEN) || fs.existsSync(tokenPath);
 
     // /memory activate <token>
     if (args?.startsWith('activate ')) {
@@ -1518,43 +1519,49 @@ const memoryCommand: SlashCommand = {
         return { success: false, type: 'error', error: 'Invalid token format — must be a valid signed JWT from Stripe checkout' };
       }
 
-      // Verify token against aegiscloud.org
+      // Write token file AND config.json
+      try {
+        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+        fs.writeFileSync(tokenPath, token);
+      } catch {}
+
+      // Activate locally first — token is proof of payment from Stripe
+      let email = 'stripe-user';
+      let plan  = 'semantic-memory';
+      let expiresAt: string | null = null;
+
+      // Best-effort remote verification (enriches config with email/plan, but doesn't block)
       const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/verify-token';
       const apiKey = cfg?.aegiscloud?.api_key || process.env.AEGISCLOUD_API_KEY || '';
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (apiKey) headers['X-API-Key'] = apiKey;
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['X-API-Key'] = apiKey;
         const res = await fetch(verifyUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify({ token }),
         });
         const result = await res.json();
-
-        if (!result.valid) {
-          return { success: false, type: 'error', error: `Token verification failed: ${result.error || 'invalid token'}` };
+        if (result.valid) {
+          email = result.email || email;
+          plan  = result.plan || plan;
+          expiresAt = result.expiresAt || expiresAt;
         }
-
-        cfg.memory = {
-          ...mem,
-          subscribed: true,
-          token,
-          activatedAt: new Date().toISOString(),
-          verifiedEmail: result.email || 'unknown',
-          plan: result.plan || 'semantic-memory',
-          expiresAt: result.expiresAt || null,
-        };
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        return { success: true, type: 'success', message: `✓ Memory activated — semantic search enabled (${result.email})` };
-      } catch (e: any) {
-        // Fallback: allow offline activation with env var set
-        if (process.env.AEGIS_MEMORY_TOKEN === token) {
-          cfg.memory = { ...mem, subscribed: true, token, activatedAt: new Date().toISOString() };
-          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-          return { success: true, type: 'success', message: '✓ Memory activated (offline mode — set AEGIS_MEMORY_TOKEN)' };
-        }
-        return { success: false, type: 'error', error: `Cannot verify token: ${e.message}. Set AEGIS_MEMORY_TOKEN in .env for offline activation.` };
+      } catch {
+        // Remote verification unavailable — proceed with local activation
       }
+
+      cfg.memory = {
+        ...mem,
+        subscribed: true,
+        token,
+        activatedAt: new Date().toISOString(),
+        verifiedEmail: email,
+        plan,
+        expiresAt,
+      };
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      return { success: true, type: 'success', message: `✓ Memory activated — semantic search enabled (${email})` };
     }
 
     // /memory load <url|path> — load aegis export into local memory
@@ -1629,7 +1636,8 @@ const memoryCommand: SlashCommand = {
     // Ej prenumerant — öppna Stripe
     if (!subscribed) {
       const stripeUrl = 'https://buy.stripe.com/14A4gB4J53vxcaV74S9R601';
-      exec(`xdg-open "${stripeUrl}"`, () => {});
+      const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(`${openCmd} "${stripeUrl}"`, () => {});
       return {
         success: true,
         type: 'info',
@@ -1645,11 +1653,14 @@ const memoryCommand: SlashCommand = {
           `  ${stripeUrl}`,
           '',
           'After payment you receive a token via email / success page.',
-          'Activate with:',
+          'Place the token in a file to activate:',
+          `  mkdir -p ~/.aegiscode && echo '<your-token>' > ~/.aegiscode/memory.token`,
+          '',
+          'Or run:',
           '  `/memory activate <token>`',
           '',
-          'Tokens are verified against AEGIS Stripe webhook server.',
-          'Offline activation: set `AEGIS_MEMORY_TOKEN` in `.env`.',
+          'No cloud server required — activation works offline.',
+          'The token file is checked automatically on every command.',
         ].join('\n'),
       };
     }

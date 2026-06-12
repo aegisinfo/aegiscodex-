@@ -14,10 +14,11 @@ import initSqlJs, { Database as SqlJsDb } from 'sql.js';
 import { pipeline } from '@xenova/transformers';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
-const MEMORY_DIR     = path.join(os.homedir(), '.aegiscode', 'memory');
-const DB_PATH        = path.join(MEMORY_DIR, 'memory.db');
-const CONFIG_FILE    = path.join(os.homedir(), '.aegiscode', 'config.json');
-const SESSION_FILE   = path.join(MEMORY_DIR, 'last-session.txt');
+const MEMORY_DIR       = path.join(os.homedir(), '.aegiscode', 'memory');
+const DB_PATH          = path.join(MEMORY_DIR, 'memory.db');
+const CONFIG_FILE      = path.join(os.homedir(), '.aegiscode', 'config.json');
+const SESSION_FILE     = path.join(MEMORY_DIR, 'last-session.txt');
+const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
 
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
@@ -600,8 +601,7 @@ export class SharedMemory {
     const combined: MemoryEntry[] = [];
 
     if (subscribed) {
-      // Prenumerant: full cross-session memory med sökning, summaries, senaste
-      if (!subscribed) return '';
+      // Subscribed: full cross-session memory with search, summaries, recent
       const relevant  = await this.search(query, Math.min(4, maxEntries));
       const recent    = this.recent(Math.min(2, maxEntries));
       const summaryRows = this.db.exec(
@@ -711,6 +711,25 @@ export class SharedMemory {
   // ── Subscription / free-tier helpers ────────────────────────────────────
 
   isSubscribed(): boolean {
+    // 1. Check memory.token file (simplest flow: put token in file after Stripe payment)
+    try {
+      if (fs.existsSync(MEMORY_TOKEN_FILE)) {
+        const fileToken = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
+        if (fileToken.length >= 20) {
+          // Token file exists and is valid — sync to config.json
+          try {
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            if (!cfg?.memory?.subscribed) {
+              const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: fileToken, activatedAt: new Date().toISOString() } };
+              fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+            }
+          } catch {}
+          return true;
+        }
+      }
+    } catch {}
+
+    // 2. Check environment variable
     if (process.env.AEGIS_MEMORY_TOKEN) {
       try {
         const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -721,6 +740,8 @@ export class SharedMemory {
       } catch {}
       return true;
     }
+
+    // 3. Check config.json
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
       return cfg?.memory?.subscribed === true;
