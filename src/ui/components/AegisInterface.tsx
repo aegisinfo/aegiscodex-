@@ -897,7 +897,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           <Box>
             <Text color={theme.colors.text.muted}>{'\u250C\u2500'}</Text>
             <Text bold color={theme.colors.primary}> \u25C6 </Text>
-            <Text bold color={theme.colors.text.primary}>claude </Text>
+            <Text bold color={theme.colors.primary}>\u00C6GIS </Text>
           </Box>
         </Box>
 
