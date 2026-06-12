@@ -4,7 +4,7 @@
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import Spinner from 'ink-spinner';
+
 
 import { Agent } from '../../agent/Agent.js';
 import type { Message, ChatContext, ToolCall, ToolResult } from '../../agent/types.js';
@@ -829,9 +829,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     return (
       <Box flexDirection="column" padding={1}>
         <Box>
-          <Text color="yellow">
-            <Spinner type="dots" />
-          </Text>
           <Text color="yellow"> Initializing...</Text>
         </Box>
       </Box>

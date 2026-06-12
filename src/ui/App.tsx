@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
+
 import { ErrorBoundary } from './components/common/ErrorBoundary.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { UpdatePrompt } from './components/dialog/UpdatePrompt.js';

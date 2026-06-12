@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
+
 import { themeManager } from '../../themes/index.js';
 
 interface LoadingIndicatorProps {
@@ -32,11 +32,6 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = React.memo(({
 
   return (
     <Box flexDirection="row" paddingX={1} marginY={1}>
-      <Box marginRight={1}>
-        <Text color={theme.colors.warning}>
-          <Spinner type="dots" />
-        </Text>
-      </Box>
       <Box flexDirection="column">
         <Text color={theme.colors.warning}>{text}</Text>
         {details && (

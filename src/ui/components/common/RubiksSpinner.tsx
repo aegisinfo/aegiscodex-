@@ -13,7 +13,6 @@ interface RubiksSpinnerProps {
 }
 
 /**
- * Same rotating dots spinner as the ordinary Spinner from ink-spinner.
  * Runs through all frames of the 'dots' type at the correct interval.
  */
 export const RubiksSpinner: React.FC<RubiksSpinnerProps> = ({ agent }) => {
