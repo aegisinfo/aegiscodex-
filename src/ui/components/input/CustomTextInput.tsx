@@ -14,8 +14,8 @@ interface CustomTextInputProps {
   value: string;
   /** 光标位置 */
   cursorPosition: number;
-  /** Blink phase from parent — cursor on when even, off when odd (avoids own timer) */
-  cursorPhase?: number;
+  /** Cursor visibility — computed by parent so this component doesn't re-render every tick */
+  cursorOn?: boolean;
   /** 值变化回调 */
   onChange: (value: string) => void;
   /** 光标位置变化回调 */
@@ -48,7 +48,7 @@ const PASTE_CONFIG = {
 /**
  * 
  */
-export const CustomTextInput: React.FC<CustomTextInputProps> = ({
+const CustomTextInputInner: React.FC<CustomTextInputProps> = ({
   value,
   cursorPosition,
   onChange,
@@ -60,14 +60,10 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
   placeholder = '',
   focusId = FocusId.MAIN_INPUT,
   disabled = false,
-  cursorPhase = 0,
+  cursorOn = true,
 }) => {
   const isFocused = useIsFocused(focusId);
   const isActive = isFocused && !disabled;
-
-  // Cursor blink derived from parent's glowPhase tick (100ms) — no own timer.
-  // Every 5 ticks ≈ 500ms half-cycle → ~1 s full blink period.
-  const cursorOn = Math.floor(cursorPhase / 5) % 2 === 0;
 
   // Render text with an animated block cursor.
   // The character at cursor position is shown with a teal bg when visible,
@@ -252,4 +248,5 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = ({
   );
 };
 
+export const CustomTextInput = React.memo(CustomTextInputInner);
 export default CustomTextInput;

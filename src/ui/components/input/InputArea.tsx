@@ -5,7 +5,7 @@
  * 
  */
 
-import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
+import React, { useCallback, useState, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 // Pulsing * when processing, □ when idle
@@ -25,8 +25,7 @@ import { CommandSuggestions } from './CommandSuggestions.js';
 
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
-import { vanillaStore } from '../../../store/vanilla.js';
+import { useIsThinking, usePendingCommands } from '../../../store/index.js';
 import { getStreamingContent } from '../../../store/streaming-buffer.js';
 
 // Electric blue color ramp — cycles fast to simulate voltage/energy
@@ -97,58 +96,55 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
 
-    // Elapsed-time counter — increments every second while processing.
-    // Only displayed after 2s to avoid flicker on fast cloud responses.
-    const [thinkingSeconds, setThinkingSeconds] = useState(0);
-    const [streamingTokens, setStreamingTokens] = useState(0);
+    // Single label state — only re-renders when visible text actually changes.
+    // Eliminates 3 separate states (thinkingSeconds, streamingTokens, hasStreamingMessage)
+    // and the vanillaStore subscription that fired on every streaming delta.
+    const [thinkingLabel, setThinkingLabel] = useState<string | null>(null);
+    const prevLabelRef = useRef<string | null>(null);
+    const secsRef = useRef(0);
     const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     useEffect(() => {
       if (isProcessing) {
-        setThinkingSeconds(0);
-        setStreamingTokens(0);
+        secsRef.current = 0;
+        prevLabelRef.current = 'thinking';
+        setThinkingLabel('thinking');
         thinkingTimerRef.current = setInterval(() => {
-          setThinkingSeconds(s => s + 1);
+          secsRef.current += 1;
           const buf = getStreamingContent();
-          if (buf) setStreamingTokens(Math.ceil(buf.content.length / 4));
+          const isStreaming = buf !== null && buf.content.length > 0;
+          const elapsed = secsRef.current >= 2 ? ` · ${secsRef.current}s` : '';
+          const toks = buf && buf.content.length > 0 ? ` · ~${Math.ceil(buf.content.length / 4)}t` : '';
+          const label = isStreaming ? `generating${elapsed}${toks}` : `thinking${elapsed}`;
+          if (label !== prevLabelRef.current) {
+            prevLabelRef.current = label;
+            setThinkingLabel(label);
+          }
         }, 1000);
       } else {
         if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; }
-        setThinkingSeconds(0);
-        setStreamingTokens(0);
+        setThinkingLabel(null);
+        prevLabelRef.current = null;
+        secsRef.current = 0;
       }
       return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
     }, [isProcessing]);
 
-    // Electric glow animation — fast color cycle + occasional dim flicker
+    // Electric glow animation — 200ms ticks, only active while processing
     const [glowPhase, setGlowPhase] = useState(0);
     const glowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     useEffect(() => {
       if (isProcessing) {
         setGlowPhase(0);
-        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
+        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 200);
       } else {
         if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
         setGlowPhase(0);
       }
       return () => { if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; } };
     }, [isProcessing]);
-    
-    // hasStreamingMessage via store subscription to avoid re-render on every delta
-    const [hasStreamingMessage, setHasStreamingMessage] = useState(
-      () => getState().session.messages.some(m => m.isStreaming)
-    );
-    useEffect(() => {
-      let prev = hasStreamingMessage;
-      const unsubscribe = vanillaStore.subscribe((state) => {
-        const msgs = state.session.messages;
-        const newVal = msgs[msgs.length - 1]?.isStreaming ?? false;
-        if (newVal !== prev) {
-          prev = newVal;
-          setHasStreamingMessage(newVal);
-        }
-      });
-      return unsubscribe;
-    }, []);
+
+    // Cursor visible when: idle (always on) or processing every ~1s (5 ticks × 200ms)
+    const cursorOn = isProcessing ? Math.floor(glowPhase / 5) % 2 === 0 : true;
     
     // 计
     const placeholder = useMemo(() => {
@@ -257,14 +253,6 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       // to prevent default browser-like behavior
     });
 
-    // 计算 thinking 状态文
-    const thinkingLabel = useMemo(() => {
-      if (!isProcessing) return null;
-      const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
-      const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
-      if (hasStreamingMessage) return `generating${elapsed}${tokens}`;
-      return `thinking${elapsed}`;
-    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens]);
 
     return (
       <Box flexDirection="column">
@@ -324,7 +312,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
               placeholder={placeholder}
               focusId={FocusId.MAIN_INPUT}
               disabled={false}
-              cursorPhase={isProcessing ? glowPhase : 0}
+              cursorOn={cursorOn}
             />
           </Box>
         </Box>
