@@ -113,19 +113,20 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
   }, []);
 
   // Layout strategy:
-  //   Old completed messages → Static (terminal scrollback, rendered once)
-  //   Last completed message → dynamic area (always visible, especially for slash cmd results)
-  //   Active streaming message → dynamic area (live updates)
-  //
-  // Keeping the most-recent completed message dynamic ensures slash command results
-  // (like /multi) are visible immediately — Static goes to scrollback which the
-  // terminal viewport skips past when scrolling to show the cursor.
+  //   During streaming: ALL completed messages → Static (scrollback).
+  //     Only the streaming message is in the dynamic area, so Ink only
+  //     repaints that one element every RAF tick — no blink from repainting
+  //     large completed messages (e.g. /multi output).
+  //   When idle (no streaming): last completed message stays in the dynamic
+  //     area so slash command results (/multi etc.) are immediately visible
+  //     instead of being swallowed into scrollback.
   const completedMessages = messages.filter(msg => !msg.isStreaming);
   const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
   const buffer = streamingMsg ? getStreamingContent() : null;
 
-  const staticMessages = completedMessages.slice(0, -1);
-  const lastCompleted = completedMessages.at(-1);
+  // During streaming keep everything in Static; when idle surface the last message.
+  const staticMessages = streamingMsg ? completedMessages : completedMessages.slice(0, -1);
+  const lastCompleted = streamingMsg ? null : completedMessages.at(-1);
 
   return (
     <Box flexDirection="column">
