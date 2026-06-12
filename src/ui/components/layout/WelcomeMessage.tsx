@@ -27,23 +27,11 @@ const COMMANDS = [
   { cmd: '/compact', desc: 'compress context' },
 ];
 
-// Divider that draws itself from width 0 to full
 const DrawingDivider: React.FC<{ targetWidth: number }> = ({ targetWidth }) => {
   const theme = themeManager.getTheme();
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    if (width >= targetWidth) return;
-    const id = setInterval(() => {
-      setWidth(w => {
-        if (w + 3 >= targetWidth) { clearInterval(id); return targetWidth; }
-        return w + 3;
-      });
-    }, 10);
-    return () => clearInterval(id);
-  }, [targetWidth]);
   return (
     <Box>
-      <Text color={theme.colors.border.light} dimColor>{'─'.repeat(width)}</Text>
+      <Text color={theme.colors.border.light} dimColor>{'─'.repeat(targetWidth)}</Text>
     </Box>
   );
 };
