@@ -88,7 +88,7 @@ import { ExitMessage } from './common/ExitMessage.js';
 import { useConfirmation } from '../hooks/useConfirmation.js';
 
 // Hooks
-import { useTerminalWidth } from '../hooks/useTerminalWidth.js';
+import { useTerminalWidth, useTerminalHeight } from '../hooks/useTerminalWidth.js';
 import { useCtrlCHandler } from '../hooks/useCtrlCHandler.js';
 
 // Focus
@@ -190,6 +190,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   // ==================== Local State & Refs ====================
   const terminalWidth = useTerminalWidth();
+  const terminalHeight = useTerminalHeight();
   const theme = themeManager.getTheme();
   const agentRef = useRef<Agent | null>(null);
   const contextManagerRef = useRef<ContextManager | null>(null);
@@ -804,14 +805,18 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
   return (
-    <Box flexDirection="column" width="100%">
+    <Box flexDirection="column" width="100%" height={terminalHeight}>
 
-      {messageCount === 0 && !hasPendingInitialMessage && (
+      {messageCount === 0 && !hasPendingInitialMessage ? (
+        /* Start screen: WelcomeMessage fills remaining space, input at bottom */
         <WelcomeMessage terminalWidth={terminalWidth - 2} />
+      ) : (
+        /* spacer grows to fill empty space above messages */
+        <Box flexGrow={1} />
       )}
 
       <Box flexDirection="column" marginBottom={1}>
-        <MessageList terminalWidth={terminalWidth - 2} />
+        <MessageList terminalWidth={terminalWidth - 2} terminalHeight={terminalHeight} />
         <QueuedCommands />
       </Box>
 
