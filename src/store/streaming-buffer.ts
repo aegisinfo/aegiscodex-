@@ -135,10 +135,6 @@ export function clearBuffer(): void {
   streamingState.toolCalls.clear();
 }
 
-// Global consumer position — tracks how much of the buffer the RAF loop has consumed.
-// This prevents the RAF loop from re-inserting old content that was flushed to the store.
-let consumerPosition = { content: 0, thinking: 0 };
-
 /**
  * Check if buffer has content.
  */
@@ -160,7 +156,7 @@ export function peekBuffer(): { content: string; thinking: string; currentBlockT
 }
 
 /**
- * Drain the accumulated content block from the buffer.
+ * Drain accumulated content block from the buffer.
  * Returns the block data and resets the accumulator.
  */
 export function drainContentBlock(): { type: 'text' | 'thinking'; content: string } | null {
@@ -186,22 +182,32 @@ export function drainToolCalls(): Array<{ id: string; name: string; arguments: s
 }
 
 /**
- * Get the consumer position (used by RAF loop to track consumed content).
+ * Drain ALL content from the buffer and return it.
+ * Clears the buffer entirely. Used by flushStreamBuffer and finishStreamingMessage.
+ *
+ * This is the SINGLE function that removes content from the buffer.
+ * After calling it, the buffer is empty and ready for new content.
+ *
+ * Returns null if buffer is empty (no messageId set or no content).
  */
-export function getConsumerPosition(): { content: number; thinking: number } {
-  return { ...consumerPosition };
-}
+export function drainBuffer(): { content: string; thinking: string; toolCalls: Array<{ id: string; name: string; arguments: string; status: ToolCallStatus }> } | null {
+  if (!streamingState.messageId) return null;
+  if (!streamingState.content && !streamingState.thinking && streamingState.toolCalls.size === 0) return null;
 
-/**
- * Reset the consumer position to the current buffer length.
- * Called after flushStreamBuffer to prevent the RAF loop from
- * re-inserting content that was just flushed to the store.
- */
-export function resetConsumerPosition(): void {
-  consumerPosition = {
-    content: streamingState.content.length,
-    thinking: streamingState.thinking.length,
+  const result = {
+    content: streamingState.content,
+    thinking: streamingState.thinking,
+    toolCalls: getBufferedToolCalls(),
   };
+
+  // Clear all content but KEEP messageId so isActiveStreamingMessage still works
+  streamingState.content = '';
+  streamingState.thinking = '';
+  streamingState.currentBlockType = null;
+  streamingState.currentBlockAccumulator = '';
+  streamingState.toolCalls.clear();
+
+  return result;
 }
 
 // ==================== Batch Buffer for Slash Commands ====================

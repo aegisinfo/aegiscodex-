@@ -17,7 +17,7 @@ import { Box } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent, resetConsumerPosition, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
+import { getStreamingContent, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
 
 interface MessageListProps {
   terminalWidth: number;
@@ -104,7 +104,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
             content: buffer.content.length,
             thinking: buffer.thinking.length,
           };
-          resetConsumerPosition();
           setStreamingVersion(v => v + 1);
         }
       }
