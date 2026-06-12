@@ -195,6 +195,10 @@ export const createSessionSlice: StateCreator<
      */
     finishStreamingMessage: (id: string) => {
       const drained = drainBuffer();
+      // Clear messageId so getStreamingContent() returns null immediately.
+      // Without this, the stale React state window sees a non-null buffer
+      // and keeps rendering the streaming cursor.
+      clearBuffer();
 
       set((state) => ({
         session: {

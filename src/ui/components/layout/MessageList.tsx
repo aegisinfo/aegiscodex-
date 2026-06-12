@@ -26,8 +26,8 @@ interface MessageListProps {
   onScroll: (offset: number) => void;
 }
 
-const RAF_INTERVAL_MS = 500;  // 2fps redraws — reduces terminal blink significantly
-const CONTENT_THRESHOLD = 15; // batch more chars before triggering repaint
+const RAF_INTERVAL_MS = 80;  // ~12fps redraws — fast enough to feel live, slow enough to avoid blink
+const CONTENT_THRESHOLD = 1; // show every buffered delta at each RAF tick
 const ESTIMATED_ITEM_HEIGHT = 3; // rows per message average
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
 
@@ -138,10 +138,17 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      // Don't call setMessages directly — queue for the RAF tick instead.
-      // This prevents dual-path interleaving with the streaming buffer updates.
       if (messagesChanged) {
-        pendingMessagesRef.current = [...newMessages];
+        // When streaming transitions to complete, apply immediately — no more buffer
+        // interleaving risk, and the cursor/thinking must vanish without delay.
+        const wasStreaming = prevMessages.some(m => m.isStreaming);
+        const nowStreaming = newMessages.some(m => m.isStreaming);
+        if (wasStreaming && !nowStreaming) {
+          setMessages([...newMessages]);
+        } else {
+          // Queue for the RAF tick to prevent dual-path interleaving during streaming.
+          pendingMessagesRef.current = [...newMessages];
+        }
       }
 
       // showAllThinking is not streaming-related, safe to apply immediately.
