@@ -240,6 +240,26 @@ export const createSessionSlice: StateCreator<
       }));
     },
 
+    setToolCallInput: (messageId: string, toolCallId: string, fullInput: string) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.map(msg =>
+            msg.id === messageId && msg.contentBlocks
+              ? {
+                  ...msg,
+                  contentBlocks: msg.contentBlocks.map(block =>
+                    block.type === 'tool_use' && block.id === toolCallId
+                      ? { ...block, input: fullInput } as ContentBlock
+                      : block
+                  ),
+                }
+              : msg
+          ),
+        },
+      }));
+    },
+
     updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus, completedAt?: number) => {
       set((state) => ({
         session: {

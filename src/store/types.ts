@@ -92,6 +92,8 @@ export interface SessionActions {
   addContentBlock: (messageId: string, block: ContentBlock) => void;
   /** Update a tool_use block's accumulated input JSON */
   updateToolCallInput: (messageId: string, toolCallId: string, partialJson: string) => void;
+  /** Set a tool_use block's full input JSON (replaces, used once on completion) */
+  setToolCallInput: (messageId: string, toolCallId: string, fullInput: string) => void;
   /** Update a tool_use block's status */
   updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCallStatus, completedAt?: number) => void;
   /** Add a tool_result block linked to a tool_use */

@@ -23,8 +23,8 @@ interface MessageListProps {
   terminalWidth: number;
 }
 
-const RAF_INTERVAL_MS = 200;
-const CONTENT_THRESHOLD = 5;
+const RAF_INTERVAL_MS = 500;  // 2fps redraws — reduces terminal blink significantly
+const CONTENT_THRESHOLD = 15; // batch more chars before triggering repaint
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);

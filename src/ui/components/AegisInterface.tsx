@@ -68,7 +68,7 @@ import {
 } from '../../store/index.js';
 
 // Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer } from '../../store/streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, startToolCallInBuffer, appendToolCallDelta, finishToolCallInBuffer, getBufferedToolCalls } from '../../store/streaming-buffer.js';
 
 // Context
 import { ContextManager, TokenCounter } from '../../context/index.js';
@@ -627,14 +627,23 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         },
         onToolCallDelta: (toolCallId, argumentsDelta) => {
           if (abortController.signal.aborted) return;
+          // Accumulate in mutable buffer only — no store write per delta.
+          // updateToolCallInput was firing 20-100× per tool call (one per arg
+          // character), triggering a store subscription + re-render each time.
+          // The full input is flushed to the store once in onToolResult below.
           appendToolCallDelta(toolCallId, argumentsDelta);
-          sessionActions().updateToolCallInput(streamingMessageId, toolCallId, argumentsDelta);
         },
         onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
           if (abortController.signal.aborted) return;
           const toolId = _toolCall.id;
           const isError = !toolResult.success;
           finishToolCallInBuffer(toolId, isError);
+          // Flush the accumulated args to the store once (not per-delta)
+          const bufferedCalls = getBufferedToolCalls();
+          const bufferedCall = bufferedCalls.find(tc => tc.id === toolId);
+          if (bufferedCall?.arguments) {
+            sessionActions().setToolCallInput(streamingMessageId, toolId, bufferedCall.arguments);
+          }
           sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success', Date.now());
           const resultContent = toolResult.error
             ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
