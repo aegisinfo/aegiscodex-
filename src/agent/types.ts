@@ -241,6 +241,9 @@ export interface AgentConfig {
   
   /** 系统提示词 */
   systemPrompt?: string;
+
+  /** Request timeout in ms (default 60000) */
+  timeout?: number;
 }
 
 /**

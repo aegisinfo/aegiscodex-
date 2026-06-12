@@ -1078,7 +1078,7 @@ All agents run concurrently, then results are synthesized.`,
       apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
     }
 
-    const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
+    const modelConfig = { model, baseURL: baseURL || undefined, apiKey, timeout: 180000 };
 
     try {
       const orchestrator = createDefaultOrchestrator(modelConfig);
@@ -1090,7 +1090,7 @@ All agents run concurrently, then results are synthesized.`,
         debugger: `Analyze potential issues and edge cases for the following task.\nIdentify failure modes, error handling gaps, and testing considerations.\n\nTask: ${task}`,
       };
 
-      const result = await orchestrator.orchestrate(task, subTasks, 'reviewer');
+      const result = await orchestrator.orchestrate(task, subTasks, 'synthesizer');
       const lines: string[] = [];
       lines.push('## ⬡ Multi-Agent Orchestration');
       lines.push(`**Task:** ${task}`);
@@ -1178,7 +1178,7 @@ Agents deliberate in parallel, then results are aggregated.`,
       apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
     }
 
-    const modelConfig = { model, baseURL: baseURL || undefined, apiKey };
+    const modelConfig = { model, baseURL: baseURL || undefined, apiKey, timeout: 180000 };
 
     try {
       const council = new CouncilAgent('research-council', modelConfig, {

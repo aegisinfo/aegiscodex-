@@ -8,11 +8,13 @@
  * - Routes follow-up tasks based on context
  */
 
-import type { AgentConfig, Message, ToolCall } from '../types.js';
+import type { AgentConfig, Message, ToolCall, ToolDefinition } from '../types.js';
 import { createChatService } from '../../services/ChatService.js';
 import { sharedMemory } from '../../memory/SharedMemory.js';
 import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
+import { createToolRegistry, ToolRegistry } from '../../tools/index.js';
+import { getBuiltinTools } from '../../tools/builtin/index.js';
 
 // ========== Types ==========
 
@@ -314,13 +316,20 @@ export class OrchestratorAgent {
       })
     );
 
-    // Phase 1: Run all sub-agents in parallel (with shared memory context)
-    const responses = await this.delegateParallel(delegations, undefined, sid);
+    // Phase 1: Run all sub-agents fully in parallel
+    const responses = await this.delegateParallel(delegations, delegations.length, sid);
 
-    // Phase 2: Synthesize results
+    // Phase 2: Synthesize — truncate each response so the synthesis prompt stays within limits
+    const MAX_RESPONSE_CHARS = 2000;
     const synthesiser = synthesiserName || this.getRegisteredAgents()[0];
     const synthesisPrompt = responses
-      .map(r => `[${r.agentName}]:\n${r.content || '(no response)'}`)
+      .map(r => {
+        const body = r.content || '(no response)';
+        const truncated = body.length > MAX_RESPONSE_CHARS
+          ? body.slice(0, MAX_RESPONSE_CHARS) + '\n...(truncated)'
+          : body;
+        return `[${r.agentName}]:\n${truncated}`;
+      })
       .join('\n\n---\n\n');
 
     let summary = '';
@@ -328,13 +337,13 @@ export class OrchestratorAgent {
       try {
         const synthesis = await this.delegate(
           synthesiser,
-          `Synthesize the following analysis from multiple agents into a concise summary:\n\n${synthesisPrompt}`,
+          `You are a senior technical lead synthesizing analysis from multiple specialist agents.\n\nTask: ${complexTask}\n\nAgent analyses:\n\n${synthesisPrompt}\n\n---\n\nProvide a concise, actionable summary: key findings, recommended approach, and top 3 action items.`,
           undefined,
           sid,
         );
         summary = synthesis.content;
       } catch {
-        summary = `[Multi-agent orchestration complete — ${responses.length} agents responded]`;
+        summary = responses.map(r => `**${r.agentName}**: ${(r.content || '').slice(0, 300)}`).join('\n\n');
       }
     } else {
       summary = responses[0]?.content || '';
@@ -380,53 +389,61 @@ export class OrchestratorAgent {
 export function createDefaultOrchestrator(
   config: AgentConfig
 ): OrchestratorAgent {
+  // Sub-agents need more time than regular chat — thinking models can run long
+  const agentConfig = { ...config, timeout: 180000 };
+
   const orchestrator = new OrchestratorAgent(
     'AEGIS-Orchestrator',
     'You are AEGIS Orchestrator, coordinating multiple specialist agents. Route tasks optimally.'
   );
 
-  // Architect agent
   orchestrator.registerAgent({
     name: 'architect',
     role: 'System Architect',
     systemPrompt: `You are a System Architect. Analyze code structure, dependencies, and design patterns.
 Provide architectural recommendations with specific file paths and refactoring steps.
-Focus on: module boundaries, data flow, API design, scalability.`,
-    config,
+Focus on: module boundaries, data flow, API design, scalability. Be concise.`,
+    config: agentConfig,
     tools: ['read', 'grep', 'glob'],
   });
 
-  // Implementer agent
   orchestrator.registerAgent({
     name: 'implementer',
     role: 'Implementation Engineer',
     systemPrompt: `You are an Implementation Engineer. Write clean, production-ready code.
 Follow existing code patterns. Provide complete code blocks with file paths.
-Focus on: correctness, error handling, TypeScript types, edge cases.`,
-    config,
+Focus on: correctness, error handling, TypeScript types, edge cases. Be concise.`,
+    config: agentConfig,
     tools: ['read', 'edit', 'write', 'grep'],
   });
 
-  // Reviewer agent
   orchestrator.registerAgent({
     name: 'reviewer',
     role: 'Code Reviewer',
     systemPrompt: `You are a Code Reviewer. Review code for bugs, security issues, and style.
 Be critical but constructive. Prioritize correctness and security over style.
-Focus on: logic errors, type safety, error handling, performance, security.`,
-    config,
+Focus on: logic errors, type safety, error handling, performance, security. Be concise.`,
+    config: agentConfig,
     tools: ['read', 'grep'],
   });
 
-  // Debugger agent
   orchestrator.registerAgent({
     name: 'debugger',
     role: 'Debugging Specialist',
     systemPrompt: `You are a Debugging Specialist. Diagnose errors systematically.
 Formulate hypotheses, test each one, and reason about root causes.
-Focus on: stack traces, error messages, unexpected behavior, reproduction steps.`,
-    config,
+Focus on: stack traces, error messages, unexpected behavior, reproduction steps. Be concise.`,
+    config: agentConfig,
     tools: ['read', 'grep', 'bash'],
+  });
+
+  orchestrator.registerAgent({
+    name: 'synthesizer',
+    role: 'Technical Lead Synthesizer',
+    systemPrompt: `You are a senior technical lead. Given analysis from multiple specialist agents, synthesize their findings into a clear, actionable summary.
+Structure your response as: key findings, recommended approach, top action items.
+Be direct, concrete, and avoid repeating everything the agents said.`,
+    config: agentConfig,
   });
 
   return orchestrator;
