@@ -26,7 +26,7 @@ interface MessageListProps {
   onScroll: (offset: number) => void;
 }
 
-const RAF_INTERVAL_MS = 80;  // ~12fps redraws — fast enough to feel live, slow enough to avoid blink
+const RAF_INTERVAL_MS = 30;  // ~33fps redraws — 2.7x faster than 80ms, content appears without perceptible delay
 const CONTENT_THRESHOLD = 1; // show every buffered delta at each RAF tick
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
 
