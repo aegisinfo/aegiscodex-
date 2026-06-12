@@ -8,24 +8,13 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-// Ink-nib glyph that pulses between filled/hollow when AI is working
-const InkNib: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
-  const FRAMES = ['□', '▪', '□', '▪'] as const;
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    if (!isProcessing) { setFrame(0); return; }
-    const id = setInterval(() => setFrame(f => (f + 1) % FRAMES.length), 300);
-    return () => clearInterval(id);
-  }, [isProcessing]);
-  return (
-    <Text color={isProcessing ? color : idleColor} bold>
-      {isProcessing ? FRAMES[frame] : '□'}
-    </Text>
-  );
-});
-InkNib.displayName = 'InkNib';
-import { RubiksSpinner } from '../common/RubiksSpinner.js';
-import Spinner from 'ink-spinner';
+// Static prompt glyph — □ when idle, ■ when processing (no pulse to avoid distraction)
+const PromptGlyph: React.FC<{ isProcessing: boolean; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => (
+  <Text color={isProcessing ? color : idleColor} bold>
+    {isProcessing ? '■' : '□'}
+  </Text>
+));
+PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
 import { CommandSuggestions } from './CommandSuggestions.js';
 
@@ -241,9 +230,6 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       return `thinking${elapsed}`;
     }, [isProcessing, hasStreamingMessage, thinkingSeconds]);
 
-    // Rubik's cube for /multi (non-streaming thinking), dots for streaming
-    const isMultiMode = isProcessing && !hasStreamingMessage;
-
     return (
       <Box flexDirection="column">
         {/* 命令建议下拉框 - 在输入框上方显示 */}
@@ -259,8 +245,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         {/* 思考/生成状态指示器 - 紧贴输入框上方 */}
         {thinkingLabel && (
           <Box paddingX={1} marginBottom={0}>
-            <Text color={theme.colors.info}><Spinner type="dots" /></Text>
-            <Text color={theme.colors.text.muted} dimColor>{' '}{thinkingLabel}</Text>
+            <Text color={theme.colors.text.muted} dimColor>{thinkingLabel}</Text>
             {pendingCommands.length > 0 && (
               <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
             )}
@@ -275,9 +260,9 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           borderStyle="single"
           borderColor={isProcessing ? theme.colors.warning : theme.colors.border.light}
         >
-          {/* Prompt glyph — ink nib: pulses while AI works */}
+          {/* Prompt glyph — static ■ while AI works, □ when idle */}
           <Box marginRight={1}>
-            <InkNib
+            <PromptGlyph
               isProcessing={isProcessing}
               color={theme.colors.warning}
               idleColor={theme.colors.primary}
