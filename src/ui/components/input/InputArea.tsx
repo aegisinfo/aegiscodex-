@@ -139,7 +139,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     useEffect(() => {
       if (isProcessing) {
         setGlowPhase(0);
-        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 200);
+        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
       } else {
         if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
         setGlowPhase(0);
@@ -148,7 +148,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     }, [isProcessing]);
 
     // Cursor: always visible at idle (no timer = no idle redraws), blinks during generation
-    const cursorOn = isProcessing ? Math.floor(glowPhase / 3) % 2 === 0 : true;
+    const cursorOn = isProcessing ? Math.floor(glowPhase / 5) % 2 === 0 : true;
 
     const thinkingLabel = useMemo(() => {
       if (!isProcessing) return null;
