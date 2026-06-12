@@ -14,8 +14,8 @@ interface WelcomeMessageProps {
   terminalWidth: number;
 }
 
-const CLAUDE_LETTERS = Array.from('claude');
-const TOTAL_SWEEP = CLAUDE_LETTERS.length;
+const AEGIS_LETTERS = Array.from('ÆGIS');
+const TOTAL_SWEEP = AEGIS_LETTERS.length;
 
 const COMMANDS = [
   { cmd: '/help',    desc: 'all commands' },
@@ -121,7 +121,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
         <Text color={logoColor} bold>{'◆  '}</Text>
 
         {/* "claude" swept char by char */}
-        {CLAUDE_LETTERS.map((ch, i) => {
+        {AEGIS_LETTERS.map((ch, i) => {
           const revealed = sweepPos >= i;
           const isNib    = sweepPos === i;
           const color    = !revealed    ? 'transparent'
