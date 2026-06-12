@@ -61,7 +61,7 @@ function callGroq(q: string, p: string)      { return callOpenAICompatible('http
 
 const AGENTS: Agent[] = [
   {
-    name: 'Strategist',
+    name: 'Claude',
     role: 'Strategic Analyst',
     color: C.teal,
     call: (q) => callPrimary(q, 'a strategic analyst focused on long-term impact and human values'),
