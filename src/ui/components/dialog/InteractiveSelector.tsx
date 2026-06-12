@@ -1,43 +1,29 @@
 /**
  * InteractiveSelector - 交互式选择器组件
- * 
- * 
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { themeManager } from '../../themes/index.js';
-import { FocusId, focusManager, useIsFocused } from '../../focus/index.js';
+import { FocusId, focusManager } from '../../focus/index.js';
 
 export interface SelectorOption<T = string> {
-  /** 选项值 */
   value: T;
-  /** 显示标签 */
   label: string;
-  /** 描述信息 */
   description?: string;
-  /** 是否为当前选中项 */
   isCurrent?: boolean;
 }
 
 interface InteractiveSelectorProps<T = string> {
-  /** 标题 */
   title: string;
-  /** 选项列表 */
   options: SelectorOption<T>[];
-  /** 选择回调 */
   onSelect: (value: T) => void;
-  /** 取消回调 */
   onCancel: () => void;
-  /** 初始选中索引 */
   initialIndex?: number;
-  /** 焦点 ID */
   focusId?: string;
+  maxVisible?: number;
 }
 
-/**
- * 
- */
 export function InteractiveSelector<T = string>({
   title,
   options,
@@ -45,44 +31,56 @@ export function InteractiveSelector<T = string>({
   onCancel,
   initialIndex = 0,
   focusId = FocusId.SELECTOR,
+  maxVisible = 10,
 }: InteractiveSelectorProps<T>): React.ReactElement {
   const theme = themeManager.getTheme();
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const [selectedIndex, setSelectedIndex] = useState(() => {
+    // Start at current item if one is marked
+    const currentIdx = options.findIndex(o => o.isCurrent);
+    return currentIdx >= 0 ? currentIdx : initialIndex;
+  });
+  const [scrollTop, setScrollTop] = useState(0);
 
-  // Fire-once guard: prevents Enter key-repeat from calling onSelect multiple times.
-  // Ink's useInput listener stays registered until the component unmounts, but
-  // React may not re-render (and unmount) until after several key events have
-  // already queued. Resetting on options change handles re-use of the same component.
   const selectFiredRef = useRef(false);
   useEffect(() => { selectFiredRef.current = false; }, [options]);
 
-  // 处理键盘输
-  useInput(
-    (input, key) => {
-      // Imperative focus check — avoids stale React closure
-      if (focusManager.getCurrentFocus() !== focusId) return;
-
-      if (key.upArrow || input === 'k') {
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
-      } else if (key.downArrow || input === 'j') {
-        setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
-      } else if (key.return) {
-        if (!selectFiredRef.current) {
-          selectFiredRef.current = true;
-          onSelect(options[selectedIndex].value);
-        }
-      } else if (key.escape || input === 'q') {
-        onCancel();
-      }
-    },
-  );
-
-  // 当 options 变化时重置索
+  // Keep viewport window in sync with cursor
   useEffect(() => {
-    if (selectedIndex >= options.length) {
-      setSelectedIndex(0);
+    setScrollTop(prev => {
+      if (selectedIndex < prev) return selectedIndex;
+      if (selectedIndex >= prev + maxVisible) return selectedIndex - maxVisible + 1;
+      return prev;
+    });
+  }, [selectedIndex, maxVisible]);
+
+  useInput((input, key) => {
+    if (focusManager.getCurrentFocus() !== focusId) return;
+
+    if (key.upArrow || input === 'k') {
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : options.length - 1));
+    } else if (key.downArrow || input === 'j') {
+      setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
+    } else if (key.pageUp) {
+      setSelectedIndex(prev => Math.max(0, prev - maxVisible));
+    } else if (key.pageDown) {
+      setSelectedIndex(prev => Math.min(options.length - 1, prev + maxVisible));
+    } else if (key.return) {
+      if (!selectFiredRef.current) {
+        selectFiredRef.current = true;
+        onSelect(options[selectedIndex].value);
+      }
+    } else if (key.escape || input === 'q') {
+      onCancel();
     }
+  });
+
+  useEffect(() => {
+    if (selectedIndex >= options.length) setSelectedIndex(0);
   }, [options.length, selectedIndex]);
+
+  const visibleOptions = options.slice(scrollTop, scrollTop + maxVisible);
+  const hasAbove = scrollTop > 0;
+  const hasBelow = scrollTop + maxVisible < options.length;
 
   return (
     <Box
@@ -92,34 +90,38 @@ export function InteractiveSelector<T = string>({
       paddingX={2}
       paddingY={1}
     >
-      {/* 标题 */}
-      <Box marginBottom={1}>
-        <Text bold color={theme.colors.primary}>
-          {title}
-        </Text>
+      <Box marginBottom={1} flexDirection="row" justifyContent="space-between">
+        <Text bold color={theme.colors.primary}>{title}</Text>
+        {options.length > maxVisible && (
+          <Text color={theme.colors.text.muted} dimColor>
+            {selectedIndex + 1}/{options.length}
+          </Text>
+        )}
       </Box>
 
-      {/* 选项列表 */}
+      {hasAbove && (
+        <Box>
+          <Text color={theme.colors.text.muted} dimColor>  ↑ {scrollTop} more</Text>
+        </Box>
+      )}
+
       <Box flexDirection="column">
-        {options.map((option, index) => {
-          const isSelected = index === selectedIndex;
-          const indicator = isSelected ? '▸ ' : '  ';
-          const currentMarker = option.isCurrent ? ' ✓' : '';
-          
+        {visibleOptions.map((option, i) => {
+          const absIndex = scrollTop + i;
+          const isSelected = absIndex === selectedIndex;
           return (
             <Box key={String(option.value)} flexDirection="row">
               <Text
                 color={isSelected ? theme.colors.primary : theme.colors.text.primary}
                 bold={isSelected}
               >
-                {indicator}
+                {isSelected ? '▸ ' : '  '}
                 {option.label}
-                {currentMarker}
+                {option.isCurrent ? ' ✓' : ''}
               </Text>
               {option.description && (
                 <Text color={theme.colors.text.muted} dimColor>
-                  {' - '}
-                  {option.description}
+                  {' - '}{option.description}
                 </Text>
               )}
             </Box>
@@ -127,10 +129,17 @@ export function InteractiveSelector<T = string>({
         })}
       </Box>
 
-      {/* 操作提示 */}
+      {hasBelow && (
+        <Box>
+          <Text color={theme.colors.text.muted} dimColor>
+            {'  ↓ '}{options.length - scrollTop - maxVisible} more
+          </Text>
+        </Box>
+      )}
+
       <Box marginTop={1} borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={theme.colors.border.light}>
         <Text color={theme.colors.text.muted} dimColor>
-          ↑/↓ navigate  Enter confirm  Esc cancel
+          ↑/↓ navigate  PgUp/PgDn page  Enter confirm  Esc cancel
         </Text>
       </Box>
     </Box>
