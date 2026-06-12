@@ -259,11 +259,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         {/* 思考/生成状态指示器 - 紧贴输入框上方 */}
         {thinkingLabel && (
           <Box paddingX={1} marginBottom={0}>
-            {hasStreamingMessage ? (
-              <Text color={theme.colors.info}><Spinner type="dots" /></Text>
-            ) : (
-              <Text color={theme.colors.primary}>{'□'}</Text>
-            )}
+            <Text color={theme.colors.info}><Spinner type="dots" /></Text>
             <Text color={theme.colors.text.muted} dimColor>{' '}{thinkingLabel}</Text>
             {pendingCommands.length > 0 && (
               <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>

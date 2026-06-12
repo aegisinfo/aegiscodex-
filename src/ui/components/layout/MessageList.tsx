@@ -112,14 +112,24 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Split: completed messages go to Static (scrollback), streaming stays dynamic
+  // Layout strategy:
+  //   Old completed messages → Static (terminal scrollback, rendered once)
+  //   Last completed message → dynamic area (always visible, especially for slash cmd results)
+  //   Active streaming message → dynamic area (live updates)
+  //
+  // Keeping the most-recent completed message dynamic ensures slash command results
+  // (like /multi) are visible immediately — Static goes to scrollback which the
+  // terminal viewport skips past when scrolling to show the cursor.
   const completedMessages = messages.filter(msg => !msg.isStreaming);
   const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
   const buffer = streamingMsg ? getStreamingContent() : null;
 
+  const staticMessages = completedMessages.slice(0, -1);
+  const lastCompleted = completedMessages.at(-1);
+
   return (
     <Box flexDirection="column">
-      <Static items={completedMessages}>
+      <Static items={staticMessages}>
         {(msg, index) => (
           <MessageRenderer
             key={msg.id || index}
@@ -134,6 +144,20 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
           />
         )}
       </Static>
+
+      {lastCompleted && (
+        <MessageRenderer
+          key={lastCompleted.id}
+          content={lastCompleted.content}
+          role={lastCompleted.role}
+          terminalWidth={terminalWidth}
+          showPrefix={true}
+          thinking={lastCompleted.thinking}
+          isStreaming={false}
+          showAllThinking={showAllThinking}
+          contentBlocks={lastCompleted.contentBlocks}
+        />
+      )}
 
       {streamingMsg && (
         <MessageRenderer
