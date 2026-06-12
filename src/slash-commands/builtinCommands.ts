@@ -401,18 +401,16 @@ export const modelCommand: SlashCommand = {
     }
 
     // ── no args — interactive selector ──
-    if (models.length === 0) {
-      const modelInfo = defaultModel?.model || currentModelId || 'unknown';
-      return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
-    }
+    const OLLAMA_DEFAULT = 'http://localhost:11434/v1';
 
-    // Fetch Ollama runtime info for any locally-configured models (non-blocking on failure)
+    // Always scan local Ollama (even if no Ollama models are configured yet)
     const ollamaInfoByName = new Map<string, OllamaModelInfo>();
-    const ollamaBaseURLs = [...new Set(
-      models
+    const ollamaBaseURLs = [...new Set([
+      OLLAMA_DEFAULT,
+      ...models
         .filter((m: any) => isLocalOllamaUrl(m.baseURL || m.baseUrl))
-        .map((m: any) => m.baseURL || m.baseUrl)
-    )];
+        .map((m: any) => m.baseURL || m.baseUrl),
+    ])];
     await Promise.all(
       ollamaBaseURLs.map(async (url: string) => {
         const infos = await getOllamaModels(url).catch(() => []);
@@ -423,33 +421,58 @@ export const modelCommand: SlashCommand = {
       })
     );
 
+    // Build configured model entries
+    const configuredIds = new Set(models.map((m: any) => m.model || m.id));
+    const configuredOptions = models.map((m: any) => {
+      const modelName: string = m.model || m.id;
+      const ollamaInfo = ollamaInfoByName.get(modelName) ?? ollamaInfoByName.get(modelName.split(':')[0]);
+      let description: string;
+      if (ollamaInfo) {
+        const p: string[] = [];
+        p.push(ollamaInfo.isLoaded ? '● loaded' : '○ cold');
+        if (ollamaInfo.sizeGB !== undefined) p.push(`${ollamaInfo.sizeGB.toFixed(1)} GB`);
+        if (ollamaInfo.supportsTools) p.push('[tools]');
+        description = p.join(' · ');
+      } else {
+        description = m.model || m.baseURL || '';
+      }
+      return {
+        value: m.id,
+        label: (m as any).label || m.name || m.model || m.id,
+        description,
+        isCurrent: m.id === currentModelId,
+      };
+    });
+
+    // Auto-discovered local Ollama models not yet in config
+    const discoveredOptions = [...ollamaInfoByName.values()]
+      .filter(info => !configuredIds.has(info.name) && !configuredIds.has(info.name.split(':')[0]))
+      .filter((info, idx, arr) => arr.findIndex(x => x.name === info.name) === idx)
+      .map(info => {
+        const p: string[] = ['○ ollama · not saved'];
+        if (info.sizeGB !== undefined) p.push(`${info.sizeGB.toFixed(1)} GB`);
+        if (info.supportsTools) p.push('[tools]');
+        return {
+          value: `__ollama__${info.name}`,
+          label: info.name,
+          description: p.join(' · '),
+          isCurrent: false,
+        };
+      });
+
+    const allOptions = [...configuredOptions, ...discoveredOptions];
+
+    if (allOptions.length === 0) {
+      const modelInfo = defaultModel?.model || currentModelId || 'unknown';
+      return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
+    }
+
     return {
       success: true,
       type: 'selector',
       selector: {
         title: 'Select model',
-        options: models.map((m: any) => {
-          const modelName: string = m.model || m.id;
-          const ollamaInfo = ollamaInfoByName.get(modelName) ?? ollamaInfoByName.get(modelName.split(':')[0]);
-
-          let description: string;
-          if (ollamaInfo) {
-            const parts: string[] = [];
-            parts.push(ollamaInfo.isLoaded ? '● loaded' : '○ cold');
-            if (ollamaInfo.sizeGB !== undefined) parts.push(`${ollamaInfo.sizeGB.toFixed(1)} GB`);
-            if (ollamaInfo.supportsTools) parts.push('[tools]');
-            description = parts.join(' · ');
-          } else {
-            description = m.model || m.baseURL || '';
-          }
-
-          return {
-            value: m.id,
-            label: (m as any).label || m.name || m.model || m.id,
-            description,
-            isCurrent: m.id === currentModelId,
-          };
-        }),
+        options: allOptions,
         handler: 'model',
       },
     };

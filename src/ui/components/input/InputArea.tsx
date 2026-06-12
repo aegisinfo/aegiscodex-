@@ -242,15 +242,17 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           />
         )}
 
-        {/* 思考/生成状态指示器 - 紧贴输入框上方 */}
-        {thinkingLabel && (
-          <Box paddingX={1} marginBottom={0}>
-            <Text color={theme.colors.text.muted} dimColor>{thinkingLabel}</Text>
-            {pendingCommands.length > 0 && (
-              <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
-            )}
-          </Box>
-        )}
+        {/* Thinking indicator — always occupies 1 row to prevent layout shift/flicker */}
+        <Box paddingX={1} marginBottom={0} height={1}>
+          {thinkingLabel ? (
+            <>
+              <Text color={theme.colors.text.muted} dimColor>{thinkingLabel}</Text>
+              {pendingCommands.length > 0 && (
+                <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
+              )}
+            </>
+          ) : <Text> </Text>}
+        </Box>
         
         {/* 输入框 */}
         <Box

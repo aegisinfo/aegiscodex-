@@ -458,9 +458,31 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       themeManager.setTheme(value);
       sessionActions().addAssistantMessage('✓  ' + value);
     } else if (handler === 'model') {
-      const { configActions } = await import('../../store/index.js');
-      configActions().updateConfig({ currentModelId: value });
-      sessionActions().addAssistantMessage('✓  ' + value);
+      const { configActions, getState: gs } = await import('../../store/index.js');
+
+      if (value.startsWith('__ollama__')) {
+        // Auto-discovered Ollama model — register it in config then switch
+        const modelName = value.slice('__ollama__'.length);
+        const id = modelName.replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+        const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+        try {
+          const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+          cfg.models = cfg.models || [];
+          if (!cfg.models.find((m: any) => m.id === id)) {
+            cfg.models.push({ id, name: modelName, model: modelName, baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+          }
+          cfg.currentModelId = id;
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        } catch { /* non-fatal */ }
+        configActions().updateConfig({ currentModelId: id });
+        sessionActions().addAssistantMessage(`✓  ${modelName} (saved to config)`);
+      } else {
+        configActions().updateConfig({ currentModelId: value });
+        sessionActions().addAssistantMessage('✓  ' + value);
+      }
     }
   }, [selectorState]);
 

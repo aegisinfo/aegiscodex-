@@ -172,13 +172,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
   const buffer = streamingMsg ? getStreamingContent() : null;
 
-  // Skip windowed rendering when there are few messages (common during streaming).
-  // Estimated-height padding causes vertical jitter — render everything directly
-  // since the message count is small enough to fit on screen.
-  const totalMessages = completedMessages.length + (streamingMsg ? 1 : 0);
-  const useWindowing = totalMessages > 20;
-
   const visibleCount = calcVisibleCount(terminalHeight);
+  // Apply windowing only when there are more messages than fit on screen.
+  // Below that threshold, render everything directly to avoid padding jitter.
+  const useWindowing = completedMessages.length > visibleCount;
   const maxOffset = Math.max(0, messages.length - visibleCount);
   const clampedOffset = Math.min(scrollOffset, maxOffset);
   const isAtBottom = clampedOffset >= maxOffset;
