@@ -143,8 +143,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       return () => { if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; } };
     }, [isProcessing]);
 
-    // Cursor visible when: idle (always on) or processing every ~1s (5 ticks × 200ms)
-    const cursorOn = isProcessing ? Math.floor(glowPhase / 5) % 2 === 0 : true;
+    // Cursor: always visible at idle (no timer = no idle redraws), blinks during generation
+    const cursorOn = isProcessing ? Math.floor(glowPhase / 3) % 2 === 0 : true;
     
     // 计
     const placeholder = useMemo(() => {
