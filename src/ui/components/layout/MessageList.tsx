@@ -60,6 +60,11 @@ interface StreamChunk {
   text: string;
 }
 
+// Top spacer rendered once via Static to push content toward the bottom.
+// Uses the terminal height at mount time (not reactive — resizing is accepted).
+const TOP_SPACER_HEIGHT = Math.max(0, (process.stdout.rows || 24) - 8);
+const TOP_SPACER_ITEMS = [{ id: '__top_spacer__' }];
+
 export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWidth }) => {
   const [messages, setMessages] = useState(() => getState().session.messages);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
@@ -212,6 +217,11 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({ terminalWid
 
   return (
     <Box flexDirection="column">
+      {/* Top spacer — rendered once before any messages to push content toward bottom */}
+      <Static items={TOP_SPACER_ITEMS}>
+        {() => <Box key="__top_spacer__" height={TOP_SPACER_HEIGHT} />}
+      </Static>
+
       {/* Committed messages — rendered once with full markdown into terminal scrollback */}
       <Static items={committedMessages}>
         {(msg) => (

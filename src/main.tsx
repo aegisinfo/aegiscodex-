@@ -312,12 +312,6 @@ async function main(): Promise<void> {
 
         try {
           const { render } = await import('ink');
-          // Push render origin toward the bottom of the terminal so the
-          // input area and first messages start near the bottom, growing
-          // upward into the scrollback as the conversation continues.
-          const termRows = process.stdout.rows || 24;
-          const padLines = Math.max(0, termRows - 8);
-          process.stdout.write('\n'.repeat(padLines));
           render(
             <App
               apiKey={modelConfig.apiKey}
