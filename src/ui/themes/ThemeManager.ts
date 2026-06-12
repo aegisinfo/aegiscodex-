@@ -10,6 +10,7 @@ import type { Theme, ThemePreset, RoleStyle, ColorMode } from './types.js';
 import { defaultTheme } from './defaultTheme.js';
 import { darkTheme } from './darkTheme.js';
 import { lightTheme } from './lightTheme.js';
+import { aegisTheme } from './aegisTheme.js';
 import { configManager } from '../../config/ConfigManager.js';
 
 /**
@@ -83,6 +84,12 @@ const presetThemes: ThemePreset[] = [
     name: 'Default',
     description: 'Balanced theme (works on most terminals)',
     theme: defaultTheme,
+  },
+  {
+    id: 'aegis',
+    name: 'ÆGIS',
+    description: 'ÆGIS teal — the signature brand theme',
+    theme: aegisTheme,
   },
   {
     id: 'light',
