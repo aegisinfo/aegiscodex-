@@ -784,9 +784,17 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       ctxManager.updateTokenCount(totalTokens);
 
       const currentTokenUsage = getState().session.tokenUsage;
+      const prevModel = currentTokenUsage.modelBreakdown[modelName] ?? { inputTokens: 0, outputTokens: 0 };
       sessionActions().updateTokenUsage({
         inputTokens: currentTokenUsage.inputTokens + inputTokens,
         outputTokens: currentTokenUsage.outputTokens + outputTokens,
+        modelBreakdown: {
+          ...currentTokenUsage.modelBreakdown,
+          [modelName]: {
+            inputTokens:  prevModel.inputTokens  + inputTokens,
+            outputTokens: prevModel.outputTokens + outputTokens,
+          },
+        },
       });
 
       if (debugRef.current) {

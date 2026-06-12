@@ -39,6 +39,7 @@ const initialSessionState = {
     outputTokens: 0,
     totalTokens: 0,
     maxContextTokens: 200000,
+    modelBreakdown: {},
   } as TokenUsage,
 };
 

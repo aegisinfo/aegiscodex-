@@ -621,89 +621,288 @@ export const tokensCommand: SlashCommand = {
   async handler(_args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
     const state = getState();
     const { session, config } = state;
-    const usage   = session.tokenUsage;
+    const usage    = session.tokenUsage;
     const messages = session.messages.filter(m => !m.isStreaming);
     const runtimeConfig = config.config;
-    const maxCtx  = (runtimeConfig as any)?.maxContextTokens ?? 200_000;
-    const model   = context.modelName || runtimeConfig?.currentModelId || 'claude-sonnet-4-6';
+    const maxCtx   = (runtimeConfig as any)?.maxContextTokens ?? 200_000;
+    const model    = context.modelName || runtimeConfig?.currentModelId || 'claude-sonnet-4-6';
 
     const totalIn  = usage.inputTokens  || 0;
     const totalOut = usage.outputTokens || 0;
     const total    = totalIn + totalOut;
+    const BAR      = 28;
+    const DIVIDER  = `${'─'.repeat(BAR + 12)}`;
 
-    const BAR = 28;
+    // shared price lookup
+    const priceFor = (mdl: string): [number, number] => {
+      const m = mdl.toLowerCase();
+      if      (m.includes('opus-4'))    return [15,    75   ];
+      else if (m.includes('sonnet-4'))  return [3,     15   ];
+      else if (m.includes('haiku-4'))   return [0.8,   4    ];
+      else if (m.includes('fable-5'))   return [5,     25   ];
+      else if (m.includes('claude'))    return [3,     15   ];
+      else if (m.includes('gpt-4o'))    return [2.5,   10   ];
+      else if (m.includes('gpt-4'))     return [30,    60   ];
+      else if (m.includes('gpt-3.5'))   return [0.5,   1.5  ];
+      else if (m.includes('deepseek'))  return [0.14,  0.28 ];
+      else if (m.includes('llama') || m.includes('groq')) return [0.06, 0.06];
+      else if (m.includes('gemini-2.5-pro'))  return [1.25, 10  ];
+      else if (m.includes('gemini-2.5-flash')) return [0.15, 0.6 ];
+      else                              return [1,     3    ];
+    };
+
+    const fmtCost = (v: number) =>
+      v === 0     ? '$0.0000'          :
+      v < 0.00001 ? '<$0.00001'        :
+      v < 0.01    ? `$${v.toFixed(5)}` :
+                    `$${v.toFixed(4)}`;
 
     // ── context meter ──
     const ctxTokens = context.contextManager?.getTokenCount?.() ?? 0;
     const ctxRatio  = maxCtx > 0 ? Math.min(1, ctxTokens / maxCtx) : 0;
 
-    // ── per-turn estimates (content.length / 4 ≈ tokens) ──
+    // ── per-turn data ──
     const turns = messages
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map((m, i) => ({
         n:    i + 1,
         role: m.role as 'user' | 'assistant',
         est:  Math.max(1, Math.ceil((m.content?.length ?? 0) / 4)),
+        ts:   m.timestamp,
       }));
 
-    const maxTurnEst = turns.reduce((a, t) => Math.max(a, t.est), 1);
-
-    // ── cost ──
-    const cost = tokCost(model, totalIn, totalOut);
+    // ── session cost ──
+    const [ip, op] = priceFor(model);
+    const sessionCost = (totalIn * ip + totalOut * op) / 1_000_000;
 
     // ── build output ──
     const L: string[] = [];
-
     L.push('## ◆ token usage');
     L.push('');
 
-    // context meter
     if (ctxTokens > 0) {
       const pct = `${Math.round(ctxRatio * 100)}%`;
       L.push(`context  ${tokBar(ctxRatio, BAR)}  ${pct} · ${tokFmt(ctxTokens)} / ${tokFmt(maxCtx)}`);
       L.push('');
     }
 
-    // in / out bars
     const maxIO = Math.max(totalIn, totalOut, 1);
     L.push(`in       ${tokBar(totalIn  / maxIO, BAR)}  ${tokFmt(totalIn)}`);
     L.push(`out      ${tokBar(totalOut / maxIO, BAR)}  ${tokFmt(totalOut)}`);
     L.push(`         ${'─'.repeat(BAR + 2)}`);
     L.push(`total    ${' '.repeat(BAR)}  ${tokFmt(total)}`);
-
-    if (cost !== null) {
-      const costStr = cost < 0.01
-        ? `<$0.01`
-        : `$${cost.toFixed(cost < 1 ? 4 : 2)}`;
-      L.push(`cost     ${' '.repeat(BAR)}  ~${costStr}  ·  ${tokShortModel(model)}`);
+    if (sessionCost > 0) {
+      L.push(`cost     ${' '.repeat(BAR)}  ~${fmtCost(sessionCost)}  ·  ${tokShortModel(model)}`);
     }
 
-    // per-turn chart
-    if (turns.length > 0) {
-      L.push('');
-      L.push(`${'─'.repeat(BAR + 12)}`);
-      L.push('');
-      L.push('turn-by-turn  (est. from content length)');
-      L.push('');
-
-      const TBAR = 20;
-      const shown = turns.slice(-25);
+    // ─────────────────────────────────────────────────────────────
+    // $ cost over turns — line graph (needs ≥ 4 turns)
+    // ─────────────────────────────────────────────────────────────
+    if (turns.length >= 4) {
+      const shown   = turns.slice(-30);
       const skipped = turns.length - shown.length;
 
-      if (skipped > 0) {
-        L.push(`  ··· ${skipped} earlier turns not shown`);
-        L.push('');
-      }
+      let cum = 0;
+      const cumCosts = shown.map(t => {
+        cum += (t.est * (t.role === 'user' ? ip : op)) / 1_000_000;
+        return cum;
+      });
+      const maxCum = cumCosts[cumCosts.length - 1] || 0.000001;
 
-      for (const t of shown) {
-        const prefix = t.role === 'user' ? '›' : '◆';
-        const ratio  = t.est / maxTurnEst;
-        const bar    = tokBar(ratio, TBAR);
-        const label  = String(t.n).padStart(3);
-        L.push(`  ${label}  ${prefix}  ${bar}  ~${tokFmt(t.est)}`);
+      const W = 54, H = 10, YW = 9;
+
+      const colFor = (i: number) =>
+        shown.length < 2 ? 0 : Math.round(i * (W - 1) / (shown.length - 1));
+      const rowFor = (c: number) =>
+        H - 1 - Math.round((c / maxCum) * (H - 1));
+
+      const grid: string[][] = Array.from({length: H}, () => Array(W).fill(' '));
+
+      for (let i = 0; i < shown.length - 1; i++) {
+        let x0 = colFor(i),     y0 = rowFor(cumCosts[i]);
+        const x1 = colFor(i+1), y1 = rowFor(cumCosts[i+1]);
+        const dx =  Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        while (true) {
+          if (grid[y0][x0] === ' ') grid[y0][x0] = '·';
+          if (x0 === x1 && y0 === y1) break;
+          const e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+      for (let i = 0; i < shown.length; i++) grid[rowFor(cumCosts[i])][colFor(i)] = '◆';
+
+      L.push(''); L.push(DIVIDER); L.push('');
+      L.push('$ cost over turns  (cumulative)');
+      L.push('');
+      if (skipped > 0) L.push(`  ··· ${skipped} earlier turns not shown`);
+
+      // 3 y-ticks: top, mid, bottom — │ on all other rows
+      const yTicks = new Map([[0, maxCum], [Math.round((H-1)/2), maxCum/2], [H-1, 0]]);
+      for (let r = 0; r < H; r++) {
+        const yLabel = yTicks.has(r)
+          ? fmtCost(yTicks.get(r)!).padStart(YW)
+          : ' '.repeat(YW);
+        const ax = yTicks.has(r) ? (r === H-1 ? '┴' : '┤') : '│';
+        L.push(`  ${yLabel} ${ax}${grid[r].join('')}`);
+      }
+      L.push(`  ${' '.repeat(YW)} └${'─'.repeat(W + 1)}`);
+
+      // x-axis: turn numbers every ~6 turns, min 4 chars apart
+      const xChars = Array(W).fill(' ');
+      const xStep  = Math.max(2, Math.round(shown.length / 6));
+      for (let i = 0; i < shown.length; i += xStep) {
+        const pos = colFor(i);
+        const num = String(shown[i].n);
+        if (pos + num.length < W) {
+          for (let j = 0; j < num.length; j++) xChars[pos + j] = num[j];
+        }
+      }
+      L.push(`  ${' '.repeat(YW + 2)}${xChars.join('')}  turn`);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // stacked bar chart — models with ≥ 5 % of total tokens, max 3
+    // ─────────────────────────────────────────────────────────────
+    const breakdown = usage.modelBreakdown ?? {};
+    const allModels = Object.keys(breakdown);
+    if (allModels.length >= 2) {
+      const totalTok = allModels.reduce(
+        (s, m) => s + breakdown[m].inputTokens + breakdown[m].outputTokens, 0
+      );
+
+      const modelCosts = allModels
+        .filter(mdl => (breakdown[mdl].inputTokens + breakdown[mdl].outputTokens) / Math.max(totalTok, 1) >= 0.05)
+        .map(mdl => {
+          const { inputTokens: iT, outputTokens: oT } = breakdown[mdl];
+          const [mip, mop] = priceFor(mdl);
+          const inCost  = (iT  * mip) / 1_000_000;
+          const outCost = (oT  * mop) / 1_000_000;
+          return { mdl, inCost, outCost, total: inCost + outCost };
+        })
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 3);
+
+      if (modelCosts.length >= 2) {
+        const maxBar  = Math.max(...modelCosts.map(m => m.total), 0.000001);
+        const BAR_H   = 8, BAR_W = 12, GAP = 4, LBL_W = 9;
+        const CHART_W = modelCosts.length * (BAR_W + GAP) - GAP;
+
+        L.push(''); L.push(DIVIDER); L.push('');
+        L.push('$ by model  (session, ≥ 5 % usage)');
+        L.push('');
+
+        const yTicks3 = new Map([
+          [BAR_H,               maxBar],
+          [Math.ceil(BAR_H / 2), maxBar / 2],
+          [1,                   0],
+        ]);
+
+        for (let row = BAR_H; row >= 1; row--) {
+          let line = '';
+          for (let mi = 0; mi < modelCosts.length; mi++) {
+            if (mi > 0) line += ' '.repeat(GAP);
+            const { inCost, outCost } = modelCosts[mi];
+            const inRows  = Math.round((inCost  / maxBar) * BAR_H);
+            const totRows = Math.min(Math.round(((inCost + outCost) / maxBar) * BAR_H), BAR_H);
+            if      (row <= inRows)  line += '▓'.repeat(BAR_W);
+            else if (row <= totRows) line += '░'.repeat(BAR_W);
+            else                     line += ' '.repeat(BAR_W);
+          }
+          const yLabel = yTicks3.has(row)
+            ? fmtCost(yTicks3.get(row)!).padStart(LBL_W)
+            : ' '.repeat(LBL_W);
+          const ax = yTicks3.has(row) ? (row === 1 ? '┴' : '┤') : '│';
+          L.push(`  ${yLabel} ${ax} ${line}`);
+        }
+        L.push(`  ${' '.repeat(LBL_W)} └${'─'.repeat(CHART_W + 2)}`);
+
+        // centered model labels + cost
+        for (let mi = 0; mi < modelCosts.length; mi++) {
+          if (mi === 0) process.stdout.write(''); // no-op to set up spacing
+        }
+        let nameRow = '  ' + ' '.repeat(LBL_W + 2);
+        let costRow = '  ' + ' '.repeat(LBL_W + 2);
+        for (let mi = 0; mi < modelCosts.length; mi++) {
+          if (mi > 0) { nameRow += ' '.repeat(GAP); costRow += ' '.repeat(GAP); }
+          const short = modelCosts[mi].mdl
+            .replace(/claude-/, '').replace(/openai-/, '').replace(/-\d{8,}$/, '')
+            .slice(0, BAR_W);
+          nameRow += short.padEnd(BAR_W);
+          costRow += fmtCost(modelCosts[mi].total).padEnd(BAR_W).slice(0, BAR_W);
+        }
+        L.push(nameRow);
+        L.push(costRow);
+        L.push('');
+        L.push(`  ${' '.repeat(LBL_W + 2)}▓ input  ░ output`);
       }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // performance — response time + benchmark vs claude-sonnet-4.6
+    // ─────────────────────────────────────────────────────────────
+    if (turns.length >= 2) {
+      // pair user → assistant to get response durations
+      const responseTimes: number[] = [];
+      const outEstimates: number[] = [];
+      for (let i = 1; i < turns.length; i++) {
+        if (turns[i].role === 'assistant' && turns[i-1].role === 'user') {
+          const dt = turns[i].ts - turns[i-1].ts;
+          if (dt > 0 && dt < 300_000) {   // sanity: 0–5 min
+            responseTimes.push(dt);
+            outEstimates.push(turns[i].est);
+          }
+        }
+      }
+
+      const avgMs  = responseTimes.length
+        ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+        : 0;
+      const avgTokPerSec = avgMs > 0 && outEstimates.length
+        ? outEstimates.reduce((a, b) => a + b, 0) / outEstimates.length / (avgMs / 1000)
+        : 0;
+      const turnCount   = Math.floor(turns.length / 2);
+      const costPerTurn = turnCount > 0 ? sessionCost / turnCount : 0;
+
+      // benchmark: claude-sonnet-4.6
+      const [bip, bop] = priceFor('claude-sonnet-4-6');
+      const benchCost  = (totalIn * bip + totalOut * bop) / 1_000_000;
+      const ratio      = benchCost > 0 ? sessionCost / benchCost : 1;
+      const ratioStr   = ratio <= 1
+        ? `${(ratio).toFixed(2)}×  (${Math.round((1 - ratio) * 100)}% cheaper)`
+        : `${(ratio).toFixed(2)}×  (${Math.round((ratio - 1) * 100)}% more expensive)`;
+
+      const COL1 = 18, COL2 = 16, COL3 = 20;
+      const row = (label: string, cur: string, bench?: string) =>
+        `  ${label.padEnd(COL1)}${cur.padEnd(COL2)}${bench ?? ''}`;
+
+      L.push(''); L.push(DIVIDER); L.push('');
+      L.push('performance');
+      L.push('');
+      L.push(row('', 'this session', 'vs sonnet-4.6'));
+      L.push(`  ${'─'.repeat(COL1 + COL2 + COL3)}`);
+      if (avgMs > 0) {
+        const secStr  = `${(avgMs / 1000).toFixed(1)}s avg`;
+        L.push(row('response time', secStr));
+      }
+      if (avgTokPerSec > 0) {
+        L.push(row('est. tok/sec', `~${Math.round(avgTokPerSec)} t/s`));
+      }
+      L.push(row('turns', `${turnCount}`));
+      L.push(row('cost/turn', `~${fmtCost(costPerTurn)}`));
+      L.push(row('session total', `~${fmtCost(sessionCost)}`, `~${fmtCost(benchCost)}`));
+      L.push(row('vs benchmark', ratioStr));
+    }
+
+    // Stream into the existing streaming message so everything lands in one
+    // render pass — avoids the empty-streaming-msg + batch-content split that
+    // required two Enter presses to see the full output.
+    if (context.onContentDelta) {
+      context.onContentDelta(L.join('\n'));
+      return { success: true, type: 'silent' };
+    }
     return { success: true, type: 'info', content: L.join('\n') };
   },
 };

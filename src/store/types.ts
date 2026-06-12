@@ -41,11 +41,17 @@ export type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResult
 
 // ========== 会话状
 
+export interface ModelTokens {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
   maxContextTokens: number;
+  modelBreakdown: Record<string, ModelTokens>;
 }
 
 export interface SessionMessage {
