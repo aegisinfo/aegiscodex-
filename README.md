@@ -9,9 +9,13 @@
 
 Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq, Gemini and Ollama. BYOK — your keys, your cost.
 
-> **Semantic memory** — €2/month. The AI remembers you across every session.  
-> Subscribe at [aegiscloud.org](https://aegiscloud.org) — check your inbox for the activation token, then run:  
-> `/memory activate <token>`
+> ### Semantic memory — €2/month
+> The AI remembers your project, stack, and decisions across every session.  
+> Subscribe at **[aegiscloud.org](https://aegiscloud.org)**, then activate with one command:
+>
+> ```
+> /memory activate <token>
+> ```
 
 ---
 
@@ -177,12 +181,23 @@ Permission modes:
 
 ## Memory
 
-Persistent cross-session memory requires an active subscription (€2/month). Subscribe at [aegiscloud.org](https://aegiscloud.org) — your activation token will arrive by email. Then run:
+Persistent cross-session memory requires an active subscription (€2/month).
+
+**How to activate:**
+
+1. Subscribe at [aegiscloud.org](https://aegiscloud.org)
+2. Check your inbox for the activation token
+3. Run inside aegiscode:
 
 ```
 /memory activate <token>
-/memory stats
-/memory clear
+```
+
+Once active, the AI remembers your stack, past decisions, and project context across every session — no re-explaining needed.
+
+```
+/memory stats    # usage and quota
+/memory clear    # wipe stored memory
 ```
 
 ---
