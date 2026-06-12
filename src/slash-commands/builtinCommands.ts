@@ -1,11 +1,26 @@
 /**
- * 
+ * Built-in slash commands
  */
 
 import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './types.js';
-import { sessionActions, getState, getConfig, getCurrentModel } from '../store/index.js';
-import { createDefaultOrchestrator, CouncilAgent } from '../agent/orchestrator/index.js';
+import type { AgentConfig } from '../agent/types.js';
+import { sessionActions, getState, getConfig } from '../store/index.js';
+import {
+  OrchestratorAgent,
+  CouncilAgent,
+  requireModelConfig,
+  createBuiltinApps,
+  runApp,
+  getApp,
+  getRegisteredApps,
+  AppBuilder,
+  type AppDefinition,
+  type SubAgentConfig,
+} from '../agent/orchestrator/index.js';
 import { getOllamaModels, isLocalOllamaUrl, type OllamaModelInfo } from '../services/OllamaInstaller.js';
+
+// ─── Auto-register AppBuilder apps ───
+const BUILTIN_APPS: AppDefinition[] = createBuiltinApps();
 
 /**
  * /help - 显示所有可用命令
@@ -1028,94 +1043,349 @@ export const thinkingCommand: SlashCommand = {
  */
 
 
+/**
+ * Detect task type from the task string.
+ * Returns 'scaffold', 'refactor', 'review', or 'default'.
+ */
+function detectTaskType(task: string): 'scaffold' | 'refactor' | 'review' | 'default' {
+  const lower = task.toLowerCase();
+  if (/^(build|create|new|scaffold|generate|make|init|bootstrap)\b/.test(lower)) return 'scaffold';
+  if (/^(refactor|restructure|reorganize|redesign|rewrite)\b/.test(lower)) return 'refactor';
+  if (/^(review|audit|inspect|check|analyze|security|vulnerab)\b/.test(lower)) return 'review';
+  return 'default';
+}
+
+/**
+ * Build agent configs dynamically based on task type.
+ * Scaffold mode agents get full Write/Edit/Bash access for building new apps.
+ */
+function buildMultiAgents(type: 'scaffold' | 'refactor' | 'review' | 'default', config: AgentConfig): SubAgentConfig[] {
+  const agentConfig = { ...config, timeout: 180000 };
+
+  switch (type) {
+    case 'scaffold':
+      return [
+        {
+          name: 'architect',
+          role: 'System Architect',
+          systemPrompt: `You are a System Architect. Design the new application architecture.
+Define: project structure, tech stack, directory layout, key modules, data flow, API design.
+Consider: scalability, maintainability, testing strategy, deployment.
+Output a concrete file tree and architecture decisions log. Be specific.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'scaffolder',
+          role: 'Project Scaffolder',
+          systemPrompt: `You are a Project Scaffolder. Build the complete application from scratch.
+
+YOUR JOB IS TO CREATE ALL PROJECT FILES - not just describe them.
+
+Use Write to create: package.json, tsconfig.json, source files, configs, tests.
+Generate COMPLETE, WORKING code - not stubs or placeholders.
+Set up build scripts, lint config, and any necessary tooling.
+
+After creating files, use Bash to run: npm/pnpm install, then build/compile.
+Fix any errors until the project builds successfully.
+
+Be thorough - a real, runnable project is the goal.`,
+          config: agentConfig,
+          tools: ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash'],
+        },
+        {
+          name: 'reviewer',
+          role: 'Code Reviewer',
+          systemPrompt: `You are a Code Reviewer. Review the scaffolded project.
+Check for: missing types, broken imports, misconfigured package.json, error handling gaps.
+Report issues with specific file paths and fix suggestions. Be concise.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+      ];
+
+    case 'refactor':
+      return [
+        {
+          name: 'analyzer',
+          role: 'Code Analyzer',
+          systemPrompt: `You are a Code Analyzer. Find refactoring opportunities.
+Look for: duplicated code, long functions (>20 lines), complex conditionals, unused imports,
+circular dependencies, inconsistent patterns. Report with file paths and line numbers.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'planner',
+          role: 'Refactoring Planner',
+          systemPrompt: `You are a Refactoring Planner. Given the analyzer findings, create a step-by-step plan.
+Each step: file path, what to change, why, risk level (LOW/MEDIUM/HIGH).
+Include before/after snippets. Order by impact. Be concrete.`,
+          config: agentConfig,
+          tools: ['Read'],
+        },
+        {
+          name: 'implementer',
+          role: 'Implementation Engineer',
+          systemPrompt: `You are an Implementation Engineer. Execute the refactoring plan.
+Use Edit and Write to make actual code changes.
+After each change, use Read to verify correctness. Keep existing code style.
+Run build commands to ensure nothing is broken.`,
+          config: agentConfig,
+          tools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'],
+        },
+      ];
+
+    case 'review':
+      return [
+        {
+          name: 'scanner',
+          role: 'Vulnerability Scanner',
+          systemPrompt: `You are a Security Vulnerability Scanner.
+Scan for: hardcoded API keys/secrets, SQL injection, XSS, unsafe eval/exec, path traversal.
+Use Grep with targeted patterns. Report every finding with: file path, severity (CRITICAL/HIGH/MEDIUM/LOW), line number.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'reviewer',
+          role: 'Code Reviewer',
+          systemPrompt: `You are a Code Reviewer. Review for bugs, logic errors, and quality issues.
+Check: type safety, error handling, null safety, race conditions, performance patterns.
+Be critical but constructive. Prioritize correctness over style.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'debugger',
+          role: 'Debugging Specialist',
+          systemPrompt: `You are a Debugging Specialist. Analyze potential runtime issues.
+Identify: error handling gaps, edge cases, resource leaks, async issues, testing blind spots.
+Suggest testing strategies for each risk area.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob', 'Bash'],
+        },
+      ];
+
+    default:
+      return [
+        {
+          name: 'architect',
+          role: 'System Architect',
+          systemPrompt: `You are a System Architect. Analyze the task from an architectural perspective.
+Evaluate: code structure, dependencies, design patterns, refactoring opportunities.
+Provide specific file paths and recommendations. Be concise and actionable.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'implementer',
+          role: 'Implementation Engineer',
+          systemPrompt: `You are an Implementation Engineer. Write clean, production-ready code.
+Follow existing patterns. Provide complete code blocks with file paths.
+Focus on: correctness, error handling, TypeScript types, edge cases.
+Use Write/Edit to create or modify files as needed.`,
+          config: agentConfig,
+          tools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'],
+        },
+        {
+          name: 'reviewer',
+          role: 'Code Reviewer',
+          systemPrompt: `You are a Code Reviewer. Review the approach and code.
+Check: logic errors, type safety, error handling, performance, security.
+Be critical but constructive. Report specific issues with file paths.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob'],
+        },
+        {
+          name: 'debugger',
+          role: 'Debugging Specialist',
+          systemPrompt: `You are a Debugging Specialist. Analyze potential issues and edge cases.
+Identify: failure modes, error handling gaps, testing considerations.
+Think about what could go wrong and how to prevent it.`,
+          config: agentConfig,
+          tools: ['Read', 'Grep', 'Glob', 'Bash'],
+        },
+      ];
+  }
+}
+
+/**
+ * Get a label+icon for the mode.
+ */
+function modeMeta(type: string): { icon: string; label: string } {
+  switch (type) {
+    case 'scaffold': return { icon: '🏗', label: 'App Scaffolding' };
+    case 'refactor': return { icon: '🔧', label: 'Code Refactoring' };
+    case 'review':   return { icon: '🔍', label: 'Code Review' };
+    default:         return { icon: '⬡', label: 'Multi-Agent Orchestration' };
+  }
+}
+
 const multiCommand: SlashCommand = {
   name: 'multi',
   description: 'Orchestrate multiple AI agents on a complex task — /multi <task>',
   category: 'general',
-  usage: '/multi <task>',
-  examples: ['/multi Refactor the auth module to use JWT', '/multi Review the codebase for security issues'],
-  fullDescription: `Spawns up to 4 specialist agents in parallel:
-- architect   — analyzes structure & design patterns
-- implementer — writes production-ready code
-- reviewer    — checks for bugs & security issues
-- debugger    — diagnoses errors systematically
+  usage: '/multi <task> [--save-as <name>] [--template <id>]',
+  examples: [
+    '/multi Refactor the auth module to use JWT',
+    '/multi Review the codebase for security issues',
+    '/multi Create a new CLI tool for managing TODO lists --save-as todo-app',
+    '/multi Build a REST API server for a blog --template refactor',
+  ],
+  fullDescription: `Orchestrates multiple AI agents in parallel on a complex task, then synthesizes results.
 
-All agents run concurrently, then results are synthesized.`,
+Task types are auto-detected:
+  build/create/new/scaffold -> scaffolding agents with full tool access (Write, Edit, Bash)
+  refactor                 -> code analysis + planning + implementation agents
+  review/audit             -> security/code review agents
+  default                  -> architect + implementer + reviewer + debugger
+
+Flags:
+  --save-as <name>    Save this agent configuration as a reusable app (e.g. /myapp <task>)
+  --template <id>     Start from a template (audit, refactor, test-gen)`,
 
   async handler(args: string, _context: SlashCommandContext): Promise<SlashCommandResult> {
-    const task = args?.trim();
+    const trimmed = args?.trim();
+    if (!trimmed) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
+
+    let modelConfig;
+    try { modelConfig = requireModelConfig(); }
+    catch (e) { return { success: false, type: 'error', error: (e as Error).message }; }
+
+    // Parse flags
+    const saveAsMatch = trimmed.match(/--save-as\s+(\S+)/);
+    const templateMatch = trimmed.match(/--template\s+(\S+)/);
+    const saveAs = saveAsMatch ? saveAsMatch[1] : null;
+    const templateId = templateMatch ? templateMatch[1] : null;
+
+    // Extract clean task (remove flags)
+    const task = trimmed
+      .replace(/--save-as\s+\S+/g, '')
+      .replace(/--template\s+\S+/g, '')
+      .trim();
+
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    // Robust model resolution — fallback chain: store → configManager → env
-    let currentModel = getCurrentModel();
-    if (!currentModel) {
-      const { configManager } = await import('../config/ConfigManager.js');
-      await configManager.initialize().catch(() => {});
-      currentModel = configManager.getDefaultModel() as any;
-    }
-    const config = getConfig();
-    const defaultCfg = (config?.default || {}) as Record<string, string | undefined>;
-
-    const model = (currentModel as any)?.model || (currentModel as any)?.id || defaultCfg.model || process.env.OPENAI_MODEL || '';
-    const baseURL = (currentModel as any)?.baseURL || defaultCfg.baseURL || process.env.OPENAI_BASE_URL || '';
-    let apiKey = (currentModel as any)?.apiKey || defaultCfg.apiKey || '';
-    const bu = baseURL.toLowerCase();
-    if (!apiKey) {
-      if (bu.includes('anthropic'))         apiKey = process.env.ANTHROPIC_API_KEY || '';
-      else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
-      else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
-      else if (bu.includes('openai'))       apiKey = process.env.OPENAI_API_KEY || '';
-      else                                  apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    }
-    if (!apiKey) apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-
-    if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
-    }
-
-    // If Anthropic key fails (e.g. zero balance), fall back to the next available key
-    if (baseURL.toLowerCase().includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
-      apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
-    }
-
-    const modelConfig = { model, baseURL: baseURL || undefined, apiKey, timeout: 180000 };
-
     try {
-      const orchestrator = createDefaultOrchestrator(modelConfig);
-
-      const subTasks: Record<string, string> = {
-        architect: `Analyze the following task from an architectural perspective.\nEvaluate code structure, dependencies, design patterns, and potential refactoring.\nProvide specific file paths and recommendations.\n\nTask: ${task}`,
-        implementer: `Implement the following task.\nWrite clean, production-ready code following existing patterns.\nProvide complete code blocks with file paths.\n\nTask: ${task}`,
-        reviewer: `Review the approach for the following task.\nCheck for potential bugs, security issues, type safety, and performance concerns.\nBe critical but constructive.\n\nTask: ${task}`,
-        debugger: `Analyze potential issues and edge cases for the following task.\nIdentify failure modes, error handling gaps, and testing considerations.\n\nTask: ${task}`,
+      const agentConfig: AgentConfig = {
+        apiKey: modelConfig.apiKey,
+        baseURL: modelConfig.baseURL,
+        model: modelConfig.model,
+        timeout: 180000,
       };
 
-      const result = await orchestrator.orchestrate(task, subTasks, 'synthesizer');
+      let agents: SubAgentConfig[];
+      let modeType: string;
+      let orchestratorName: string;
+      let synthesizerName: string;
+
+      if (templateId) {
+        // Use a built-in template
+        const templateApp = getApp(templateId);
+        if (!templateApp) {
+          const available = getRegisteredApps().map(a => a.id).join(', ');
+          return { success: false, type: 'error', error: `Template "${templateId}" not found. Available: ${available}` };
+        }
+        agents = templateApp.agents.map(a => ({
+          ...a,
+          config: { ...agentConfig, ...a.config },
+        }));
+        modeType = templateId;
+        orchestratorName = templateApp.name;
+        synthesizerName = templateApp.synthesizer || agents[agents.length - 1]?.name;
+      } else {
+        // Detect task type
+        modeType = detectTaskType(task);
+        orchestratorName = modeMeta(modeType).label;
+        agents = buildMultiAgents(modeType as any, agentConfig);
+        synthesizerName = agents[agents.length - 1]?.name;
+      }
+
+      // Build orchestrator
+      const orchestrator = new OrchestratorAgent(
+        `Multi-${modeType}`,
+        `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
+      );
+
+      for (const agent of agents) {
+        orchestrator.registerAgent(agent);
+      }
+
+      // Build sub-tasks
+      const subTasks: Record<string, string> = {};
+      for (const agent of agents) {
+        subTasks[agent.name] = agent.systemPrompt.split('\n')[0];
+      }
+
+      // Run
+      const result = await orchestrator.orchestrate(task, subTasks, synthesizerName);
+
+      // If --save-as, register as reusable AppBuilder app
+      if (saveAs) {
+        const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+
+        // Check for conflicts
+        if (getApp(saveId)) {
+          return {
+            success: false,
+            type: 'error',
+            error: `App "${saveId}" already exists. Choose a different name.`,
+          };
+        }
+
+        const builder = new AppBuilder(saveId, `${task.slice(0, 50)}...`)
+          .describe(`Custom app created via /multi: ${task.slice(0, 120)}`)
+          .use(`/${saveId} <task>`)
+          .examples([`/${saveId} ${task.slice(0, 60)}`]);
+
+        for (const agent of agents) {
+          builder.agent(agent.name, agent.role, agent.systemPrompt, agent.tools);
+        }
+
+        builder.register();
+      }
+
+      // Format output
+      const { icon, label } = modeMeta(modeType);
       const lines: string[] = [];
-      lines.push('## ⬡ Multi-Agent Orchestration');
+      lines.push(`## ${icon} ${label}`);
       lines.push(`**Task:** ${task}`);
       lines.push('');
 
       for (const response of result.responses) {
-        const icon = response.agentName === 'architect' ? '🏗'
-          : response.agentName === 'implementer' ? '⚙'
-          : response.agentName === 'reviewer' ? '🔍'
-          : '🐛';
-        lines.push(`### ${icon} ${response.agentName.charAt(0).toUpperCase() + response.agentName.slice(1)}`);
+        const agentCfg = agents.find(a => a.name === response.agentName);
+        const role = agentCfg?.role || response.agentName;
+        const toolHint = response.metadata?.toolCallsCount
+          ? ` [${response.metadata.toolCallsCount} tool calls]`
+          : '';
+        lines.push(`### ${role}${toolHint}`);
+        if (response.metadata?.durationMs) {
+          lines.push(`*${(response.metadata.durationMs / 1000).toFixed(1)}s*`);
+        }
         lines.push('');
         lines.push(response.content || '*No response*');
-        if (response.metadata?.durationMs) {
-          lines.push(`\n*(${response.metadata.durationMs}ms)*`);
-        }
         lines.push('');
       }
 
       lines.push('---');
-      lines.push('### 📋 Synthesized Summary');
+      lines.push('### Synthesized Summary');
       lines.push('');
       lines.push(result.summary);
       lines.push('');
-      lines.push(`*${result.metadata.agentsUsed} agents · ${(result.metadata.totalDurationMs / 1000).toFixed(1)}s total*`);
+
+      const statusParts = [
+        `${result.metadata.agentsUsed} agents`,
+        `${(result.metadata.totalDurationMs / 1000).toFixed(1)}s`,
+      ];
+      if (result.metadata.totalTokens) {
+        statusParts.push(`${result.metadata.totalTokens} tokens`);
+      }
+      if (saveAs) {
+        const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+        statusParts.push(`saved as /${saveId}`);
+      }
+      lines.push(`*${statusParts.join(' \u00b7 ')}*`);
 
       return { success: true, type: 'info', content: lines.join('\n') };
     } catch (error) {
@@ -1127,6 +1397,8 @@ All agents run concurrently, then results are synthesized.`,
     }
   },
 };
+
+
 
 const researchCommand: SlashCommand = {
   name: 'research',
@@ -1146,39 +1418,9 @@ Agents deliberate in parallel, then results are aggregated.`,
     const question = args?.trim();
     if (!question) return { success: false, type: 'error', error: 'Usage: /research <question>' };
 
-    // Robust model resolution — fallback chain: store → configManager → env
-    let currentModel2 = getCurrentModel();
-    if (!currentModel2) {
-      const { configManager } = await import('../config/ConfigManager.js');
-      await configManager.initialize().catch(() => {});
-      currentModel2 = configManager.getDefaultModel() as any;
-    }
-    const config2 = getConfig();
-    const defaultCfg2 = (config2?.default || {}) as Record<string, string | undefined>;
-
-    const model = (currentModel2 as any)?.model || (currentModel2 as any)?.id || defaultCfg2.model || process.env.OPENAI_MODEL || '';
-    const baseURL = (currentModel2 as any)?.baseURL || defaultCfg2.baseURL || process.env.OPENAI_BASE_URL || '';
-    let apiKey = (currentModel2 as any)?.apiKey || defaultCfg2.apiKey || '';
-    if (!apiKey) {
-      const bu = baseURL.toLowerCase();
-      if (bu.includes('anthropic'))         apiKey = process.env.ANTHROPIC_API_KEY || '';
-      else if (bu.includes('deepseek'))     apiKey = process.env.DEEPSEEK_API_KEY || '';
-      else if (bu.includes('groq'))         apiKey = process.env.GROQ_API_KEY || '';
-      else if (bu.includes('openai'))       apiKey = process.env.OPENAI_API_KEY || '';
-      else                                  apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-    }
-    if (!apiKey) apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || process.env.ANTHROPIC_API_KEY || '';
-
-    if (!apiKey) {
-      return { success: false, type: 'error', error: 'No API key configured. Add DEEPSEEK_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to ~/.aegiscode/.env' };
-    }
-
-    // If Anthropic key fails (e.g. zero balance), fall back to the next available key
-    if (baseURL.toLowerCase().includes('anthropic') && !process.env.ANTHROPIC_API_KEY) {
-      apiKey = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY || '';
-    }
-
-    const modelConfig = { model, baseURL: baseURL || undefined, apiKey, timeout: 180000 };
+    let modelConfig;
+    try { modelConfig = requireModelConfig(); }
+    catch (e) { return { success: false, type: 'error', error: (e as Error).message }; }
 
     try {
       const council = new CouncilAgent('research-council', modelConfig, {
@@ -1573,6 +1815,71 @@ const yoloCommand: SlashCommand = {
   },
 };
 
+// ─── AppBuilder-powered commands ────────────────────────────────────
+
+function createAppCommand(app: AppDefinition): SlashCommand {
+  return {
+    name: app.id,
+    description: app.description,
+    category: 'general',
+    usage: app.usage || `/${app.id} <task>`,
+    examples: app.examples,
+    fullDescription: `Runs a multi-agent app: **${app.name}**\n\nAgents: ${app.agents.map(a => `**${a.role}**`).join(' → ')}\n\nUses ${app.agents.length} specialist agents in parallel, then synthesizes results.`,
+
+    async handler(args: string): Promise<SlashCommandResult> {
+      const task = args?.trim();
+      if (!task) {
+        return { success: false, type: 'error', error: `Usage: /${app.id} <task>\n\n${app.description}` };
+      }
+      try {
+        const result = await runApp(app.id, { task });
+        const lines: string[] = [];
+
+        // ── Status line ──
+        const statusIcon = result.errorCount > 0 ? '⚠' : '✓';
+        lines.push(`## ⬡ ${app.name}`);
+        lines.push(`**Task:** ${task}`);
+        lines.push(`*${result.responses.length} agents · ${(result.totalDurationMs / 1000).toFixed(1)}s · ${result.errorCount} error(s)*`);
+        lines.push('');
+
+        // ── Agent responses ──
+        for (const response of result.responses) {
+          const appCfg = app.agents.find(a => a.name === response.agentName);
+          const role = appCfg?.role || response.agentName;
+          const icon = result.errorCount > 0 && response.content.startsWith('[Error:') ? '⚠' : '▸';
+          const toolHint = response.toolCallsCount ? ` [${response.toolCallsCount} tool calls]` : '';
+          lines.push(`### ${icon} ${role}${toolHint}`);
+          if (response.durationMs) {
+            lines.push(`*${(response.durationMs / 1000).toFixed(1)}s*`);
+          }
+          lines.push('');
+          lines.push(response.content || '*No response*');
+          lines.push('');
+        }
+
+        // ── Summary ──
+        lines.push('---');
+        lines.push('### Synthesis');
+        lines.push('');
+        lines.push(result.summary);
+
+        return { success: true, type: 'info', content: lines.join('\n') };
+      } catch (error) {
+        return {
+          success: false,
+          type: 'error',
+          error: `/${app.id} failed: ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
+    },
+  };
+}
+
+/** Generate SlashCommand wrappers for all AppBuilder apps */
+const appCommands: SlashCommand[] = BUILTIN_APPS.map(createAppCommand);
+
+// ─── Export all commands ───────────────────────────────────────────
+
 export const builtinCommands: SlashCommand[] = [
   helpCommand,
   clearCommand,
@@ -1591,4 +1898,5 @@ export const builtinCommands: SlashCommand[] = [
   yoloCommand,
   multiCommand,
   researchCommand,
+  ...appCommands,
 ];

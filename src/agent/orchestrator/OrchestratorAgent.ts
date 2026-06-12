@@ -6,6 +6,7 @@
  * - Runs agents in parallel for independent tasks
  * - Fuses results from multiple agents
  * - Routes follow-up tasks based on context
+ * - Sub-agents can use real tools (Read, Edit, Write, Bash, Grep, Glob)
  */
 
 import type { AgentConfig, Message, ToolCall, ToolDefinition } from '../types.js';
@@ -13,8 +14,14 @@ import { createChatService } from '../../services/ChatService.js';
 import { sharedMemory } from '../../memory/SharedMemory.js';
 import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
-import { createToolRegistry, ToolRegistry } from '../../tools/index.js';
-import { getBuiltinTools } from '../../tools/builtin/index.js';
+import {
+  createToolRegistry,
+  getBuiltinTools,
+  ExecutionPipeline,
+  PermissionMode,
+  type ToolRegistry,
+  type PipelineExecutionContext,
+} from '../../tools/index.js';
 
 // ========== Types ==========
 
@@ -43,6 +50,7 @@ export interface AgentResponse {
   metadata?: {
     tokensUsed?: number;
     durationMs?: number;
+    toolCallsCount?: number;
   };
 }
 
@@ -57,17 +65,42 @@ export interface OrchestrationResult {
   };
 }
 
-// ========== Sub-Agent Runner ==========
+// ========== Tool-Enabled Sub-Agent Runner ==========
 
+/**
+ * SubAgentRunner — runs one sub-agent with optional tool execution.
+ *
+ * Previously this was a pure LLM chat. Now it:
+ * 1. Registers its allowed tools
+ * 2. Passes tool definitions to the LLM
+ * 3. Executes tool calls inline (like Agent.ts)
+ * 4. Returns the final content + metadata
+ */
 class SubAgentRunner {
   private chatService: ReturnType<typeof createChatService>;
   private config: SubAgentConfig;
-  // Track active session for memory bus context sharing
+  private toolRegistry?: ToolRegistry;
+  private executionPipeline?: ExecutionPipeline;
   private currentSessionId: string = 'default';
 
   constructor(config: SubAgentConfig) {
     this.config = config;
     this.chatService = createChatService(config.config);
+
+    // Set up tool registry if this agent has tool access
+    if (config.tools && config.tools.length > 0) {
+      const registry = createToolRegistry();
+      const builtins = getBuiltinTools();
+      for (const tool of builtins) {
+        if (config.tools.includes(tool.name)) {
+          registry.register(tool);
+        }
+      }
+      this.toolRegistry = registry;
+      this.executionPipeline = new ExecutionPipeline(registry, {
+        defaultMode: PermissionMode.AUTO_EDIT, // no confirm prompts for sub-agents
+      });
+    }
   }
 
   async run(
@@ -83,8 +116,8 @@ class SubAgentRunner {
     const agentContext = await agentMemoryBus.getContextForAgent(
       this.config.name,
       sid,
-      8,    // last 8 messages
-      600,  // within last 10 minutes
+      8,
+      600,
     );
 
     const messages: Message[] = [
@@ -92,7 +125,6 @@ class SubAgentRunner {
       ...(context?.messages || []),
     ];
 
-    // Add shared memory context if available
     if (agentContext) {
       messages.push({ role: 'system', content: agentContext });
     }
@@ -104,35 +136,60 @@ class SubAgentRunner {
         : task,
     });
 
+    // ── Build tool definitions for LLM ──
+    const tools: ToolDefinition[] | undefined = this.toolRegistry
+      ? this.toolRegistry.getFunctionDeclarationsByMode().map(fn => ({
+          type: 'function' as const,
+          function: {
+            name: fn.name,
+            description: fn.description,
+            parameters: fn.parameters as ToolDefinition['function']['parameters'],
+          },
+        }))
+      : undefined;
+
+    // ── Execute LLM loop (max 1 turn with tools) ──
+    let totalToolCalls = 0;
     try {
-      const result = await this.chatService.chat(messages, undefined);
+      const result = await this.chatService.chat(messages, tools);
 
-      // ── Publish result to shared memory bus ──
-      const channel = this.inferChannel(task, result.content);
-      agentMemoryBus.publish({
-        channel,
-        sourceAgent: this.config.name,
-        sessionId: sid,
-        content: result.content.slice(0, 500),
-        importance: result.content.length > 100 ? 0.7 : 0.4,
-        tags: [this.config.role],
-        metadata: { tokensUsed: result.usage?.totalTokens, taskLength: task.length },
-      }).catch(() => {});
+      // If no tool calls — just return content
+      if (!result.toolCalls || result.toolCalls.length === 0) {
+        await this.publishResult(task, result.content, result.usage?.totalTokens, startTime);
+        return {
+          agentName: this.config.name,
+          content: result.content,
+          metadata: {
+            tokensUsed: result.usage?.totalTokens,
+            durationMs: Date.now() - startTime,
+          },
+        };
+      }
 
+      // Execute tool calls and get final content from LLM
+      const finalContent = await this.executeToolCallsAndRespond(
+        result.toolCalls,
+        messages,
+        tools,
+        sid,
+      );
+      totalToolCalls = result.toolCalls.length;
+
+      await this.publishResult(task, finalContent, result.usage?.totalTokens, startTime);
       return {
         agentName: this.config.name,
-        content: result.content,
+        content: finalContent,
         toolCalls: result.toolCalls,
         metadata: {
           tokensUsed: result.usage?.totalTokens,
           durationMs: Date.now() - startTime,
+          toolCallsCount: totalToolCalls,
         },
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       agentDebug.error(`[${this.config.name}] LLM call failed: ${errMsg}`);
 
-      // Publish error to shared memory bus
       agentMemoryBus.publish({
         channel: 'error',
         sourceAgent: this.config.name,
@@ -153,8 +210,93 @@ class SubAgentRunner {
   }
 
   /**
-   * Infer the channel type from task description and result content
+   * Execute tool calls, feed results back to LLM, return final response.
    */
+  private async executeToolCallsAndRespond(
+    toolCalls: ToolCall[],
+    messages: Message[],
+    tools: ToolDefinition[] | undefined,
+    sessionId: string,
+  ): Promise<string> {
+    if (!this.executionPipeline) {
+      return toolCalls.map(tc => `[tool call: ${tc.function.name}]`).join('\n');
+    }
+
+    // Add assistant message with tool calls
+    messages.push({
+      role: 'assistant',
+      content: '',
+      tool_calls: toolCalls,
+    });
+
+    // Execute each tool call
+    for (const tc of toolCalls) {
+      if (tc.type !== 'function') continue;
+
+      let params: Record<string, unknown>;
+      try {
+        params = JSON.parse(tc.function.arguments);
+      } catch {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          name: tc.function.name,
+          content: `Error: Invalid JSON arguments: ${tc.function.arguments}`,
+        });
+        continue;
+      }
+
+      const pipelineContext: PipelineExecutionContext = {
+        sessionId,
+        workspaceRoot: process.cwd(),
+        permissionMode: PermissionMode.AUTO_EDIT,
+        messageId: tc.id,
+      };
+
+      const execResult = await this.executionPipeline.execute(
+        tc.function.name,
+        params,
+        pipelineContext,
+      );
+
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        name: tc.function.name,
+        content: execResult.llmContent || execResult.displayContent || '',
+      });
+    }
+
+    // Get final response from LLM after tool execution
+    try {
+      const final = await this.chatService.chat(messages, tools);
+      return final.content || '';
+    } catch {
+      return toolCalls.map(tc => `[${tc.function.name}: executed]`).join('\n');
+    }
+  }
+
+  /**
+   * Publish result to shared memory bus.
+   */
+  private async publishResult(
+    task: string,
+    content: string,
+    tokensUsed: number | undefined,
+    startTime: number,
+  ): Promise<void> {
+    const channel = this.inferChannel(task, content);
+    agentMemoryBus.publish({
+      channel,
+      sourceAgent: this.config.name,
+      sessionId: this.currentSessionId,
+      content: content.slice(0, 500),
+      importance: content.length > 100 ? 0.7 : 0.4,
+      tags: [this.config.role],
+      metadata: { tokensUsed, taskLength: task.length },
+    }).catch(() => {});
+  }
+
   private inferChannel(task: string, content: string): import('../../memory/AgentMemoryBus.js').AgentChannel {
     const lowerTask = task.toLowerCase();
     const lowerContent = content.toLowerCase();
@@ -185,9 +327,6 @@ export class OrchestratorAgent {
     this.systemPrompt = systemPrompt;
   }
 
-  /**
-   * Register a sub-agent with a specific role and system prompt
-   */
   registerAgent(config: SubAgentConfig): void {
     if (this.agents.has(config.name)) {
       agentDebug.warn(`Orchestrator: Agent "${config.name}" already registered, overwriting`);
@@ -196,31 +335,19 @@ export class OrchestratorAgent {
     this.agentConfigs.set(config.name, config);
   }
 
-  /**
-   * Remove a registered agent
-   */
   unregisterAgent(name: string): void {
     this.agents.delete(name);
     this.agentConfigs.delete(name);
   }
 
-  /**
-   * Get list of registered agent names
-   */
   getRegisteredAgents(): string[] {
     return Array.from(this.agentConfigs.keys());
   }
 
-  /**
-   * Get agent configuration
-   */
   getAgentConfig(name: string): SubAgentConfig | undefined {
     return this.agentConfigs.get(name);
   }
 
-  /**
-   * Run a single task through a specific agent
-   */
   async delegate(
     agentName: string,
     task: string,
@@ -234,20 +361,22 @@ export class OrchestratorAgent {
     return runner.run(task, context, sessionId);
   }
 
-  /**
-   * Set the active session ID for all delegations
-   */
   setSessionId(sessionId: string): void {
-    this.name = this.name; // Keep name, but session routing handled via delegates
+    this.name = this.name;
   }
 
   /**
-   * Run multiple tasks in parallel across different agents
-   * Each delegation in the array runs concurrently
+   * Run multiple tasks in parallel with configurable concurrency.
+   * Default concurrency = number of tasks (full parallelism).
    */
-  async delegateParallel(delegations: TaskDelegation[], concurrency: number = 2, sessionId?: string): Promise<AgentResponse[]> {
+  async delegateParallel(
+    delegations: TaskDelegation[],
+    concurrency: number = delegations.length,
+    sessionId?: string,
+  ): Promise<AgentResponse[]> {
+    if (concurrency <= 0) concurrency = delegations.length;
+
     const results: AgentResponse[] = [];
-    // Run in batches to avoid overwhelming API rate limits
     for (let i = 0; i < delegations.length; i += concurrency) {
       const batch = delegations.slice(i, i + concurrency);
       const batchResults = await Promise.allSettled(
@@ -271,9 +400,6 @@ export class OrchestratorAgent {
     return results;
   }
 
-  /**
-   * Chain: run agents sequentially, passing previous results as context
-   */
   async delegateChain(tasks: TaskDelegation[]): Promise<AgentResponse[]> {
     const results: AgentResponse[] = [];
     let previousResults = '';
@@ -294,12 +420,7 @@ export class OrchestratorAgent {
 
   /**
    * Full orchestration: split a complex task into sub-tasks,
-   * run them in parallel, then synthesize results
-   *
-   * @param complexTask - The high-level task description
-   * @param subTasks - Map of agentName -> specific sub-task
-   * @param synthesiserName - Agent to synthesize results (defaults to first registered)
-   * @param sessionId - Session ID for shared memory context
+   * run them in parallel, then synthesize results.
    */
   async orchestrate(
     complexTask: string,
@@ -319,7 +440,7 @@ export class OrchestratorAgent {
     // Phase 1: Run all sub-agents fully in parallel
     const responses = await this.delegateParallel(delegations, delegations.length, sid);
 
-    // Phase 2: Synthesize — truncate each response so the synthesis prompt stays within limits
+    // Phase 2: Synthesize
     const MAX_RESPONSE_CHARS = 2000;
     const synthesiser = synthesiserName || this.getRegisteredAgents()[0];
     const synthesisPrompt = responses
@@ -349,7 +470,6 @@ export class OrchestratorAgent {
       summary = responses[0]?.content || '';
     }
 
-    // Publish orchestration summary to shared memory
     agentMemoryBus.publish({
       channel: 'decision',
       sourceAgent: 'orchestrator',
@@ -383,13 +503,9 @@ export class OrchestratorAgent {
 
 // ========== Factory ==========
 
-/**
- * Create a pre-configured orchestrator with standard role agents
- */
 export function createDefaultOrchestrator(
   config: AgentConfig
 ): OrchestratorAgent {
-  // Sub-agents need more time than regular chat — thinking models can run long
   const agentConfig = { ...config, timeout: 180000 };
 
   const orchestrator = new OrchestratorAgent(
@@ -402,9 +518,11 @@ export function createDefaultOrchestrator(
     role: 'System Architect',
     systemPrompt: `You are a System Architect. Analyze code structure, dependencies, and design patterns.
 Provide architectural recommendations with specific file paths and refactoring steps.
-Focus on: module boundaries, data flow, API design, scalability. Be concise.`,
+Focus on: module boundaries, data flow, API design, scalability. Be concise.
+
+You can use Read, Grep, and Glob to explore the codebase.`,
     config: agentConfig,
-    tools: ['read', 'grep', 'glob'],
+    tools: ['Read', 'Grep', 'Glob'],
   });
 
   orchestrator.registerAgent({
@@ -412,9 +530,11 @@ Focus on: module boundaries, data flow, API design, scalability. Be concise.`,
     role: 'Implementation Engineer',
     systemPrompt: `You are an Implementation Engineer. Write clean, production-ready code.
 Follow existing code patterns. Provide complete code blocks with file paths.
-Focus on: correctness, error handling, TypeScript types, edge cases. Be concise.`,
+Focus on: correctness, error handling, TypeScript types, edge cases. Be concise.
+
+You can use Read, Grep, Edit, and Write to modify the codebase.`,
     config: agentConfig,
-    tools: ['read', 'edit', 'write', 'grep'],
+    tools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'],
   });
 
   orchestrator.registerAgent({
@@ -422,9 +542,11 @@ Focus on: correctness, error handling, TypeScript types, edge cases. Be concise.
     role: 'Code Reviewer',
     systemPrompt: `You are a Code Reviewer. Review code for bugs, security issues, and style.
 Be critical but constructive. Prioritize correctness and security over style.
-Focus on: logic errors, type safety, error handling, performance, security. Be concise.`,
+Focus on: logic errors, type safety, error handling, performance, security. Be concise.
+
+You can use Read, Grep, and Glob to examine the codebase.`,
     config: agentConfig,
-    tools: ['read', 'grep'],
+    tools: ['Read', 'Grep', 'Glob'],
   });
 
   orchestrator.registerAgent({
@@ -432,9 +554,11 @@ Focus on: logic errors, type safety, error handling, performance, security. Be c
     role: 'Debugging Specialist',
     systemPrompt: `You are a Debugging Specialist. Diagnose errors systematically.
 Formulate hypotheses, test each one, and reason about root causes.
-Focus on: stack traces, error messages, unexpected behavior, reproduction steps. Be concise.`,
+Focus on: stack traces, error messages, unexpected behavior, reproduction steps. Be concise.
+
+You can use Read, Grep, Glob, and Bash to investigate and test hypotheses.`,
     config: agentConfig,
-    tools: ['read', 'grep', 'bash'],
+    tools: ['Read', 'Grep', 'Glob', 'Bash'],
   });
 
   orchestrator.registerAgent({
