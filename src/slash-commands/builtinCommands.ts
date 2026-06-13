@@ -2170,7 +2170,7 @@ const memoryCommand: SlashCommand = {
     if (args?.startsWith('activate ')) {
       const token = args.replace('activate ', '').trim();
       if (token.length < 20) {
-        return { success: false, type: 'error', error: 'Invalid token format — must be a valid signed JWT from Stripe checkout' };
+        return { success: false, type: 'error', error: 'Invalid token — paste the full token from your activation email' };
       }
 
       // Write token file AND config.json
