@@ -144,13 +144,39 @@ Any OpenAI-compatible API can be added as a custom model.
 | `/copy` | `/cp` | Copy last code block to clipboard |
 | `/copy N` | | Copy Nth code block |
 | `/yolo` | | Toggle auto-approve for all tool calls |
-| `/multi <task>` | | Run task across multiple agents |
+| `/multi <task>` | | Run task across multiple agents in parallel |
+| `/multiyolo <task>` | | Same as /multi with auto-approved tool calls |
+| `/build <description>` | `/forge` | Build an app with multiple AI models in parallel |
 | `/council <question>` | | Multi-model majority vote |
 | `/research <question>` | | Multi-agent research |
 | `/memory` | | Manage semantic memory |
 | `/skills` | `/sk` | List loaded skills |
 | `/hooks` | | View and manage hooks |
 | `/version` | `/v` | Show version info |
+
+---
+
+## /build — parallel multi-model app builder
+
+`/build` decomposes your task into components, assigns each to the best available AI model, and builds everything simultaneously.
+
+```
+/build a REST API for a todo app with PostgreSQL
+/build a CLI tool that summarizes git commits
+/build a Flask web app with login and dashboard
+```
+
+**How it works:**
+
+1. **Plan** — primary model produces a component tree (JSON)
+2. **Build** — all components built in parallel, each by the best model for that role:
+   - DeepSeek → backend, algorithms (`DEEPSEEK_API_KEY`)
+   - GPT-4o → frontend, UI (`OPENAI_API_KEY`)
+   - Llama via Groq → tests, docs (`GROQ_API_KEY`)
+   - Primary model → architecture, integration
+3. **Sync** — summary of files written and how to run the app
+
+All agents write real files to your current directory. The more API keys you have configured, the more models work in parallel.
 
 ---
 
