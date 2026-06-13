@@ -329,6 +329,7 @@ async function main(): Promise<void> {
               stdin: renderStdin,
               stdout: process.stdout,
               alternateScreen: false,
+              maxFps: 0,
             },
           );
         } catch (renderError) {
