@@ -14,9 +14,9 @@ export const MessageSeparator: React.FC<MessageSeparatorProps> = React.memo(({ i
   if (isLast) return null;
   const theme = themeManager.getTheme();
   return (
-    <Box marginY={1} paddingLeft={1}>
-      <Text color={theme.colors.text.muted} dimColor>
-        {'\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C\u254C'}
+    <Box marginY={0}>
+      <Text color={theme.colors.border.light} dimColor>
+        {'\u2500'}{'\u00B7'}{'\u2500'}
       </Text>
     </Box>
   );
