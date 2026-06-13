@@ -4,6 +4,7 @@
 
 import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './types.js';
 import type { AgentConfig } from '../agent/types.js';
+import { buildCommand } from './build.js';
 import { sessionActions, getState, getConfig } from '../store/index.js';
 import {
   OrchestratorAgent,
@@ -2581,5 +2582,6 @@ export const builtinCommands: SlashCommand[] = [
   multiCommand,
   multiYoloCommand,
   researchCommand,
+  buildCommand,
   ...appCommands,
 ];
