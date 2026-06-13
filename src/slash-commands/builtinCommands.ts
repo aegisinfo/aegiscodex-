@@ -1697,11 +1697,16 @@ Flags:
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
-      // Run agents in yolo mode — user already approved upfront
+      // Serialize confirmations so parallel agents don't race on the single dialog slot
+      let confirmQueue: Promise<any> = Promise.resolve();
+      const serialHandler = context.confirmationHandler
+        ? { requestConfirmation: (details: any) => { confirmQueue = confirmQueue.then(() => context.confirmationHandler!.requestConfirmation(details)); return confirmQueue; } }
+        : undefined;
+
       for (const agent of agents) {
         orchestrator.registerAgent({
           ...agent,
-          permissionMode: 'yolo' as any,
+          confirmationHandler: serialHandler,
         });
       }
 
@@ -1733,7 +1738,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Running with auto-approved tool calls*\n\n---\n\n`);
+        context.onContentDelta(`*Tool calls will require confirmation*\n\n---\n\n`);
       }
 
       // Run

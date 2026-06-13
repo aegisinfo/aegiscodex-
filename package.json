@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "build": "node esbuild.mjs",
+    "publish:release": "node esbuild.mjs --publish",
     "start": "node --no-deprecation dist/main.js",
     "typecheck": "tsc --noEmit",
     "test:prompts": "tsx src/prompts/test.ts",
@@ -60,7 +61,6 @@
     "fuse.js": "^7.4.1",
     "glob": "^13.0.0",
     "ink": "^7.0.5",
-
     "ink-text-input": "^6.0.0",
     "js-tiktoken": "^1.0.21",
     "lowlight": "^3.3.0",
@@ -87,6 +87,7 @@
     "@types/uuid": "^11.0.0",
     "@types/yargs": "^17.0.33",
     "esbuild": "^0.28.0",
+    "javascript-obfuscator": "^5.4.3",
     "react-devtools-core": "^7.0.1",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2"

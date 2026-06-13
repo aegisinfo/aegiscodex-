@@ -1,7 +1,10 @@
 import * as esbuild from 'esbuild';
 import { argv } from 'node:process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import JavaScriptObfuscator from 'javascript-obfuscator';
 
 const dev = argv.includes('--dev');
+const publish = argv.includes('--publish');
 const cjs = argv.includes('--cjs'); // for Node SEA standalone builds
 const minify = !dev;
 const sourcemap = dev;
@@ -42,7 +45,31 @@ import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis
     },
   });
 
-  const mode = dev ? 'dev (with sourcemaps)' : 'production (minified)';
+  if (publish) {
+    const src = readFileSync('dist/main.js', 'utf8');
+    // Strip the shebang line before obfuscating — obfuscator doesn't handle it
+    const shebangMatch = src.match(/^(#!.*\n(?:.*\n)?)/);
+    const shebang = shebangMatch ? shebangMatch[1] : '';
+    const body = shebang ? src.slice(shebang.length) : src;
+
+    const result = JavaScriptObfuscator.obfuscate(body, {
+      compact: true,
+      controlFlowFlattening: false,
+      stringArray: true,
+      stringArrayEncoding: ['base64'],
+      stringArrayThreshold: 0.5,
+      identifierNamesGenerator: 'hexadecimal',
+      selfDefending: false,
+      deadCodeInjection: false,
+      debugProtection: false,
+      disableConsoleOutput: false,
+    });
+
+    writeFileSync('dist/main.js', shebang + result.getObfuscatedCode(), 'utf8');
+    console.log('✓ Obfuscated: dist/main.js');
+  }
+
+  const mode = dev ? 'dev (with sourcemaps)' : publish ? 'production (minified + obfuscated)' : 'production (minified)';
   const size = dev ? '' : ' — run `node dist/main.js` to verify';
   console.log(`✓ Build complete: dist/main.js (${mode})${size}`);
 }
