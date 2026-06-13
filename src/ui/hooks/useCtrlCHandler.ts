@@ -84,7 +84,7 @@ export const useCtrlCHandler = (options: CtrlCHandlerOptions): CtrlCHandlerResul
 
   // 监听 Ctrl+C 输
   useInput((input, key) => {
-    if (input === 'c' && key.ctrl) {
+    if (input === 'z' && key.ctrl) {
       handleCtrlC();
     }
   });

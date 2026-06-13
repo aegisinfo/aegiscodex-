@@ -157,7 +157,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           ? `Queued: ${pendingCommands.length} command(s). Type to add more...`
           : 'Processing... Type to queue next command';
       }
-      return 'Type a message... (Ctrl+C to exit)';
+      return 'Type a message... (Ctrl+Z to exit)';
     }, [isProcessing, pendingCommands.length]);
     
     // 自管理的输入状

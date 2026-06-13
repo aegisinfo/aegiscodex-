@@ -65,11 +65,12 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
 
+    // Start the RAF loop. No-op if already running.
+    const scheduleRaf = () => {
+      if (rafId === null) rafId = requestAnimationFrame(flushTick);
+    };
+
     const flushTick = (now: number) => {
-      // Collated update: apply both buffered streaming content AND any
-      // pending store messages in a SINGLE render cycle. This prevents
-      // the "jumping" caused by store subscription updates (tool calls,
-      // block additions) interleaving with RAF streaming content updates.
       if (now - lastRafTime < RAF_INTERVAL_MS) {
         rafId = requestAnimationFrame(flushTick);
         return;
@@ -107,10 +108,17 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      rafId = requestAnimationFrame(flushTick);
+      // Keep ticking only while there is active streaming or queued work.
+      // When idle, stop — the store subscription restarts the loop as needed.
+      if (streamingMsg || pendingMessagesRef.current) {
+        rafId = requestAnimationFrame(flushTick);
+      } else {
+        rafId = null;
+      }
     };
 
-    rafId = requestAnimationFrame(flushTick);
+    // Start idle — store subscription will kick off the loop when work arrives.
+    // (No initial RAF; avoids a 33fps spin on startup before any streaming.)
 
     const unsub = vanillaStore.subscribe((state) => {
       const newMessages = state.session.messages;
@@ -152,15 +160,18 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         const wasStreaming = prevMessages[prevMessages.length - 1]?.isStreaming ?? false;
         const nowStreaming = newMessages[newMessages.length - 1]?.isStreaming ?? false;
         if (wasStreaming && !nowStreaming) {
-          // Also discard any pending RAF update — it may hold a stale intermediate
-          // state (e.g. from a flushStreamBuffer call that fired just before finish)
-          // that would overwrite the correct final state on the next RAF tick.
           pendingMessagesRef.current = null;
           setMessages([...newMessages]);
         } else {
-          // Queue for the RAF tick to prevent dual-path interleaving during streaming.
+          // Queue for the RAF tick; ensure the loop is running to pick it up.
           pendingMessagesRef.current = [...newMessages];
+          scheduleRaf();
         }
+      }
+
+      // Kick off the RAF loop whenever streaming is active so the buffer drains.
+      if (newMessages[newMessages.length - 1]?.isStreaming) {
+        scheduleRaf();
       }
 
       // showAllThinking is not streaming-related, safe to apply immediately.

@@ -143,7 +143,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
       {/* Footer */}
       <FadeInText delayMs={footerT}>
         <Box marginLeft={3}>
-          <Text color={theme.colors.text.muted} dimColor>Ctrl+C exit  ·  Ctrl+F search</Text>
+          <Text color={theme.colors.text.muted} dimColor>Ctrl+Z exit  ·  Ctrl+F search</Text>
         </Box>
       </FadeInText>
 
