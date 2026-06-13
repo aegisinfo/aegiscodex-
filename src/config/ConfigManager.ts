@@ -144,7 +144,7 @@ export class ConfigManager {
         if (eq < 0 || line.trim().startsWith('#')) continue;
         const k = line.slice(0, eq).trim();
         const v = line.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-        if (k && v && !process.env[k]) process.env[k] = v;
+        if (k && v && !v.startsWith('YOUR_') && !process.env[k]) process.env[k] = v;
       }
     } catch {}
 
