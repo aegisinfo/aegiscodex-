@@ -1643,13 +1643,7 @@ Flags:
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    // Resolve permission mode from user config (like the main model does)
-    let permissionMode: string = 'default';
-    try {
-      const { configManager } = await import('../config/ConfigManager.js');
-      const mode = configManager.getDefaultPermissionMode();
-      if (mode) permissionMode = mode;
-    } catch { /* use default */ }
+    const permissionMode: string = 'yolo';
 
     try {
       const agentConfig: AgentConfig = {
@@ -1730,7 +1724,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Permission mode: \`${permissionMode}\` — tool edits will ask for confirmation*\n\n---\n\n`);
+        context.onContentDelta(`*Permission mode: \`${permissionMode}\` — tool calls auto-approved*\n\n---\n\n`);
       }
 
       // Run
