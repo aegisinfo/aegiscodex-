@@ -8,12 +8,8 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-// Ink-style spinner when processing, □ when idle.
-// Derives frame from glowPhase (150ms ticks) — no own timer, no extra Ink redraws.
-const GLYPH_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, glowPhase, color, idleColor }) => {
-  if (!isProcessing) return <Text color={idleColor} bold>□</Text>;
-  return <Text color={color}>{GLYPH_FRAMES[glowPhase % GLYPH_FRAMES.length]}</Text>;
+const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
+  return <Text color={isProcessing ? color : idleColor} bold>□</Text>;
 });
 PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
