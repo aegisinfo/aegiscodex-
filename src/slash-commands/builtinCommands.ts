@@ -1643,8 +1643,6 @@ Flags:
 
     if (!task) return { success: false, type: 'error', error: 'Usage: /multi <task>' };
 
-    const permissionMode: string = 'yolo';
-
     try {
       const agentConfig: AgentConfig = {
         apiKey: modelConfig.apiKey,
@@ -1680,19 +1678,30 @@ Flags:
         synthesizerName = agents[agents.length - 1]?.name;
       }
 
+      // Ask for a single upfront confirmation before any agents run
+      if (context.confirmationHandler) {
+        const agentNames = agents.filter(a => a.name !== 'synthesizer').map(a => a.name);
+        const response = await context.confirmationHandler.requestConfirmation({
+          title: `Start multi-agent task?`,
+          message: task,
+          details: `Agents: ${agentNames.join(', ')}`,
+        });
+        if (!response.approved) {
+          return { success: false, type: 'info', content: 'Multi-agent task cancelled.' };
+        }
+      }
+
       // Build orchestrator
       const orchestrator = new OrchestratorAgent(
         `Multi-${modeType}`,
         `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`,
       );
 
-      // Attach user's confirmation handler and permission mode to every agent
-      // so sub-agent tool calls go through the interactive accept/reject flow
+      // Run agents in yolo mode — user already approved upfront
       for (const agent of agents) {
         orchestrator.registerAgent({
           ...agent,
-          confirmationHandler: context.confirmationHandler,
-          permissionMode: permissionMode as any,
+          permissionMode: 'yolo' as any,
         });
       }
 
@@ -1724,7 +1733,7 @@ Flags:
         context.onContentDelta(`## ${icon} ${label}\n`);
         context.onContentDelta(`**Task:** ${task}\n\n`);
         context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
-        context.onContentDelta(`*Permission mode: \`${permissionMode}\` — tool calls auto-approved*\n\n---\n\n`);
+        context.onContentDelta(`*Running with auto-approved tool calls*\n\n---\n\n`);
       }
 
       // Run
