@@ -61,9 +61,18 @@ function tryWebGL(t) {
   }
 }
 
+// Spårar om användaren är vid botten — scrolla bara auto-scroll när det stämmer.
+function makeBottomTracker(t) {
+  let atBottom = true;
+  t.onScroll(() => {
+    const buf = t.buffer.active;
+    atBottom = buf.viewportY >= buf.length - t.rows - 2;
+  });
+  return () => atBottom;
+}
+
 // Batch writes till en per animation frame — eliminerar per-chunk reflow lag.
-// Scrollar alltid till botten så input-baren syns under strömning.
-function makeBatchedWriter(t) {
+function makeBatchedWriter(t, isAtBottom) {
   let buf = "", raf = null, destroyed = false;
   return data => {
     if (destroyed || !t || !t.element) return;
@@ -72,7 +81,7 @@ function makeBatchedWriter(t) {
       const chunk = buf; buf = ""; raf = null;
       try {
         t.write(chunk);
-        t.scrollToBottom();
+        if (!isAtBottom || isAtBottom()) t.scrollToBottom();
       } catch (_) { destroyed = true; }
     });
   };
@@ -126,7 +135,7 @@ function initTerminal() {
     rightClickSelectsWord: true,
     fastScrollModifier: "shift",
     fastScrollSensitivity: 5,
-    smoothScrollDuration: 80,
+    smoothScrollDuration: 0,
     overviewRulerWidth: 10,
     macOptionIsMeta: true,
     drawBoldTextInBrightColors: false,
@@ -154,7 +163,7 @@ function initTerminal() {
   term.onData(data => AEGIS.ptyWrite(data));
 
   // PTY output → terminal (batched per animation frame to handle fast streaming)
-  AEGIS.onPtyData(makeBatchedWriter(term));
+  AEGIS.onPtyData(makeBatchedWriter(term, makeBottomTracker(term)));
 
   // PTY exit
   AEGIS.onPtyExit(code => {
@@ -354,7 +363,7 @@ function initShell() {
   shellTerm.onData(data => AEGIS.shellWrite(data));
 
   // PTY utdata → terminal
-  AEGIS.onShellData(makeBatchedWriter(shellTerm));
+  AEGIS.onShellData(makeBatchedWriter(shellTerm, makeBottomTracker(shellTerm)));
 
   // När shell:et dör: auto-återskapa efter 500 ms
   let _restartTimer = null;
