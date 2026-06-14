@@ -309,14 +309,18 @@ function initShell() {
 
   shellTerm = new Terminal({
     fontFamily: '"Cascadia Code","Fira Code","JetBrains Mono","Consolas",monospace',
+    fontWeight: "400",
+    fontWeightBold: "700",
     fontSize:   13,
     lineHeight: 1.25,
+    letterSpacing: 0,
     cursorBlink: true,
     cursorStyle: "bar",
     theme: {
-      background:  "#000000",
-      foreground:  "#c8d8e8",
-      cursor:      "#00c8b4",
+      background:    "#000000",
+      foreground:    "#c8d8e8",
+      cursor:        "#00c8b4",
+      cursorAccent:  "#000000",
       selectionBackground: "rgba(0,200,180,.25)",
       black:"#04060a",red:"#e04444",green:"#1ab87a",yellow:"#e89020",
       blue:"#5a7fd4",magenta:"#a06ad4",cyan:"#00c8b4",white:"#c8d8e8",
@@ -400,6 +404,8 @@ function initShell() {
   requestAnimationFrame(async () => {
     shellFit.fit();
     const res = await AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+    // Force blinking-bar cursor (same as upper terminal) — overrides bash default block
+    AEGIS.shellWrite("\x1b[5 q");
     const cwdEl = document.getElementById("shell-cwd");
     if (cwdEl && res?.cwd) cwdEl.textContent = res.cwd;
   });
