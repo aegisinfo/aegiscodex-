@@ -260,22 +260,74 @@ function toggleKeyVis(id, inputId) {
 
 async function loadSettings() {
   const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
-  console.log("[aegis-gui] loadSettings env:", Object.fromEntries(
-    Object.entries(env).map(([k, v]) => [k, v ? v.slice(0, 6) + "…" : "(empty)"])
-  ));
-
-  Object.entries(KEY_MAP).forEach(([id, envKey]) => {
-    const el = document.getElementById("key-" + id);
-    if (el) el.value = env[envKey] || "";
-    setApiDot(id, env[envKey]);
-  });
 
   const cloudKey = cfg?.aegiscloud?.api_key || "";
-  const cloudEl  = document.getElementById("s-cloudkey");
-  if (cloudEl) { cloudEl.value = cloudKey; setApiDot("cloudkey", cloudKey); }
+  const syncOn   = cfg?.aegiscloud?.syncConversations !== false;
 
-  const syncEl = document.getElementById("s-cloudsync");
-  if (syncEl) syncEl.value = cfg?.aegiscloud?.syncConversations === false ? "off" : "on";
+  const PROVIDERS = [
+    { id: "anthropic", label: "Anthropic (Claude)", envKey: "ANTHROPIC_API_KEY", ph: "sk-ant-…",              type: "password" },
+    { id: "openai",    label: "OpenAI (GPT)",       envKey: "OPENAI_API_KEY",    ph: "sk-…",                  type: "password" },
+    { id: "deepseek",  label: "DeepSeek",            envKey: "DEEPSEEK_API_KEY",  ph: "sk-…",                  type: "password" },
+    { id: "groq",      label: "Groq",                envKey: "GROQ_API_KEY",      ph: "gsk_…",                 type: "password" },
+    { id: "gemini",    label: "Google Gemini",        envKey: "GEMINI_API_KEY",    ph: "AIza…",                 type: "password" },
+    { id: "ollama",    label: "Ollama",               envKey: "OLLAMA_BASE_URL",   ph: "http://localhost:11434", type: "text" },
+  ];
+
+  const providerRows = PROVIDERS.map(p => {
+    const val  = escAttr(env[p.envKey] || "");
+    const set  = !!env[p.envKey];
+    const eye  = p.type === "password"
+      ? `<button class="api-row-toggle" onclick="toggleKeyVis('${p.id}')">${set ? "show" : "show"}</button>`
+      : `<div style="width:52px"></div>`;
+    return `
+      <div class="api-row">
+        <div class="api-row-info">
+          <div class="api-row-label">${p.label}</div>
+          <div class="api-row-var">${p.envKey}</div>
+        </div>
+        <input class="api-row-input" type="${p.type}" id="key-${p.id}"
+               placeholder="${p.ph}" autocomplete="off" value="${val}">
+        ${eye}
+        <div class="api-dot${set ? " set" : ""}" id="dot-${p.id}"></div>
+      </div>`;
+  }).join("");
+
+  document.getElementById("settings-content").innerHTML = `
+    <div class="settings-body">
+      <div class="settings-section">
+        <h3>AI Provider Keys</h3>
+        <div class="section-hint">Saved to ~/.aegiscode/.env — shared with the CLI</div>
+        ${providerRows}
+      </div>
+
+      <div class="settings-section">
+        <h3>AEGIS Cloud</h3>
+        <div class="section-hint">Enables memory &amp; conversation sync</div>
+        <div class="api-row">
+          <div class="api-row-info">
+            <div class="api-row-label">Cloud API Key</div>
+            <div class="api-row-var">aegiscloud.org</div>
+          </div>
+          <input class="api-row-input" type="password" id="s-cloudkey"
+                 placeholder="aegis_…" autocomplete="off" value="${escAttr(cloudKey)}">
+          <button class="api-row-toggle" onclick="toggleKeyVis('cloudkey','s-cloudkey')">show</button>
+          <div class="api-dot${cloudKey ? " set" : ""}" id="dot-cloudkey"></div>
+        </div>
+        <div class="field" style="margin-top:10px">
+          <label>Auto-upload on exit</label>
+          <select id="s-cloudsync">
+            <option value="on"${syncOn  ? " selected" : ""}>Enabled</option>
+            <option value="off"${!syncOn ? " selected" : ""}>Disabled</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      <span class="save-note" id="save-note" style="display:none">✓ Saved</span>
+    </div>
+  `;
 }
 
 async function saveSettings() {
@@ -284,7 +336,8 @@ async function saveSettings() {
   // Write provider keys to .env
   Object.entries(KEY_MAP).forEach(([id, envKey]) => {
     const el  = document.getElementById("key-" + id);
-    const val = el ? el.value.trim() : "";
+    if (!el) return;
+    const val = el.value.trim();
     if (val) env[envKey] = val;
     else     delete env[envKey];
     setApiDot(id, val);
@@ -502,6 +555,10 @@ async function confirmClearMemory() {
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function escAttr(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
