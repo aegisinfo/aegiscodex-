@@ -23,6 +23,32 @@ function switchTab(tab) {
   }
 }
 
+// ── Terminal performance helpers ──────────────────────────────────────────────
+
+// WebGL renderer — 3-5x faster than canvas for streaming output
+function tryWebGL(t) {
+  try {
+    if (typeof Unicode11Addon !== "undefined") {
+      t.loadAddon(new Unicode11Addon.Unicode11Addon());
+      t.unicode.activeVersion = "11";
+    }
+  } catch (_) {}
+  try {
+    const gl = new WebglAddon.WebglAddon();
+    gl.onContextLoss(() => gl.dispose());
+    t.loadAddon(gl);
+  } catch (_) {}
+}
+
+// Batch writes to one per animation frame — eliminates per-chunk reflow lag
+function makeBatchedWriter(t) {
+  let buf = "", raf = null;
+  return data => {
+    buf += data;
+    if (!raf) raf = requestAnimationFrame(() => { t.write(buf); buf = ""; raf = null; });
+  };
+}
+
 // ── xterm.js setup ────────────────────────────────────────────────────────────
 let term         = null;
 let fitAddon     = null;
@@ -36,8 +62,11 @@ function initTerminal() {
 
   term = new Terminal({
     fontFamily: '"Cascadia Code","Fira Code","JetBrains Mono","Consolas",monospace',
+    fontWeight: "400",
+    fontWeightBold: "700",
     fontSize:   13,
     lineHeight: 1.25,
+    letterSpacing: 0,
     cursorBlink:true,
     cursorStyle:"bar",
     theme: {
@@ -64,8 +93,16 @@ function initTerminal() {
       brightWhite:   "#e8f0f8",
     },
     allowTransparency: true,
-    scrollback: 5000,
+    scrollback: 10000,
     rightClickSelectsWord: true,
+    fastScrollModifier: "shift",
+    fastScrollSensitivity: 5,
+    smoothScrollDuration: 80,
+    overviewRulerWidth: 10,
+    macOptionIsMeta: true,
+    drawBoldTextInBrightColors: false,
+    minimumContrastRatio: 1,
+    rescaleOverlappingGlyphs: true,
   });
 
   fitAddon = new FitAddon.FitAddon();
@@ -74,6 +111,9 @@ function initTerminal() {
   term.loadAddon(fitAddon);
   term.loadAddon(linkAddon);
   term.open(container);
+
+  // WebGL renderer — much faster than Canvas for streaming output
+  tryWebGL(term);
 
   // Defer initial fit until layout is complete
   requestAnimationFrame(() => {
@@ -84,8 +124,8 @@ function initTerminal() {
   // Input → PTY
   term.onData(data => AEGIS.ptyWrite(data));
 
-  // PTY output → terminal
-  AEGIS.onPtyData(data => term.write(data));
+  // PTY output → terminal (batched per animation frame to handle fast streaming)
+  AEGIS.onPtyData(makeBatchedWriter(term));
 
   // PTY exit
   AEGIS.onPtyExit(code => {
@@ -249,8 +289,10 @@ function initShell() {
   shellTerm.loadAddon(new WebLinksAddon.WebLinksAddon((_, url) => AEGIS.openExternal(url)));
   shellTerm.open(container);
 
+  tryWebGL(shellTerm);
+
   shellTerm.onData(data => AEGIS.shellWrite(data));
-  AEGIS.onShellData(data => shellTerm.write(data));
+  AEGIS.onShellData(makeBatchedWriter(shellTerm));
   AEGIS.onShellExit(() => shellTerm.writeln("\r\n\x1b[2m[shell exited — press Enter to restart]\x1b[0m"));
 
   shellTerm.onKey(({ key }) => {
