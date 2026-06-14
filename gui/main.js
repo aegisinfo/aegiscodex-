@@ -21,6 +21,47 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
 }
 
+// ── Memory ─────────────────────────────────────────────────────────────────────
+const MEMORY_PATH = path.join(os.homedir(), ".aegiscode", "memory", "shared.json");
+
+function loadMemoryEntries() {
+  try { return JSON.parse(fs.readFileSync(MEMORY_PATH, "utf8")); }
+  catch { return []; }
+}
+
+function getMemoryStats() {
+  const entries = loadMemoryEntries();
+  const sessions = new Set(entries.map(e => e.session).filter(Boolean)).size;
+  const sources  = [...new Set(entries.map(e => e.source).filter(Boolean))];
+  const byRole   = { user: 0, assistant: 0, other: 0 };
+  entries.forEach(e => {
+    const tag = (e.tags || []).find(t => t === "user" || t === "assistant");
+    if (tag === "user") byRole.user++;
+    else if (tag === "assistant") byRole.assistant++;
+    else byRole.other++;
+  });
+  return { total: entries.length, sessions, sources, byRole };
+}
+
+function searchMemory(query, limit = 50) {
+  const entries = loadMemoryEntries();
+  if (!query) return entries.slice(-limit).reverse();
+  const q = query.toLowerCase();
+  return entries
+    .filter(e => (e.content || "").toLowerCase().includes(q) ||
+                 (e.tags  || []).some(t => t.toLowerCase().includes(q)) ||
+                 (e.session || "").toLowerCase().includes(q))
+    .slice(-limit)
+    .reverse();
+}
+
+function clearMemory() {
+  try {
+    fs.writeFileSync(MEMORY_PATH, "[]");
+    return true;
+  } catch { return false; }
+}
+
 // ── Session history ────────────────────────────────────────────────────────────
 function loadHistory() {
   try {
@@ -128,6 +169,10 @@ function spawnPty(cols, rows, resumeId) {
 }
 
 // ── IPC ───────────────────────────────────────────────────────────────────────
+ipcMain.handle("get-memory-stats",   ()           => getMemoryStats());
+ipcMain.handle("search-memory",      (_, q)       => searchMemory(q));
+ipcMain.handle("clear-memory",       ()           => clearMemory());
+
 ipcMain.handle("get-config",    ()        => loadConfig());
 ipcMain.handle("save-config",   (_, d)    => { saveConfig(d); return true; });
 ipcMain.handle("get-history",   ()        => loadHistory());

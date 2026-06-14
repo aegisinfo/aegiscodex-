@@ -8,6 +8,7 @@ function switchTab(tab) {
   document.querySelector(`[data-tab="${tab}"]`)?.classList.add("active");
 
   if (tab === "history") loadHistory();
+  if (tab === "memory")  loadMemory();
   if (tab === "cloud")   loadCloud();
   if (tab === "settings") loadSettings();
 
@@ -299,6 +300,87 @@ function loadTerminalModel(cfg) {
   if (el && model) el.textContent = model;
 }
 
+// ── Memory ────────────────────────────────────────────────────────────────────
+let _memSearchTimer = null;
+
+async function loadMemory(query) {
+  const [stats, entries] = await Promise.all([
+    AEGIS.getMemoryStats(),
+    AEGIS.searchMemory(query || ""),
+  ]);
+
+  // Badge
+  const badge = document.getElementById("memory-badge");
+  if (badge) badge.textContent = stats.total > 0 ? stats.total : "";
+
+  // Stats bar
+  const statsEl = document.getElementById("memory-stats");
+  if (statsEl) {
+    statsEl.innerHTML = `
+      <div class="mem-stat"><div class="mem-stat-val">${stats.total}</div><div class="mem-stat-label">Entries</div></div>
+      <div class="mem-stat"><div class="mem-stat-val">${stats.sessions}</div><div class="mem-stat-label">Sessions</div></div>
+      <div class="mem-stat"><div class="mem-stat-val">${stats.byRole.user}</div><div class="mem-stat-label">User</div></div>
+      <div class="mem-stat"><div class="mem-stat-val">${stats.byRole.assistant}</div><div class="mem-stat-label">Assistant</div></div>
+    `;
+  }
+
+  // Entry list
+  const listEl = document.getElementById("memory-list");
+  if (!listEl) return;
+
+  if (!entries.length) {
+    listEl.innerHTML = `<div class="memory-empty">⬡<br><br>${query ? "No results for "" + escHtml(query) + """ : "Memory is empty."}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = entries.map((e, i) => {
+    const role = (e.tags || []).find(t => t === "user" || t === "assistant") || "other";
+    const tagClass = `mem-tag-${role}`;
+    const ts = e.timestamp ? new Date(e.timestamp).toLocaleString(undefined, { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "";
+    const content = escHtml((e.content || "").trim());
+    const isLong = (e.content || "").length > 180;
+    return `
+      <div class="mem-entry">
+        <div class="mem-entry-header">
+          <span class="mem-tag ${tagClass}">${role}</span>
+          ${e.source && e.source !== "aegis-cli" ? `<span class="mem-tag mem-tag-other">${escHtml(e.source)}</span>` : ""}
+          <span class="mem-ts">${ts}</span>
+        </div>
+        <div class="mem-content" id="mc-${i}">${content}</div>
+        ${isLong ? `<div class="mem-expand" id="mx-${i}" onclick="toggleMemEntry(${i})">show more ▾</div>` : ""}
+        <div class="mem-session">${(e.session || "").slice(0, 20)}</div>
+      </div>`;
+  }).join("");
+
+  // Show "show more" buttons for long entries
+  entries.forEach((e, i) => {
+    if ((e.content || "").length > 180) {
+      const btn = document.getElementById(`mx-${i}`);
+      if (btn) btn.style.display = "block";
+    }
+  });
+}
+
+function toggleMemEntry(i) {
+  const content = document.getElementById(`mc-${i}`);
+  const btn     = document.getElementById(`mx-${i}`);
+  if (!content || !btn) return;
+  const expanded = content.classList.toggle("expanded");
+  btn.textContent = expanded ? "show less ▴" : "show more ▾";
+}
+
+function onMemorySearch(val) {
+  clearTimeout(_memSearchTimer);
+  _memSearchTimer = setTimeout(() => loadMemory(val), 250);
+}
+
+async function confirmClearMemory() {
+  if (!confirm("Clear all memory entries? This cannot be undone.")) return;
+  await AEGIS.clearMemory();
+  document.getElementById("memory-search").value = "";
+  loadMemory();
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -315,4 +397,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Show version in sidebar
   const verEl = document.getElementById("nav-version");
   if (verEl) verEl.textContent = "v1.0.0";
+
+  // Load memory badge count
+  AEGIS.getMemoryStats().then(stats => {
+    const badge = document.getElementById("memory-badge");
+    if (badge && stats.total > 0) badge.textContent = stats.total;
+  }).catch(() => {});
 });
