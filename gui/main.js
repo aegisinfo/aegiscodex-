@@ -345,12 +345,17 @@ function spawnPty(cols, rows, resumeId) {
   const args = ["--no-deprecation", AEGIS_BIN];
   if (resumeId) args.push("--resume", resumeId);
 
+  // Merge env vars from .env files so CLI gets API keys without reading its own .env
+  const loaded = loadEnv();
   const env = {
     ...process.env,
+    ...loaded,
     TERM:       "xterm-256color",
     COLORTERM:  "truecolor",
     FORCE_COLOR:"3",
   };
+  // Remove empty values — don't override shell-set keys with empty strings
+  for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
   ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
@@ -379,14 +384,15 @@ ipcMain.handle("clear-memory",       ()           => clearMemory());
 ipcMain.handle("get-memory-status",  ()           => getMemoryStatus());
 ipcMain.handle("activate-memory",    (_, token)   => activateMemory(token));
 
-ipcMain.handle("get-env",       ()        => loadEnv());
-ipcMain.handle("save-env",      (_, d)    => { saveEnv(d); return true; });
+ipcMain.handle("get-version",  ()        => require("./package.json").version);
+ipcMain.handle("get-env",      ()        => loadEnv());
+ipcMain.handle("save-env",     (_, d)    => { saveEnv(d); return true; });
 
-ipcMain.handle("get-config",    ()        => loadConfig());
-ipcMain.handle("save-config",   (_, d)    => { saveConfig(d); return true; });
-ipcMain.handle("get-history",   ()        => loadHistory());
-ipcMain.handle("get-cloud",     ()        => getCloudConfig());
-ipcMain.handle("open-external", (_, url)  => shell.openExternal(url));
+ipcMain.handle("get-config",   ()        => loadConfig());
+ipcMain.handle("save-config",  (_, d)    => { saveConfig(d); return true; });
+ipcMain.handle("get-history",  ()        => loadHistory());
+ipcMain.handle("get-cloud",    ()        => getCloudConfig());
+ipcMain.handle("open-external",(_, url)  => shell.openExternal(url));
 
 ipcMain.handle("pty-spawn", (_, { cols, rows, resumeId }) => {
   return spawnPty(cols, rows, resumeId);
@@ -405,14 +411,38 @@ ipcMain.handle("pty-kill", () => {
   ptyProcess = null;
 });
 
-ipcMain.handle("shell-spawn",  (_, { cols, rows }) => spawnShell(cols, rows));
+ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
+  const ok = spawnShell(cols, rows);
+  return { ok, cwd: os.homedir() };
+});
 ipcMain.handle("shell-write",  (_, data)           => { if (shellProcess) shellProcess.write(data); });
 ipcMain.handle("shell-resize", (_, { cols, rows }) => { if (shellProcess) shellProcess.resize(cols, rows); });
 ipcMain.handle("shell-kill",   ()                  => { shellProcess?.kill(); shellProcess = null; });
 
+// ── Config file watcher (model change detection) ──────────────────────────────
+let configWatcher = null;
+function watchConfig() {
+  try {
+    configWatcher?.close();
+    const dir = path.dirname(CONFIG_PATH);
+    if (!fs.existsSync(dir)) return;
+    configWatcher = fs.watch(CONFIG_PATH, (eventType) => {
+      if (eventType === 'change') {
+        try {
+          const cfg = loadConfig();
+          mainWindow?.webContents.send("config-changed", cfg);
+        } catch {}
+      }
+    });
+  } catch {}
+}
+app.on("ready", () => watchConfig());
+app.on("window-all-closed", () => { configWatcher?.close(); });
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
+  watchConfig();
   // Linux taskbar icon must be set explicitly
   if (process.platform === "linux") {
     try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
