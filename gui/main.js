@@ -48,21 +48,54 @@ function saveConfig(data) {
 // ── .env file (API keys) ──────────────────────────────────────────────────────
 const ENV_PATH = path.join(os.homedir(), ".aegiscode", ".env");
 
-function loadEnv() {
+// Keys we expose in the Settings UI
+const KNOWN_ENV_KEYS = [
+  "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY",
+  "GROQ_API_KEY", "GEMINI_API_KEY", "OLLAMA_BASE_URL",
+];
+
+function parseEnvFile(filePath) {
   try {
     return Object.fromEntries(
-      fs.readFileSync(ENV_PATH, "utf8").split("\n")
-        .map(l => l.match(/^([A-Z_]+)=(.*)$/))
+      fs.readFileSync(filePath, "utf8").split("\n")
+        .map(l => {
+          const eq = l.indexOf("=");
+          if (eq < 0 || l.trim().startsWith("#")) return null;
+          const k = l.slice(0, eq).trim();
+          const v = l.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+          return k && v && !v.startsWith("YOUR_") ? [k, v] : null;
+        })
         .filter(Boolean)
-        .map(m => [m[1], m[2].trim()])
     );
   } catch { return {}; }
 }
 
+function loadEnv() {
+  // Priority (highest → lowest):
+  // 1. ~/.aegiscode/.env  — GUI-saved keys
+  // 2. <project>/.env     — project-level keys (one dir above gui/)
+  // 3. process.env        — system / shell-exported keys
+  const stored  = parseEnvFile(ENV_PATH);
+  const project = parseEnvFile(path.join(__dirname, "..", ".env"));
+
+  const merged = {};
+  for (const key of KNOWN_ENV_KEYS) {
+    merged[key] = stored[key] || project[key] || process.env[key] || "";
+  }
+  // Also carry over any non-provider keys from ~/.aegiscode/.env
+  Object.assign(merged, { ...project, ...stored, ...merged });
+  return merged;
+}
+
 function saveEnv(data) {
-  const lines = Object.entries(data)
+  // Read existing file to preserve any non-provider keys
+  const existing = parseEnvFile(ENV_PATH);
+  const updated  = { ...existing, ...data };
+
+  const lines = Object.entries(updated)
     .filter(([, v]) => v && v.trim())
     .map(([k, v]) => `${k}=${v.trim()}`);
+
   fs.mkdirSync(path.dirname(ENV_PATH), { recursive: true });
   fs.writeFileSync(ENV_PATH, lines.join("\n") + "\n");
 }
