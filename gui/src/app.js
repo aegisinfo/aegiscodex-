@@ -61,7 +61,7 @@ function makeBatchedWriter(t) {
     buf += data;
     if (!raf) raf = requestAnimationFrame(() => {
       const chunk = buf; buf = ""; raf = null;
-      t.write(chunk, () => t.scrollToBottom());
+      t.write(chunk);
     });
   };
 }
