@@ -62,6 +62,76 @@ function clearMemory() {
   } catch { return false; }
 }
 
+// ── Memory subscription ────────────────────────────────────────────────────────
+const TOKEN_PATH = path.join(os.homedir(), ".aegiscode", "memory.token");
+const STRIPE_URL = "https://buy.stripe.com/14A4gB4J53vxcaV74S9R601";
+const VERIFY_URL = "https://aegiscloud.org/api/verify-token";
+
+function getMemoryStatus() {
+  const cfg        = loadConfig();
+  const mem        = cfg?.memory ?? {};
+  const tokenExists = fs.existsSync(TOKEN_PATH);
+  const subscribed = mem.subscribed === true || tokenExists;
+  return {
+    subscribed,
+    email:       mem.verifiedEmail || null,
+    plan:        mem.plan || null,
+    activatedAt: mem.activatedAt || null,
+    stripeUrl:   STRIPE_URL,
+  };
+}
+
+async function activateMemory(token) {
+  if (!token || token.length < 20) {
+    return { ok: false, error: "Invalid token — paste the full token from your activation email" };
+  }
+
+  // Write token file
+  try {
+    fs.mkdirSync(path.dirname(TOKEN_PATH), { recursive: true });
+    fs.writeFileSync(TOKEN_PATH, token.trim());
+  } catch {}
+
+  // Best-effort remote verification
+  let email = "stripe-user";
+  let plan  = "semantic-memory";
+  let expiresAt = null;
+
+  try {
+    const cfg    = loadConfig();
+    const apiKey = cfg?.aegiscloud?.api_key || "";
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["X-API-Key"] = apiKey;
+
+    const res    = await fetch(VERIFY_URL, { method: "POST", headers, body: JSON.stringify({ token }) });
+    const result = await res.json();
+    if (result.valid) {
+      email     = result.email     || email;
+      plan      = result.plan      || plan;
+      expiresAt = result.expiresAt || null;
+    }
+  } catch { /* offline activation */ }
+
+  // Save to config
+  try {
+    const cfg = loadConfig();
+    cfg.memory = {
+      ...(cfg.memory || {}),
+      subscribed:    true,
+      token:         token.trim(),
+      activatedAt:   new Date().toISOString(),
+      verifiedEmail: email,
+      plan,
+      expiresAt,
+    };
+    saveConfig(cfg);
+  } catch (e) {
+    return { ok: false, error: "Failed to save config: " + e.message };
+  }
+
+  return { ok: true, email, plan };
+}
+
 // ── Session history ────────────────────────────────────────────────────────────
 function loadHistory() {
   try {
@@ -172,6 +242,8 @@ function spawnPty(cols, rows, resumeId) {
 ipcMain.handle("get-memory-stats",   ()           => getMemoryStats());
 ipcMain.handle("search-memory",      (_, q)       => searchMemory(q));
 ipcMain.handle("clear-memory",       ()           => clearMemory());
+ipcMain.handle("get-memory-status",  ()           => getMemoryStatus());
+ipcMain.handle("activate-memory",    (_, token)   => activateMemory(token));
 
 ipcMain.handle("get-config",    ()        => loadConfig());
 ipcMain.handle("save-config",   (_, d)    => { saveConfig(d); return true; });

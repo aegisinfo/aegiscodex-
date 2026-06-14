@@ -16,7 +16,9 @@ contextBridge.exposeInMainWorld("AEGIS", {
   onPtyData: (cb)         => ipcRenderer.on("pty-data", (_, d) => cb(d)),
   onPtyExit: (cb)         => ipcRenderer.on("pty-exit", (_, c) => cb(c)),
 
-  getMemoryStats: ()      => ipcRenderer.invoke("get-memory-stats"),
-  searchMemory:   (q)     => ipcRenderer.invoke("search-memory", q),
-  clearMemory:    ()      => ipcRenderer.invoke("clear-memory"),
+  getMemoryStats:  ()      => ipcRenderer.invoke("get-memory-stats"),
+  searchMemory:    (q)     => ipcRenderer.invoke("search-memory", q),
+  clearMemory:     ()      => ipcRenderer.invoke("clear-memory"),
+  getMemoryStatus: ()      => ipcRenderer.invoke("get-memory-status"),
+  activateMemory:  (token) => ipcRenderer.invoke("activate-memory", token),
 });

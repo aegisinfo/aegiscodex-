@@ -304,6 +304,90 @@ function loadTerminalModel(cfg) {
 let _memSearchTimer = null;
 
 async function loadMemory(query) {
+  const status = await AEGIS.getMemoryStatus();
+
+  if (!status.subscribed) {
+    renderMemorySubscribeView();
+    return;
+  }
+
+  renderMemoryActiveView(status, query);
+}
+
+function renderMemorySubscribeView() {
+  const panel = document.getElementById("tab-memory");
+  panel.innerHTML = `
+    <div class="mem-subscribe">
+      <div class="mem-subscribe-icon">⬡</div>
+      <div class="mem-subscribe-title">AEGIS Semantic Memory</div>
+      <div class="mem-subscribe-sub">
+        Cross-session memory — aegiscode remembers context, decisions and code
+        across all your conversations.
+      </div>
+      <div class="mem-price">$2<span style="font-size:14px;font-weight:400;color:var(--text2)">/month</span></div>
+      <div class="mem-price-sub">Billed via Stripe · cancel anytime</div>
+      <button class="mem-subscribe-btn" onclick="openStripe()">Subscribe &amp; get token ↗</button>
+      <div class="mem-divider"></div>
+      <div class="mem-activate-label">Already have a token? Paste it here:</div>
+      <div class="mem-token-row">
+        <input class="mem-token-input" id="mem-token-input" placeholder="Paste activation token…" autocomplete="off">
+        <button class="mem-token-btn" onclick="submitToken()">Activate</button>
+      </div>
+      <div class="mem-activate-msg" id="mem-activate-msg"></div>
+    </div>
+  `;
+
+  // Allow Enter key in token input
+  document.getElementById("mem-token-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") submitToken();
+  });
+}
+
+async function openStripe() {
+  const status = await AEGIS.getMemoryStatus();
+  AEGIS.openExternal(status.stripeUrl);
+}
+
+async function submitToken() {
+  const input = document.getElementById("mem-token-input");
+  const msgEl = document.getElementById("mem-activate-msg");
+  const token = (input?.value || "").trim();
+
+  if (!token) return;
+
+  msgEl.className = "mem-activate-msg";
+  msgEl.textContent = "Activating…";
+
+  const result = await AEGIS.activateMemory(token);
+
+  if (result.ok) {
+    msgEl.className = "mem-activate-msg mem-activate-ok";
+    msgEl.textContent = `✓ Activated — welcome ${result.email || ""}`;
+    // Reload the full memory view after a short delay
+    setTimeout(() => loadMemory(), 1200);
+  } else {
+    msgEl.className = "mem-activate-msg mem-activate-err";
+    msgEl.textContent = result.error || "Activation failed";
+  }
+}
+
+async function renderMemoryActiveView(status, query) {
+  // Restore panel structure if subscribe view replaced it
+  const panel = document.getElementById("tab-memory");
+  if (!document.getElementById("memory-stats")) {
+    panel.innerHTML = `
+      <div class="memory-toolbar">
+        <input class="memory-search" id="memory-search" placeholder="Search memory…" oninput="onMemorySearch(this.value)">
+        <button class="btn" onclick="loadMemory()">↺</button>
+        <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="confirmClearMemory()">Clear all</button>
+      </div>
+      <div class="memory-stats" id="memory-stats"></div>
+      <div class="memory-list" id="memory-list"></div>
+    `;
+    // Restore search value
+    if (query) document.getElementById("memory-search").value = query;
+  }
+
   const [stats, entries] = await Promise.all([
     AEGIS.getMemoryStats(),
     AEGIS.searchMemory(query || ""),
@@ -313,6 +397,11 @@ async function loadMemory(query) {
   const badge = document.getElementById("memory-badge");
   if (badge) badge.textContent = stats.total > 0 ? stats.total : "";
 
+  // Status row if email known
+  const activatedLine = status?.email && status.email !== "stripe-user"
+    ? `<div class="mem-stat"><div class="mem-stat-val" style="font-size:11px;color:var(--green)">✓ ${escHtml(status.email)}</div><div class="mem-stat-label">Account</div></div>`
+    : "";
+
   // Stats bar
   const statsEl = document.getElementById("memory-stats");
   if (statsEl) {
@@ -321,6 +410,7 @@ async function loadMemory(query) {
       <div class="mem-stat"><div class="mem-stat-val">${stats.sessions}</div><div class="mem-stat-label">Sessions</div></div>
       <div class="mem-stat"><div class="mem-stat-val">${stats.byRole.user}</div><div class="mem-stat-label">User</div></div>
       <div class="mem-stat"><div class="mem-stat-val">${stats.byRole.assistant}</div><div class="mem-stat-label">Assistant</div></div>
+      ${activatedLine}
     `;
   }
 
