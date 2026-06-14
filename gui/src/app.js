@@ -16,7 +16,10 @@ function switchTab(tab) {
   if (tab === "settings") loadSettings();
 
   if (tab === "terminal" && fitAddon) {
-    setTimeout(() => { fitAddon.fit(); }, 50);
+    requestAnimationFrame(() => {
+      fitAddon.fit();
+      if (term && term.cols > 0) AEGIS.ptyResize({ cols: term.cols, rows: term.rows });
+    });
   }
 }
 
@@ -24,6 +27,7 @@ function switchTab(tab) {
 let term     = null;
 let fitAddon = null;
 let lastResumeId = null;
+let _spawning = false;
 
 function initTerminal() {
   const container = document.getElementById("xterm-container");
@@ -68,7 +72,12 @@ function initTerminal() {
   term.loadAddon(fitAddon);
   term.loadAddon(linkAddon);
   term.open(container);
-  fitAddon.fit();
+
+  // Defer initial fit until layout is complete
+  requestAnimationFrame(() => {
+    fitAddon.fit();
+    spawnSession();
+  });
 
   // Input → PTY
   term.onData(data => AEGIS.ptyWrite(data));
@@ -83,25 +92,22 @@ function initTerminal() {
     term.writeln(`\x1b[2m[press any key or click ↺ New session to restart]\x1b[0m`);
   });
 
-  // Resize observer
+  // Resize observer — skip when container is hidden (cols/rows = 0)
   const ro = new ResizeObserver(() => {
     if (!fitAddon) return;
     try {
       fitAddon.fit();
-      AEGIS.ptyResize({ cols: term.cols, rows: term.rows });
+      const { cols, rows } = term;
+      if (cols > 0 && rows > 0) AEGIS.ptyResize({ cols, rows });
     } catch(_) {}
   });
   ro.observe(container);
 
-  // Keyboard: any key after exit restarts
-  term.onKey(({ domEvent }) => {
+  // Keyboard: any key after exit restarts (guard against double-spawn)
+  term.onKey(() => {
     const dot = document.getElementById("pty-dot");
-    if (!dot.classList.contains("on")) {
-      spawnSession();
-    }
+    if (!dot.classList.contains("on")) spawnSession();
   });
-
-  spawnSession();
 }
 
 // ── PTY control ───────────────────────────────────────────────────────────────
@@ -113,9 +119,12 @@ function setPtyStatus(on, label) {
 }
 
 async function spawnSession(resumeId) {
+  if (_spawning) return;
+  _spawning = true;
   setPtyStatus(false, "starting…");
   lastResumeId = resumeId || null;
   const ok = await AEGIS.ptySpawn({ cols: term.cols, rows: term.rows, resumeId });
+  _spawning = false;
   if (ok) {
     setPtyStatus(true, "running");
   } else {
