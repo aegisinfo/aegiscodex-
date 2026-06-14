@@ -7,12 +7,14 @@ function switchTab(tab) {
   document.getElementById("tab-" + tab)?.classList.add("active");
   document.querySelector(`[data-tab="${tab}"]`)?.classList.add("active");
 
-  if (tab === "history") loadHistory();
-  if (tab === "memory")  loadMemory();
-  if (tab === "cloud")   loadCloud();
+  // Show terminal controls in titlebar only when terminal is active
+  document.getElementById("terminal-controls")?.classList.toggle("visible", tab === "terminal");
+
+  if (tab === "history")  loadHistory();
+  if (tab === "memory")   loadMemory();
+  if (tab === "cloud")    loadCloud();
   if (tab === "settings") loadSettings();
 
-  // Re-fit terminal when switching back
   if (tab === "terminal" && fitAddon) {
     setTimeout(() => { fitAddon.fit(); }, 50);
   }
@@ -564,6 +566,7 @@ function escAttr(s) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   initTerminal();
+  document.getElementById("terminal-controls")?.classList.add("visible");
 
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();
