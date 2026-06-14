@@ -5,20 +5,23 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:linux": "electron-builder --linux AppImage",
-    "build:win": "electron-builder --win nsis",
-    "build:mac": "electron-builder --mac dmg"
+    "build:linux": "node build-prod.mjs --linux",
+    "build:win":   "node build-prod.mjs --win",
+    "build:mac":   "node build-prod.mjs --mac",
+    "build:all":   "node build-prod.mjs --linux --win --mac"
   },
   "build": {
     "appId": "org.aegiscloud.aegiscode",
     "productName": "AEGIS Code",
     "asar": true,
+    "asarIntegrity": true,
     "asarUnpack": [
       "node_modules/node-pty/**"
     ],
     "files": [
       "**/*",
-      "!node_modules/electron-builder/**"
+      "!node_modules/electron-builder/**",
+      "!build-prod.mjs"
     ],
     "linux": {
       "target": "AppImage",
@@ -45,6 +48,7 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "javascript-obfuscator": "^5.4.3"
   }
 }
