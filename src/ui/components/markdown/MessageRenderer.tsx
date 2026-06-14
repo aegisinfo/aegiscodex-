@@ -143,6 +143,17 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     const hasToolBlocks = contentBlocks && contentBlocks.some(b => b.type === 'tool_use' || b.type === 'tool_result')
 
+    // User messages: full-width background bar (Claude Code style)
+    if (role === 'user') {
+      return (
+        <Box marginBottom={1}>
+          <Box backgroundColor="#1e1e1e" paddingX={1} width={terminalWidth}>
+            <Text color="white">{content || ' '}</Text>
+          </Box>
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" marginBottom={1}>
         {filteredThinkingBlocks.length > 0 && (
@@ -208,8 +219,8 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
           />
         ))}
 
-        {/* Tool actions — only shown after streaming completes */}
-        {hasToolBlocks && !isStreaming && (
+        {/* Tool actions — shown during and after streaming */}
+        {hasToolBlocks && (
           <ActionsBlock
             contentBlocks={contentBlocks!}
             theme={theme}
@@ -220,10 +231,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
         {isStreaming && (
           <StreamingCursor prefixOffset={prefixOffset} hasContent={content.length > 0 || (thinking?.length ?? 0) > 0} />
         )}
-
-        {!isStreaming && (
-          <MessageSeparator width={terminalWidth} />
-        )}
       </Box>
     )
   },
@@ -231,19 +238,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 )
 
 MessageRenderer.displayName = 'MessageRenderer'
-
-// ===== Message Separator =====
-
-const MessageSeparator: React.FC<{ width: number }> = React.memo(({ width }) => {
-  const theme = themeManager.getTheme()
-  const lineWidth = Math.max(4, Math.min(width - 2, 78))
-  return (
-    <Box marginTop={0}>
-      <Text color={theme.colors.text.muted} dimColor>{'─'.repeat(lineWidth)}</Text>
-    </Box>
-  )
-})
-MessageSeparator.displayName = 'MessageSeparator'
 
 // ===== Streaming Cursor Component (animated) =====
 
@@ -347,11 +341,12 @@ function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-// ===== VS Code diff colors reused for action status =====
-const ACTION_OK  = '#3fb950'
-const ACTION_ERR = '#f85149'
+// ===== Colors =====
+const DOT_OK  = '#3fb950'
+const DOT_ERR = '#f85149'
+const DOT_RUN = '#e3b341'
 
-// ===== ActionsBlock — shown once after streaming completes =====
+// ===== ActionsBlock — Claude Code style: ● Name(args) + └ result =====
 
 interface ActionsBlockProps {
   contentBlocks: ContentBlock[]
@@ -360,67 +355,78 @@ interface ActionsBlockProps {
 }
 
 const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefixOffset }) => {
-  const toolCount = contentBlocks.filter(b => b.type === 'tool_use').length
-  if (toolCount === 0) return null
+  const toolBlocks = contentBlocks.filter(b => b.type === 'tool_use')
+  if (toolBlocks.length === 0) return null
 
   return (
-    <Box flexDirection="column" marginTop={1} marginLeft={prefixOffset}>
-      {/* Section header */}
-      <Box marginBottom={0}>
-        <Text color={theme.colors.text.muted} dimColor>
-          {'── '}{toolCount} action{toolCount !== 1 ? 's' : ''}{' ──'}
-        </Text>
-      </Box>
-
-      {/* Each tool_use + its immediate tool_result */}
+    <Box flexDirection="column" marginLeft={prefixOffset}>
       {contentBlocks.map((block, idx) => {
-        if (block.type === 'tool_use') {
-          const result = contentBlocks.find(
-            b => b.type === 'tool_result' && b.tool_use_id === block.id
-          ) as (ContentBlock & { type: 'tool_result' }) | undefined
+        if (block.type !== 'tool_use') return null
 
-          const isError  = block.status === 'error'
-          const elapsed  = block.completedAt
-            ? formatElapsed(block.completedAt - block.startedAt)
-            : null
-          const summary  = getToolSummary(block.name, block.input)
-          const { label, path } = splitToolSummary(summary)
-          const resultLines = result?.content
-            ? result.content.split('\n').filter(l => l.trim()).slice(0, 3)
-            : []
+        const result = contentBlocks.find(
+          b => b.type === 'tool_result' && (b as any).tool_use_id === block.id
+        ) as (ContentBlock & { type: 'tool_result' }) | undefined
 
-          return (
-            <Box key={`action-${block.id || idx}`} flexDirection="column" marginTop={0}>
-              <Box>
-                <Text color={isError ? ACTION_ERR : ACTION_OK} bold>
-                  {isError ? '✗ ' : '✓ '}
+        const isError   = block.status === 'error'
+        const isRunning = block.status === 'running'
+        const dotColor  = isError ? DOT_ERR : isRunning ? DOT_RUN : DOT_OK
+        const elapsed   = block.completedAt ? formatElapsed(block.completedAt - block.startedAt) : null
+        const summary   = getToolSummary(block.name, block.input)
+        const { label, path } = splitToolSummary(summary)
+
+        // Build result sub-lines
+        const subLines: Array<{ text: string; isUrl: boolean; isDiff?: boolean; diffType?: '+' | '-' }> = []
+        if (result?.content) {
+          const lines = result.content.split('\n').filter(l => l.trim())
+          const diffLines = lines.filter(l => /^[+-]/.test(l) && !l.startsWith('+++') && !l.startsWith('---'))
+          if (diffLines.length > 0) {
+            // Show diff summary + first few diff lines
+            const added   = diffLines.filter(l => l.startsWith('+')).length
+            const removed = diffLines.filter(l => l.startsWith('-')).length
+            if (added > 0 || removed > 0) {
+              subLines.push({ text: `${added > 0 ? `+${added}` : ''}${removed > 0 ? ` -${removed}` : ''} lines`, isUrl: false })
+            }
+            diffLines.slice(0, 5).forEach(l => {
+              subLines.push({ text: l, isUrl: false, isDiff: true, diffType: l.startsWith('+') ? '+' : '-' })
+            })
+          } else {
+            lines.slice(0, 4).forEach(line => {
+              const trimmed = line.length > 100 ? line.slice(0, 97) + '…' : line
+              const isUrl = /^https?:\/\//.test(trimmed)
+              subLines.push({ text: trimmed, isUrl })
+            })
+          }
+        }
+
+        return (
+          <Box key={`action-${block.id || idx}`} flexDirection="column">
+            {/* ● ToolName(args) */}
+            <Box>
+              <Text color={dotColor} bold>{'● '}</Text>
+              <Text color={theme.colors.text.primary} bold>{label}</Text>
+              {path && <Text color={isError ? DOT_ERR : DOT_OK}>{path}</Text>}
+              {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
+            </Box>
+
+            {/* └ sub-items */}
+            {subLines.map((sub, i) => (
+              <Box key={i} marginLeft={2}>
+                <Text color={theme.colors.text.muted} dimColor>
+                  {i === 0 ? '└ ' : '  '}
                 </Text>
-                <Text color={theme.colors.text.primary} bold>{label}</Text>
-                {path && (
-                  <Text color={isError ? ACTION_ERR : ACTION_OK}>{path}</Text>
-                )}
-                {elapsed && (
-                  <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>
+                {sub.isDiff ? (
+                  <Box backgroundColor={sub.diffType === '+' ? '#0d2b0d' : '#2b0d0d'}>
+                    <Text color={sub.diffType === '+' ? DOT_OK : DOT_ERR}>{sub.text}</Text>
+                  </Box>
+                ) : sub.isUrl ? (
+                  <Text color="#58a6ff" underline>{sub.text}</Text>
+                ) : (
+                  <Text color={isError ? DOT_ERR : theme.colors.text.muted} dimColor={!isError}>{sub.text}</Text>
                 )}
               </Box>
-              {resultLines.map((line, i) => (
-                <Box key={i} marginLeft={2}>
-                  <Text color={theme.colors.text.muted} dimColor>
-                    {i === 0 ? '⎿  ' : '   '}
-                  </Text>
-                  <Text
-                    color={isError ? ACTION_ERR : theme.colors.text.muted}
-                    dimColor={!isError}
-                    wrap="wrap"
-                  >
-                    {line.length > 110 ? line.slice(0, 107) + '…' : line}
-                  </Text>
-                </Box>
-              ))}
-            </Box>
-          )
-        }
-        return null
+            ))}
+          </Box>
+        )
       })}
     </Box>
   )

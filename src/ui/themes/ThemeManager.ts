@@ -303,8 +303,8 @@ export class ThemeManager {
         };
       case 'assistant':
         return {
-          color: colors.primary,
-          prefix: '◆ ',
+          color: colors.text.secondary,
+          prefix: '● ',
           bold: false,
         };
       case 'system':
