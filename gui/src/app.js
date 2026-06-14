@@ -106,7 +106,7 @@ function initTerminal() {
     lineHeight: 1.25,
     letterSpacing: 0,
     cursorBlink:true,
-    cursorStyle:"bar",
+    cursorStyle:"block",
     theme: {
       background:    "#000000",
       foreground:    "#c8d8e8",
@@ -404,8 +404,6 @@ function initShell() {
   requestAnimationFrame(async () => {
     shellFit.fit();
     const res = await AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
-    // Force blinking-bar cursor (same as upper terminal) — overrides bash default block
-    AEGIS.shellWrite("\x1b[5 q");
     const cwdEl = document.getElementById("shell-cwd");
     if (cwdEl && res?.cwd) cwdEl.textContent = res.cwd;
   });
