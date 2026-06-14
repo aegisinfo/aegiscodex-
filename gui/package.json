@@ -23,7 +23,7 @@
       "!build-prod.mjs"
     ],
     "linux": {
-      "target": "AppImage",
+      "target": "deb",
       "category": "Development",
       "icon": "icons/icon.png"
     },
