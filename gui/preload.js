@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld("AEGIS", {
   activateMemory:      (token) => ipcRenderer.invoke("activate-memory", token),
   verifyMemoryToken:   (token) => ipcRenderer.invoke("verify-memory-token", token),
 
+  kittyAvailable: ()      => ipcRenderer.invoke("kitty-available"),
+  kittySpawn:     (opts)  => ipcRenderer.invoke("kitty-spawn", opts || {}),
+
   getFilePath: (file) => webUtils.getPathForFile(file),
   copyText:    (text) => clipboard.writeText(text),
 

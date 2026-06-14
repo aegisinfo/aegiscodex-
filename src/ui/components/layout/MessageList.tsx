@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Box } from 'ink';
+import { Box, Text } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
@@ -30,10 +30,17 @@ const RAF_INTERVAL_MS = 30;   // ~33fps redraws
 const CONTENT_THRESHOLD = 1;   // re-render on every content character
 const THINKING_THRESHOLD = 1; // update thinking content every 1 char for real-time visibility
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
+export const UI_OVERHEAD_MAIN = 8; // matches AegisInterface.tsx pageSize calc for scroll offset consistency
 
 // How many messages fit on screen (rough estimate)
 function calcVisibleCount(terminalHeight: number): number {
   const available = Math.max(terminalHeight - UI_OVERHEAD, 5);
+  return Math.max(3, Math.ceil(available / 3));
+}
+
+// Consistent page size used by both AegisInterface and MessageList
+export function calcPageSize(terminalHeight: number): number {
+  const available = Math.max(terminalHeight - UI_OVERHEAD_MAIN, 5);
   return Math.max(3, Math.ceil(available / 3));
 }
 
@@ -61,22 +68,43 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 
   // Queued store updates — applied during the RAF tick to prevent dual-path jumping.
   const pendingMessagesRef = useRef<typeof messages | null>(null);
+  // Queued scroll offset — applied in the same RAF tick as pendingMessages so
+  // they land in a single React render (prevents the jump where offset changes
+  // before messages update, showing old content at the new scroll position).
+  const pendingScrollRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
-    let lastRafTime = 0;
+  // Tracks whether RAF should keep polling. Starts false; activated by store subscription
+  // when streaming or message changes are detected. Deactivated when idle.
+  const rafActiveRef = useRef(false);
+  const rafIdRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
+  const lastRafTimeRef = useRef(0);
+
+  // Start/restart the RAF loop. Safe to call multiple times — checks rafActiveRef.
+  function ensureRafRunning() {
+    if (rafActiveRef.current) return;
+    rafActiveRef.current = true;
 
     const flushTick = (now: number) => {
-      if (now - lastRafTime < RAF_INTERVAL_MS) {
-        rafId = requestAnimationFrame(flushTick);
+      if (!rafActiveRef.current) return; // stopped while tick was queued
+      if (now - lastRafTimeRef.current < RAF_INTERVAL_MS) {
+        rafIdRef.current = requestAnimationFrame(flushTick);
         return;
       }
-      lastRafTime = now;
+      lastRafTimeRef.current = now;
 
       // 1. Apply any pending store message changes (tool calls, blocks, etc.)
+      // Apply scroll offset in the same tick so they land in one React render —
+      // prevents a visible jump where offset advances before messages update.
       if (pendingMessagesRef.current) {
         setMessages(pendingMessagesRef.current);
         pendingMessagesRef.current = null;
+        if (pendingScrollRef.current !== null) {
+          onScrollRef.current(pendingScrollRef.current);
+          pendingScrollRef.current = null;
+        }
+      } else if (pendingScrollRef.current !== null) {
+        onScrollRef.current(pendingScrollRef.current);
+        pendingScrollRef.current = null;
       }
 
       // 2. Check and apply buffered streaming content
@@ -105,12 +133,22 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      // Always keep ticking — no restart latency when streaming begins.
-      rafId = requestAnimationFrame(flushTick);
+      // If there's pending messages or active streaming, keep polling.
+      // Otherwise stop to save CPU and reduce unnecessary terminal flushes.
+      const stillHasPending = pendingMessagesRef.current !== null;
+      const stillStreaming = !!(getStreamingContent() && streamingMsg);
+      if (stillHasPending || stillStreaming) {
+        rafIdRef.current = requestAnimationFrame(flushTick);
+      } else {
+        rafActiveRef.current = false;
+        rafIdRef.current = null;
+      }
     };
 
-    rafId = requestAnimationFrame(flushTick);
+    rafIdRef.current = requestAnimationFrame(flushTick);
+  }
 
+  useEffect(() => {
     const unsub = vanillaStore.subscribe((state) => {
       const newMessages = state.session.messages;
       const newShowAllThinking = state.app.showAllThinking;
@@ -119,20 +157,18 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       let messagesChanged = false;
       if (newMessages.length !== prevMessages.length) {
         messagesChanged = true;
-        // Auto-scroll to bottom when new messages arrive (if currently at bottom)
+        // Queue scroll alongside message update — flushed in the same RAF tick
+        // so they land in one React render and don't cause a visible position jump.
         const visibleCount = calcVisibleCount(terminalHeightRef.current);
         const maxOffset = Math.max(0, newMessages.length - visibleCount);
-        if (scrollOffsetRef.current >= maxOffset) {
-          onScrollRef.current(maxOffset);
+        if (scrollOffsetRef.current >= maxOffset - 1) {
+          pendingScrollRef.current = maxOffset;
         }
       } else if (newMessages[newMessages.length - 1]?.isStreaming) {
-        // Also auto-scroll during streaming content growth (message count unchanged,
-        // but content appended). Without this, scrolling freezes once user is "at bottom"
-        // during a /multi or any streaming response that uses onContentDelta.
         const visibleCount = calcVisibleCount(terminalHeightRef.current);
         const maxOffset = Math.max(0, newMessages.length - visibleCount);
-        if (scrollOffsetRef.current >= maxOffset) {
-          onScrollRef.current(maxOffset);
+        if (scrollOffsetRef.current >= maxOffset - 1) {
+          pendingScrollRef.current = maxOffset;
         }
       } else {
         for (let i = 0; i < newMessages.length; i++) {
@@ -156,6 +192,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         } else {
           pendingMessagesRef.current = [...newMessages];
         }
+        // Ensure RAF loop is running to pick up pending messages
+        ensureRafRunning();
+      }
+
+      // Start RAF loop if a new streaming message appeared
+      if (newMessages.length > 0 && newMessages[newMessages.length - 1].isStreaming) {
+        ensureRafRunning();
       }
 
       // showAllThinking is not streaming-related, safe to apply immediately.
@@ -169,7 +212,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
     });
 
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafActiveRef.current = false;
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
       unsub();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,6 +246,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 
   return (
     <Box flexDirection="column">
+      {/* Scroll-up indicator */}
+      {useWindowing && !isAtBottom && !streamingMsg && (
+        <Box>
+          <Text dimColor>↑ scrolled ({completedMessages.length - clampedOffset - visibleCount} more above) — End or Ctrl+Down to return</Text>
+        </Box>
+      )}
+
       {/* Visible messages */}
       {visibleMessages.map((msg) => (
         <MessageRenderer

@@ -34,6 +34,7 @@ import { InputArea } from './input/InputArea.js';
 import { ChatStatusBar } from './layout/ChatStatusBar.js';
 import { WelcomeMessage } from './layout/WelcomeMessage.js';
 import { MessageList } from './layout/MessageList.js';
+import { calcPageSize } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
 import { SetupWizard } from './dialog/SetupWizard.js';
@@ -148,7 +149,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
-  const pageSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
+  const pageSize = calcPageSize(terminalHeight);
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -341,8 +342,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
   const isScrolledUp = (() => {
-    const pgSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
-    return scrollOffset < Math.max(0, messages.length - pgSize);
+    return scrollOffset < Math.max(0, messages.length - pageSize);
   })();
 
   return (

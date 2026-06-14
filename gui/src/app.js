@@ -28,7 +28,7 @@ function switchTab(tab) {
   if (tab === "cloud")    loadCloud();
   if (tab === "settings") loadSettings();
 
-  if (tab === "terminal" && fitAddon) {
+  if (tab === "terminal" && fitAddon && !_kittyMode) {
     requestAnimationFrame(() => {
       fitAddon.fit();
       if (term && term.cols > 0) AEGIS.ptyResize({ cols: term.cols, rows: term.rows });
@@ -89,14 +89,19 @@ function makeBatchedWriter(t) {
     buf += data;
     if (!raf) raf = requestAnimationFrame(() => {
       const chunk = buf; buf = ""; raf = null;
+      // Wrap in DEC mode 2026 (synchronized output). xterm.js buffers all
+      // rendering between \e[?2026h and \e[?2026l and paints atomically,
+      // eliminating the partial-frame jumping caused by Ink's cursor-up/erase/
+      // rewrite sequences being visible as separate draw operations.
+      const syncChunk = "\x1b[?2026h" + chunk + "\x1b[?2026l";
       try {
         if (following) {
-          t.write(chunk, () => {
+          t.write(syncChunk, () => {
             snap();
             requestAnimationFrame(() => { if (following) snap(); });
           });
         } else {
-          t.write(chunk);
+          t.write(syncChunk);
         }
       } catch (_) { destroyed = true; }
     });
@@ -110,6 +115,7 @@ let shellTerm    = null;
 let shellFit     = null;
 let lastResumeId = null;
 let _spawning    = false;
+let _kittyMode   = false;  // true when Kitty is the active terminal
 
 function initTerminal() {
   const container = document.getElementById("xterm-container");
@@ -147,12 +153,12 @@ function initTerminal() {
       brightWhite:   "#e8f0f8",
     },
     allowTransparency: false,
-    scrollback: 10000,
+    scrollback: 3000,
     rightClickSelectsWord: true,
     fastScrollModifier: "shift",
-    fastScrollSensitivity: 5,
+    fastScrollSensitivity: 8,
     smoothScrollDuration: 0,
-    overviewRulerWidth: 10,
+    overviewRulerWidth: 0,
     macOptionIsMeta: true,
     drawBoldTextInBrightColors: false,
     minimumContrastRatio: 1,
@@ -303,12 +309,14 @@ async function spawnSession(resumeId) {
 }
 
 function restartPty() {
+  if (_kittyMode) { newKittySession(); return; }
   AEGIS.ptyKill();
   term.clear();
   spawnSession();
 }
 
 function resumePty() {
+  if (_kittyMode) { resumeKitty(); return; }
   if (lastResumeId) {
     AEGIS.ptyKill();
     term.clear();
@@ -328,8 +336,79 @@ async function loadHistoryAndResume() {
 }
 
 function killPty() {
+  if (_kittyMode) return;
   AEGIS.ptyKill();
   setPtyStatus(false, "killed");
+}
+
+// ── Kitty mode ────────────────────────────────────────────────────────────────
+
+function _setKittyPlaceholder(msg) {
+  const sub = document.getElementById("kitty-status-msg");
+  if (sub) sub.textContent = msg || "aegiscode is running in your Kitty window";
+}
+
+async function launchKitty(resumeId) {
+  const rid = resumeId || lastResumeId || undefined;
+  if (rid) lastResumeId = rid;
+  await AEGIS.kittySpawn({ resumeId: rid });
+  _setKittyPlaceholder("Kitty window launched — working in Kitty");
+  setPtyStatus(true, "kitty");
+}
+
+function resumeKitty() {
+  launchKitty(lastResumeId);
+}
+
+async function newKittySession() {
+  lastResumeId = null;
+  await AEGIS.kittySpawn({});
+  _setKittyPlaceholder("New Kitty session launched");
+  setPtyStatus(true, "kitty");
+}
+
+function initKittyMode() {
+  _kittyMode = true;
+
+  // Replace the xterm.js container with a Kitty placeholder panel
+  const container = document.getElementById("xterm-container");
+  if (container) {
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.alignItems = "center";
+    container.style.justifyContent = "center";
+    container.innerHTML = `
+      <div style="text-align:center;color:#2e4055;user-select:none">
+        <div style="font-size:48px;margin-bottom:12px;opacity:.25">⬡</div>
+        <div style="font-size:14px;font-weight:700;color:#00c8b4;margin-bottom:6px;letter-spacing:.04em">KITTY TERMINAL</div>
+        <div id="kitty-status-msg" style="font-size:11px;color:#2e4055;margin-bottom:20px">starting aegiscode in Kitty…</div>
+        <button onclick="launchKitty()" style="padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s"
+          onmouseover="this.style.borderColor='#00c8b4';this.style.color='#00c8b4'"
+          onmouseout="this.style.borderColor='#1c2333';this.style.color='#6a8aaa'">
+          ↺ Relaunch in Kitty
+        </button>
+      </div>
+    `;
+  }
+
+  // Swap titlebar controls for Kitty-specific actions (no Kill button)
+  const controls = document.getElementById("terminal-controls");
+  if (controls) {
+    controls.innerHTML = `
+      <span class="tb-sep">·</span>
+      <button class="tb-btn" onclick="newKittySession()">↺ New session</button>
+      <button class="tb-btn" onclick="resumeKitty()">⟳ Resume</button>
+      <span class="terminal-model-tb" id="terminal-model"></span>
+    `;
+  }
+
+  // Init bottom shell terminal (stays as xterm.js — it's a normal shell, not aegiscode)
+  initShell();
+  initResizer();
+  initDragDrop();
+
+  // Auto-launch Kitty immediately
+  launchKitty();
 }
 
 // ── Shell terminal (bottom pane) ──────────────────────────────────────────────
@@ -509,6 +588,7 @@ async function loadHistory() {
 function openSession(id) {
   lastResumeId = id;
   switchTab("terminal");
+  if (_kittyMode) { launchKitty(id); return; }
   AEGIS.ptyKill();
   term.clear();
   spawnSession(id);
@@ -979,8 +1059,15 @@ function refreshModelDisplay() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  initTerminal();
   document.getElementById("terminal-controls")?.classList.add("visible");
+
+  // Kitty is the preferred terminal — use it if available, else fall back to xterm.js
+  const kittyAvailable = await AEGIS.kittyAvailable().catch(() => false);
+  if (kittyAvailable) {
+    initKittyMode();
+  } else {
+    initTerminal();
+  }
 
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();

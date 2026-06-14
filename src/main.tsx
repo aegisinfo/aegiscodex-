@@ -17,9 +17,13 @@
  * 5. CLI 参数 (--api-key, --base-url, --model)
  */
 
-// RAF polyfill — MUST run before any module that uses requestAnimationFrame
+// RAF polyfill — MUST run before any module that uses requestAnimationFrame.
+// Pass Date.now() as the timestamp so RAF callbacks that throttle by timestamp
+// (e.g. MessageList's RAF_INTERVAL_MS check) work correctly. Without this,
+// `now` is undefined and `undefined - ref < 30` is always false, causing the
+// streaming render loop to fire at the raw setTimeout rate (~16ms) instead of 30ms.
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(cb, 16);
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16);
   (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
 }
 
@@ -333,7 +337,7 @@ async function main(): Promise<void> {
               stdin: renderStdin,
               stdout: process.stdout,
               alternateScreen: false,
-              maxFps: 0,
+              maxFps: 30,
             },
           );
         } catch (renderError) {

@@ -224,22 +224,93 @@ async function activateMemory(apiKey) {
 }
 
 // ── Session history ────────────────────────────────────────────────────────────
+// CLI saves sessions to ~/.aegis/projects/{escaped-cwd}/{sessionId}.jsonl
+// We scan all project subdirectories and read the first user message as the title.
 function loadHistory() {
   try {
-    const dir = path.join(os.homedir(), ".aegiscode", "sessions");
-    if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir)
-      .filter(f => f.endsWith(".json"))
-      .map(f => {
+    const aegisRoot = path.join(os.homedir(), ".aegis", "projects");
+    if (!fs.existsSync(aegisRoot)) return [];
+
+    const allSessions = [];
+
+    let projectDirs;
+    try {
+      projectDirs = fs.readdirSync(aegisRoot, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => path.join(aegisRoot, d.name));
+    } catch { return []; }
+
+    for (const projectDir of projectDirs) {
+      let files;
+      try { files = fs.readdirSync(projectDir).filter(f => f.endsWith(".jsonl")); }
+      catch { continue; }
+
+      for (const file of files) {
         try {
-          const d = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
-          return { id: f.replace(".json",""), title: d.title || d.id || f, ts: d.createdAt || d.timestamp || "" };
-        } catch { return null; }
-      })
-      .filter(Boolean)
-      .sort((a,b) => b.ts.localeCompare(a.ts))
-      .slice(0, 50);
+          const filePath = path.join(projectDir, file);
+          const stat    = fs.statSync(filePath);
+          const sessionId = file.replace(".jsonl", "");
+          let title = sessionId.slice(0, 24) + "…";
+          let ts    = stat.mtime.toISOString();
+
+          // Read first 4 KB to find the first user message for the title
+          try {
+            const fd  = fs.openSync(filePath, "r");
+            const buf = Buffer.alloc(4096);
+            const n   = fs.readSync(fd, buf, 0, 4096, 0);
+            fs.closeSync(fd);
+            for (const line of buf.toString("utf8", 0, n).split("\n")) {
+              if (!line.trim()) continue;
+              try {
+                const entry = JSON.parse(line);
+                if (entry.type === "user" && entry.message?.content) {
+                  const c = typeof entry.message.content === "string"
+                    ? entry.message.content : JSON.stringify(entry.message.content);
+                  if (c.trim()) {
+                    title = c.trim().slice(0, 60) + (c.length > 60 ? "…" : "");
+                    ts = entry.timestamp || ts;
+                    break;
+                  }
+                }
+              } catch {}
+            }
+          } catch {}
+
+          allSessions.push({ id: sessionId, title, ts });
+        } catch {}
+      }
+    }
+
+    return allSessions.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 50);
   } catch { return []; }
+}
+
+// ── Kitty terminal support ─────────────────────────────────────────────────────
+function isKittyAvailable() {
+  try {
+    require("child_process").execFileSync("which", ["kitty"], { stdio: "ignore" });
+    return true;
+  } catch { return false; }
+}
+
+function spawnKitty(resumeId) {
+  const nodeBin = findNode() || "node";
+  const args = ["--no-deprecation", AEGIS_BIN];
+  if (resumeId) args.push("--resume", resumeId);
+
+  const loaded = loadEnv();
+  const env = {
+    ...process.env,
+    ...loaded,
+    TERM: "xterm-kitty",
+    COLORTERM: "truecolor",
+    FORCE_COLOR: "3",
+  };
+  for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
+
+  const { execFile } = require("child_process");
+  const aegisRoot = path.join(__dirname, "..");
+  execFile("kitty", ["--", nodeBin, ...args], { cwd: aegisRoot, env, detached: true });
 }
 
 // ── Cloud sync status ──────────────────────────────────────────────────────────
@@ -488,6 +559,9 @@ ipcMain.handle("pty-kill", () => {
   ptyProcess?.kill();
   ptyProcess = null;
 });
+
+ipcMain.handle("kitty-available", ()               => isKittyAvailable());
+ipcMain.handle("kitty-spawn",    (_, opts = {})    => { spawnKitty(opts.resumeId); return true; });
 
 ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
   const cwd = spawnShell(cols, rows);
