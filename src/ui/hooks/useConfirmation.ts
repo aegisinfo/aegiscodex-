@@ -9,6 +9,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { focusActions, FocusId } from '../focus/index.js';
 import type { ConfirmationHandler, ConfirmationDetails, ConfirmationResponse } from '../../tools/execution/types.js';
 
+// Re-export for useCommandProcessor
+export type { ConfirmationHandler, ConfirmationDetails, ConfirmationResponse };
+
 /**
  * 
  */

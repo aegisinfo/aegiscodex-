@@ -1,0 +1,333 @@
+/**
+ * useCommandProcessor - Command processing hook
+ *
+ * Extracts the core command processing logic (slash commands, agent chat,
+ * streaming, tool calls, auto-compaction) from AegisInterface.
+ */
+
+import { useCallback, useRef } from 'react';
+import type { Agent } from '../../agent/Agent.js';
+import type { ContextManager } from '../../context/index.js';
+import { TokenCounter } from '../../context/index.js';
+import type { Message, ToolCall, ToolResult } from '../../agent/types.js';
+import type { SlashCommandResult } from '../../slash-commands/types.js';
+import {
+  sessionActions,
+  commandActions,
+  getState,
+} from '../../store/index.js';
+import {
+  applyStreamEvent,
+  finishToolCallInBuffer,
+  getBufferedToolCalls,
+} from '../../store/streaming-buffer.js';
+import type { ConfirmationHandler } from './useConfirmation.js';
+
+export interface UseCommandProcessorOptions {
+  agentRef: React.MutableRefObject<Agent | null>;
+  contextManagerRef: React.MutableRefObject<ContextManager | null>;
+  modelRef: React.MutableRefObject<string | undefined>;
+  debugRef: React.MutableRefObject<boolean | undefined>;
+  getMessagesRef: React.MutableRefObject<() => any[]>;
+  confirmationHandlerRef: React.MutableRefObject<ConfirmationHandler>;
+  onSelectorRequest?: (state: {
+    title: string;
+    options: Array<{ value: string; label: string }>;
+    handler: 'theme' | 'model' | null;
+  }) => void;
+}
+
+export interface UseCommandProcessorResult {
+  processCommand: (value: string, options?: { silent?: boolean }) => Promise<void>;
+  handleSubmit: (value: string) => Promise<void>;
+  processQueue: () => Promise<void>;
+}
+
+export function useCommandProcessor(options: UseCommandProcessorOptions): UseCommandProcessorResult {
+  const {
+    agentRef,
+    contextManagerRef,
+    modelRef,
+    debugRef,
+    getMessagesRef,
+    confirmationHandlerRef,
+    onSelectorRequest,
+  } = options;
+
+  const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
+    const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
+    const { vanillaStore } = await import('../../store/vanilla.js');
+    const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
+    const streamingBuf = await import('../../store/streaming-buffer.js');
+
+    if (isSlashCommand(value)) {
+      // Phase 1: flush user message + thinking=true immediately
+      startBatch();
+      batchAddUserMessage(value);
+      batchSetThinking(true);
+      flushBatchWithStore(vanillaStore);
+
+      let streamingMsgId: string | null = null;
+      let streamingResult: SlashCommandResult | null = null;
+      try {
+        streamingMsgId = sessionActions().startStreamingMessage();
+      } catch { /* streaming not available */ }
+
+      const onContentDelta = streamingMsgId
+        ? (delta: string) => { streamingBuf.appendToBuffer(delta); }
+        : undefined;
+
+      try {
+        streamingResult = await executeSlashCommand(value, {
+          cwd: process.cwd(),
+          sessionId: getState().session.sessionId,
+          messages: getMessagesRef.current(),
+          contextManager: contextManagerRef.current,
+          modelName: modelRef.current,
+          onContentDelta,
+          onThinkingDelta: streamingMsgId
+            ? (delta: string) => { streamingBuf.appendThinkingToBuffer(delta); }
+            : undefined,
+          confirmationHandler: confirmationHandlerRef.current,
+        });
+
+        if (streamingResult.type === 'selector' && streamingResult.selector) {
+          sessionActions().setThinking(false);
+          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          onSelectorRequest?.(streamingResult.selector);
+          return;
+        }
+
+        if (streamingResult.sendToAgent && streamingResult.content) {
+          sessionActions().setThinking(false);
+          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          await processCommand(streamingResult.content, { silent: true });
+          return;
+        }
+
+        if (streamingResult.type === 'silent') {
+          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          sessionActions().setThinking(false);
+          return;
+        }
+
+        startBatch();
+        if (streamingResult.content) {
+          batchAddAssistantMessage(streamingResult.content);
+        } else if (streamingResult.message) {
+          batchAddAssistantMessage(streamingResult.message);
+        } else if (streamingResult.error) {
+          batchAddAssistantMessage('error: ' + streamingResult.error);
+        }
+      } catch (error) {
+        startBatch();
+        batchAddAssistantMessage(
+          'error: ' + (error instanceof Error ? error.message : String(error))
+        );
+      } finally {
+        if (streamingMsgId && streamingResult?.type !== 'silent') {
+          try { sessionActions().finishStreamingMessage(streamingMsgId); } catch {}
+        }
+        batchSetThinking(false);
+        flushBatchWithStore(vanillaStore);
+      }
+      return;
+    }
+
+    if (!agentRef.current || !contextManagerRef.current) return;
+
+    const ctxManager = contextManagerRef.current;
+
+    if (!options?.silent) {
+      sessionActions().addUserMessage(value);
+    }
+
+    sessionActions().setThinking(true);
+
+    const { onUserPromptSubmit } = await import('../../hooks/index.js');
+    const injectedContext = await onUserPromptSubmit(value, getState().session.sessionId, process.cwd());
+
+    if (injectedContext) {
+      if (debugRef.current) {
+        console.log('[DEBUG] Hook injected context:', injectedContext);
+      }
+      sessionActions().addAssistantMessage('[Hook] ' + injectedContext);
+    }
+
+    await ctxManager.addMessage('user', value);
+
+    // Auto-compact when context approaches 80% of the token limit
+    {
+      const currentTokens = ctxManager.getTokenCount();
+      const runtimeConfig = getState().config.config;
+      const maxCtx = runtimeConfig?.maxContextTokens ?? 200000;
+      if (currentTokens > 0 && currentTokens >= maxCtx * 0.8) {
+        try {
+          sessionActions().setCompacting(true);
+          sessionActions().addAssistantMessage('⟳ Context near limit - auto-compacting...');
+          const { CompactionService } = await import('../../context/CompactionService.js');
+          const ctxMsgs = ctxManager.getMessages();
+          const msgs = ctxMsgs.map((m: { role: string; content: string }) => ({
+            role: m.role as Message['role'],
+            content: m.content,
+          }));
+          const result = await CompactionService.compact(msgs, {
+            modelName: modelRef.current || 'claude-sonnet-4-6',
+            maxContextTokens: maxCtx,
+            chatService: agentRef.current?.getChatService(),
+            trigger: 'auto',
+            actualPreTokens: currentTokens,
+          });
+          if (result.success) {
+            const { nanoid } = await import('nanoid');
+            ctxManager.replaceMessages(result.compactedMessages.map((m: Message) => ({
+              id: nanoid(),
+              role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+              content: m.content,
+              timestamp: Date.now(),
+            })));
+            ctxManager.updateTokenCount(result.postTokens);
+            const saved = result.preTokens - result.postTokens;
+            sessionActions().addAssistantMessage(
+              `✓ Auto-compact: ${result.preTokens.toLocaleString()} → ${result.postTokens.toLocaleString()} tokens (−${saved.toLocaleString()})`
+            );
+          }
+        } catch { /* non-fatal */ }
+        finally { sessionActions().setCompacting(false); }
+      }
+    }
+
+    // Dual-path streaming: mutable buffer + store
+    const streamingMessageId = sessionActions().startStreamingMessage();
+    const abortController = new AbortController();
+
+    try {
+      const contextMessages = ctxManager.getMessages();
+      const modelName = modelRef.current || 'claude-sonnet-4-6';
+
+      const inputTokens = TokenCounter.countTokens(
+        contextMessages.map(m => ({ role: m.role as Message['role'], content: m.content })),
+        modelName
+      );
+
+      const { nanoid } = await import('nanoid');
+
+      const chatContext = {
+        sessionId: ctxManager.getCurrentSessionId() || getState().session.sessionId,
+        messages: contextMessages.map(m => ({
+          role: m.role as Message['role'],
+          content: m.content,
+        })),
+        confirmationHandler: confirmationHandlerRef.current,
+      };
+
+      const result = await agentRef.current.chat(value, chatContext, {
+        signal: abortController.signal,
+        onStreamEvent: (event) => {
+          if (!abortController.signal.aborted) {
+            applyStreamEvent(event);
+          }
+        },
+        onToolCallStart: (toolCall) => {
+          if (abortController.signal.aborted) return;
+          sessionActions().flushStreamBuffer(streamingMessageId);
+          const name = toolCall.function?.name || 'tool';
+          const toolId = toolCall.id || `${name}-${Date.now()}`;
+          sessionActions().addContentBlock(streamingMessageId, {
+            type: 'tool_use',
+            id: toolId,
+            name,
+            input: '',
+            status: 'running',
+            startedAt: Date.now(),
+          });
+        },
+        onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
+          if (abortController.signal.aborted) return;
+          const toolId = _toolCall.id;
+          const isError = !toolResult.success;
+          finishToolCallInBuffer(toolId, isError);
+          const bufferedCalls = getBufferedToolCalls();
+          const bufferedCall = bufferedCalls.find(tc => tc.id === toolId);
+          if (bufferedCall?.arguments) {
+            sessionActions().setToolCallInput(streamingMessageId, toolId, bufferedCall.arguments);
+          }
+          sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success', Date.now());
+          const resultContent = toolResult.error
+            ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
+            : (toolResult.displayContent
+                ? (toolResult.displayContent.length > 200 ? toolResult.displayContent.slice(0, 200) + '...' : toolResult.displayContent)
+                : '');
+          sessionActions().addToolResultBlock(streamingMessageId, toolId, resultContent, isError);
+        },
+      });
+
+      sessionActions().finishStreamingMessage(streamingMessageId);
+      await ctxManager.addMessage('assistant', result);
+
+      const outputTokens = TokenCounter.countTextTokens(result, modelName);
+      const totalTokens = inputTokens + outputTokens;
+      ctxManager.updateTokenCount(totalTokens);
+
+      const currentTokenUsage = getState().session.tokenUsage;
+      const prevModel = currentTokenUsage.modelBreakdown[modelName] ?? { inputTokens: 0, outputTokens: 0 };
+      sessionActions().updateTokenUsage({
+        inputTokens: currentTokenUsage.inputTokens + inputTokens,
+        outputTokens: currentTokenUsage.outputTokens + outputTokens,
+        modelBreakdown: {
+          ...currentTokenUsage.modelBreakdown,
+          [modelName]: {
+            inputTokens: prevModel.inputTokens + inputTokens,
+            outputTokens: prevModel.outputTokens + outputTokens,
+          },
+        },
+      });
+
+      if (debugRef.current) {
+        console.log('[DEBUG] Token usage - input:', inputTokens, 'output:', outputTokens);
+        console.log('[DEBUG] Total context tokens:', ctxManager.getTokenCount());
+      }
+    } catch (error) {
+      if ((error as Error)?.name !== 'AbortError') {
+        const errorContent = 'Error: ' + (error as Error).message;
+        sessionActions().forceAppendToMessage(streamingMessageId, errorContent);
+        sessionActions().finishStreamingMessage(streamingMessageId);
+        await ctxManager.addMessage('assistant', errorContent);
+      } else {
+        sessionActions().finishStreamingMessage(streamingMessageId);
+      }
+    } finally {
+      sessionActions().setThinking(false);
+    }
+  }, [onSelectorRequest]);
+
+  const processQueue = useCallback(async () => {
+    const nextCommand = commandActions().dequeueCommand();
+    if (nextCommand) {
+      if (debugRef.current) {
+        console.log('[DEBUG] Processing queued command:', nextCommand);
+      }
+      await processCommand(nextCommand);
+    }
+  }, [processCommand]);
+
+  const handleSubmit = useCallback(async (value: string) => {
+    if (!value.trim()) return;
+
+    const currentState = getState();
+    const currentIsThinking = currentState.session.isThinking;
+    const currentPendingCount = currentState.command.pendingCommands.length;
+
+    if (currentIsThinking) {
+      commandActions().enqueueCommand(value);
+      if (debugRef.current) {
+        console.log('[DEBUG] Command queued:', value, 'Queue size:', currentPendingCount + 1);
+      }
+      return;
+    }
+
+    await processCommand(value);
+  }, [processCommand]);
+
+  return { processCommand, handleSubmit, processQueue };
+}

@@ -1,8 +1,7 @@
 /**
  * ErrorBoundary - React 错误边界组件
- * 
- * 
- * 
+ *
+ * Enhanced with region name for logging and optional fallback render prop.
  */
 
 import React from 'react';
@@ -11,6 +10,10 @@ import { Box, Text } from 'ink';
 interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  /** Region name for debug logging (e.g. 'MessageList', 'ThinkingPanel') */
+  name?: string;
+  /** Called when an error is caught, for telemetry */
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
 }
 
 interface State {
@@ -25,32 +28,32 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // 更新 state 以便下次渲染显示备
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // 可以在这里记录错误到日志服
-    console.error('[ErrorBoundary] Caught error:', error);
-    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+    const region = this.props.name || 'unknown';
+    console.error(`[ErrorBoundary:${region}] Caught error:`, error);
+    console.error(`[ErrorBoundary:${region}] Component stack:`, errorInfo.componentStack);
+    this.props.onError?.(error, errorInfo);
   }
 
   render(): React.ReactNode {
     if (this.state.hasError) {
-      // 如果提供了自定义 fallback，使用
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
-      // 默认错
+      const region = this.props.name || 'application';
+
       return (
         <Box flexDirection="column" padding={1}>
           <Text color="red" bold>
-            ❌ Application Error
+            ❌ {region} Error
           </Text>
           <Box marginTop={1}>
             <Text color="yellow">
-              An unexpected error occurred. Please restart the application.
+              An unexpected error occurred in {region}. Please restart the application.
             </Text>
           </Box>
           {this.state.error && (

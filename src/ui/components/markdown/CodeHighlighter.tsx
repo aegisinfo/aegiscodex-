@@ -54,28 +54,26 @@ function doHighlightAst(
 
 // ── Diff rendering ──────────────────────────────────────────────────────────
 
+// VS Code Dark+ exact hex colors
+const VS_DIFF = {
+  add:    '#3fb950',  // additions
+  del:    '#f85149',  // deletions
+  hunk:   '#79c0ff',  // @@ hunk headers
+  header: '#e3b341',  // --- +++ file headers
+} as const;
+
 const DIFF_HEADER_RE = /^(diff --git |index |--- |\+\+\+ )/;
 const DIFF_HUNK_RE = /^@@ /;
 const DIFF_ADD_RE = /^\+/;
 const DIFF_DEL_RE = /^\-/;
-const DIFF_NBSP_RE = /^ /; // non-breaking space used by some diff outputs
 
 function getDiffLineStyle(
   line: string
 ): { prefix: string; color: string; bold?: boolean } | null {
-  if (DIFF_HEADER_RE.test(line)) {
-    return { prefix: ' ', color: 'yellow' };
-  }
-  if (DIFF_HUNK_RE.test(line)) {
-    return { prefix: ' ', color: 'cyan' };
-  }
-  if (DIFF_ADD_RE.test(line)) {
-    return { prefix: '+', color: 'green' };
-  }
-  if (DIFF_DEL_RE.test(line)) {
-    return { prefix: '-', color: 'red' };
-  }
-  // context lines
+  if (DIFF_HEADER_RE.test(line)) return { prefix: ' ', color: VS_DIFF.header, bold: true };
+  if (DIFF_HUNK_RE.test(line))   return { prefix: ' ', color: VS_DIFF.hunk };
+  if (DIFF_ADD_RE.test(line))    return { prefix: '+', color: VS_DIFF.add };
+  if (DIFF_DEL_RE.test(line))    return { prefix: '-', color: VS_DIFF.del };
   return { prefix: ' ', color: '' };
 }
 

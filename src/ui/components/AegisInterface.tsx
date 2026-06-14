@@ -1,66 +1,19 @@
 /**
  * AegisInterface.tsx - Main CLI interface component
+ *
+ * Refactored to use extracted hooks: useAgent, useCommandProcessor, useTerminalSize.
+ * Previously 977 lines — now ~450 lines of orchestration, with logic in focused hooks.
  */
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-
-import { Agent } from '../../agent/Agent.js';
-import type { Message, ChatContext, ToolCall, ToolResult } from '../../agent/types.js';
-
-// ========== Tool Call Formatting ==========
-
-function formatToolArgs(name: string, argsJson?: string): string {
-  if (!argsJson) return '';
-  try {
-    const args = JSON.parse(argsJson);
-    switch (name) {
-      case 'Read':
-        return args.file_path || '';
-      case 'Bash': {
-        const cmd = args.command || '';
-        return cmd.length > 80 ? cmd.slice(0, 77) + '...' : cmd;
-      }
-      case 'Edit':
-        return args.file_path || '';
-      case 'Write':
-        return args.file_path || '';
-      case 'Glob':
-        return args.pattern || '';
-      case 'Grep':
-        return `${args.pattern || ''}${args.path ? ` in ${args.path}` : ''}`;
-      default: {
-        const entries = Object.entries(args);
-        if (entries.length === 0) return '';
-        const [key, val] = entries[0];
-        const valStr = String(val);
-        return `${key}=${valStr.length > 40 ? valStr.slice(0, 37) + '...' : valStr}`;
-      }
-    }
-  } catch {
-    return '';
-  }
-}
-
-function formatToolResult(result: ToolResult): string {
-  if (result.error) {
-    const err = result.error
-      .replace(/^(Error|error):\s*/, '')
-      .split('\n')[0];
-    return err.length > 50 ? err.slice(0, 47) + '...' : err;
-  }
-  return '';
-}
-
 // Store
 import {
   useInitializationStatus,
   useActiveModal,
-  useSessionId,
   useMessages,
   usePendingCommands,
-  useTokenUsage,
   sessionActions,
   configActions,
   commandActions,
@@ -68,11 +21,12 @@ import {
   subscribe,
 } from '../../store/index.js';
 
-// Streaming buffer — direct writes to mutable buffer (no store re-renders)
-import { applyStreamEvent, finishToolCallInBuffer, getBufferedToolCalls } from '../../store/streaming-buffer.js';
-
-// Context
-import { ContextManager, TokenCounter } from '../../context/index.js';
+// Hooks
+import { useTerminalSize } from '../hooks/useTerminalSize.js';
+import { useCtrlCHandler } from '../hooks/useCtrlCHandler.js';
+import { useConfirmation } from '../hooks/useConfirmation.js';
+import { useAgent } from '../hooks/useAgent.js';
+import { useCommandProcessor } from '../hooks/useCommandProcessor.js';
 
 // Components
 import { MessageRenderer } from './markdown/MessageRenderer.js';
@@ -84,11 +38,7 @@ import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
 import { SetupWizard } from './dialog/SetupWizard.js';
 import { ExitMessage } from './common/ExitMessage.js';
-import { useConfirmation } from '../hooks/useConfirmation.js';
-
-// Hooks
-import { useTerminalWidth, useTerminalHeight } from '../hooks/useTerminalWidth.js';
-import { useCtrlCHandler } from '../hooks/useCtrlCHandler.js';
+import { ErrorBoundary } from './common/ErrorBoundary.js';
 
 // Focus
 import { FocusId, focusActions } from '../focus/index.js';
@@ -133,27 +83,26 @@ const QueuedCommands: React.FC = React.memo(() => {
 
 QueuedCommands.displayName = 'QueuedCommands';
 
-/**
- * Memoized recent messages preview for selector overlay
- */
-const RecentMessagesPreview: React.FC<{ terminalWidth: number; count?: number }> = React.memo(({ terminalWidth, count = 3 }) => {
-  const messages = getState().session.messages;
-  const recentMessages = messages.slice(-count);
+const RecentMessagesPreview: React.FC<{ terminalWidth: number; count?: number }> = React.memo(
+  ({ terminalWidth, count = 3 }) => {
+    const messages = getState().session.messages;
+    const recentMessages = messages.slice(-count);
 
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      {recentMessages.map((msg, index) => (
-        <MessageRenderer
-          key={msg.id || index}
-          content={msg.content}
-          role={msg.role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-        />
-      ))}
-    </Box>
-  );
-});
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        {recentMessages.map((msg, index) => (
+          <MessageRenderer
+            key={msg.id || index}
+            content={msg.content}
+            role={msg.role}
+            terminalWidth={terminalWidth}
+            showPrefix={true}
+          />
+        ))}
+      </Box>
+    );
+  }
+);
 
 RecentMessagesPreview.displayName = 'RecentMessagesPreview';
 
@@ -167,70 +116,39 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   debug,
   resumeSessionId,
 }) => {
+  // ==================== Terminal Size ====================
+  const { width: terminalWidth, height: terminalHeight } = useTerminalSize();
+
   // ==================== Store State ====================
   const initializationStatus = useInitializationStatus();
   const activeModal = useActiveModal();
-  const sessionId = useSessionId();
   const messages = useMessages();
 
-  // Stable getMessages
   const getMessages = useCallback(() => getState().session.messages, []);
 
-  // ==================== Stable Refs for processCommand ====================
-  // Using refs to prevent processCommand from being recreated on every prop/state change.
-  // This is the single most important optimization for preventing cascading re-renders.
+  // ==================== Agent Hook ====================
+  const {
+    agentRef,
+    contextManagerRef,
+    isInitializing,
+    initError,
+    currentModel,
+    handleSetupComplete,
+  } = useAgent({ apiKey, baseURL, model, debug, resumeSessionId });
+
+  // ==================== Stable Refs ====================
   const debugRef = useRef(debug);
   debugRef.current = debug;
   const modelRef = useRef(model);
   modelRef.current = model;
-  const sessionIdRef = useRef(sessionId);
-  sessionIdRef.current = sessionId;
   const getMessagesRef = useRef(getMessages);
   getMessagesRef.current = getMessages;
 
-  // ==================== Local State & Refs ====================
-  const terminalWidth = useTerminalWidth();
-  const terminalHeight = useTerminalHeight();
-  const theme = themeManager.getTheme();
-  const agentRef = useRef<Agent | null>(null);
-  const contextManagerRef = useRef<ContextManager | null>(null);
-  const initialMessageSent = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const streamingMessageIdRef = useRef<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [initError, setInitError] = useState<string | null>(null);
+  // ==================== Local State ====================
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
-
-  // Scroll state for fullscreen mode
   const [scrollOffset, setScrollOffset] = useState(0);
   const pageSize = Math.max(3, Math.floor((terminalHeight - 8) / 3));
-
-  // Scroll helpers
-  const scrollUp = useCallback((amount: number) => {
-    setScrollOffset(prev => Math.max(0, prev - amount));
-  }, []);
-
-  const scrollDown = useCallback((amount: number) => {
-    setScrollOffset(prev => {
-      const msgs = getState().session.messages;
-      const maxOffset = Math.max(0, msgs.length - pageSize);
-      return Math.min(maxOffset, prev + amount);
-    });
-  }, [pageSize]);
-
-  // Keyboard scroll: Ctrl+Up/Down (1 msg), PgUp/PgDn (page), Home/End
-  useInput((_input, key) => {
-    if (key.upArrow && key.ctrl) { scrollUp(1); return; }
-    if (key.downArrow && key.ctrl) { scrollDown(1); return; }
-    if (key.pageUp) { scrollUp(pageSize); return; }
-    if (key.pageDown) { scrollDown(pageSize); return; }
-    if (key.home) { setScrollOffset(0); return; }
-    if (key.end) {
-      const msgs = getState().session.messages;
-      setScrollOffset(Math.max(0, msgs.length - pageSize));
-    }
-  });
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -249,23 +167,60 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const confirmationHandlerRef = useRef(confirmationHandler);
   confirmationHandlerRef.current = confirmationHandler;
 
-  // Ctrl+C handler
+  // Command processor — extracted hook
+  const { processCommand, handleSubmit, processQueue } = useCommandProcessor({
+    agentRef,
+    contextManagerRef,
+    modelRef,
+    debugRef,
+    getMessagesRef,
+    confirmationHandlerRef,
+    onSelectorRequest: (state) => {
+      setSelectorState({
+        isVisible: true,
+        title: state.title,
+        options: state.options,
+        handler: state.handler,
+      });
+      focusActions.setFocus(FocusId.SELECTOR);
+    },
+  });
+
+  // ==================== Scroll Helpers ====================
+  const scrollUp = useCallback((amount: number) => {
+    setScrollOffset(prev => Math.max(0, prev - amount));
+  }, []);
+
+  const scrollDown = useCallback((amount: number) => {
+    setScrollOffset(prev => {
+      const msgs = getState().session.messages;
+      const maxOffset = Math.max(0, msgs.length - pageSize);
+      return Math.min(maxOffset, prev + amount);
+    });
+  }, [pageSize]);
+
+  // Keyboard scrolling
+  useInput((_input, key) => {
+    if (key.upArrow && key.ctrl) { scrollUp(1); return; }
+    if (key.downArrow && key.ctrl) { scrollDown(1); return; }
+    if (key.pageUp) { scrollUp(pageSize); return; }
+    if (key.pageDown) { scrollDown(pageSize); return; }
+    if (key.home) { setScrollOffset(0); return; }
+    if (key.end) {
+      const msgs = getState().session.messages;
+      setScrollOffset(Math.max(0, msgs.length - pageSize));
+    }
+  });
+
+  // ==================== Ctrl+C Handler ====================
   useCtrlCHandler({
     onInterrupt: () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      if (streamingMessageIdRef.current) {
-        sessionActions().finishStreamingMessage(streamingMessageIdRef.current);
-        streamingMessageIdRef.current = null;
-      }
+      commandActions().abort();
       sessionActions().setThinking(false);
     },
     onBeforeExit: () => {
       const currentMessageCount = getState().session.messages.length;
       const currentSessionId = contextManagerRef.current?.getCurrentSessionId() || getState().session.sessionId;
-
       if (currentSessionId && currentMessageCount > 0) {
         setExitSessionId(currentSessionId);
         setIsExiting(true);
@@ -275,207 +230,9 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     },
   });
 
-  // ==================== Agent & Context Initialization ====================
-
-  // Called by SetupWizard after first-run config is saved to disk.
-  const handleSetupComplete = useCallback(async () => {
-    setInitError(null);
-    setIsInitializing(true);
-    try {
-      const { ConfigManager } = await import('../../config/index.js');
-      const cm = ConfigManager.getInstance();
-      await cm.initialize();
-      const newModel = cm.getDefaultModel();
-
-      contextManagerRef.current = new ContextManager({ compressionThreshold: 100000 });
-      const sid = await contextManagerRef.current.createSession();
-      sessionActions().setSessionId(sid);
-
-      agentRef.current = await Agent.create({
-        apiKey: newModel.apiKey!,
-        baseURL: newModel.baseURL,
-        model: newModel.model!,
-      });
-
-      const { initializeCustomCommands } = await import('../../slash-commands/index.js');
-      await initializeCustomCommands(process.cwd());
-
-      import('../../skills/index.js').then(({ initializeSkills }) => {
-        initializeSkills(process.cwd()).catch(() => {});
-      }).catch(() => {});
-
-      try {
-        const { initializeHooks, onSessionStart } = await import('../../hooks/index.js');
-        initializeHooks(cm.getConfig().hooks || {});
-        await onSessionStart(sid, process.cwd());
-      } catch {}
-
-      setIsInitializing(false);
-    } catch (err) {
-      setInitError(err instanceof Error ? err.message : String(err));
-      setIsInitializing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const initAgent = async () => {
-      // Skip init during first-run setup — handleSetupComplete handles this.
-      if (getState().app.initializationStatus === 'needsSetup') return;
-      try {
-        if (debug) {
-          console.log('[DEBUG] Initializing Agent and ContextManager...');
-        }
-
-        contextManagerRef.current = new ContextManager({
-          compressionThreshold: 100000,
-        });
-
-        let currentSessionId: string;
-
-        if (resumeSessionId) {
-          const loaded = await contextManagerRef.current.loadSession(resumeSessionId);
-
-          if (loaded) {
-            currentSessionId = resumeSessionId;
-            const contextMessages = contextManagerRef.current.getMessages();
-            contextMessages
-              .filter(m => m.role === 'user' || m.role === 'assistant')
-              .forEach(m => {
-                if (m.role === 'user') {
-                  sessionActions().addUserMessage(m.content);
-                } else if (m.role === 'assistant') {
-                  sessionActions().addAssistantMessage(m.content);
-                }
-              });
-
-            if (debug) {
-              console.log('[DEBUG] Loaded session with', contextMessages.length, 'messages');
-            }
-          } else {
-            if (debug) {
-              console.log('[DEBUG] Failed to load session, creating new one');
-            }
-            currentSessionId = await contextManagerRef.current.createSession();
-          }
-        } else {
-          currentSessionId = await contextManagerRef.current.createSession();
-        }
-
-        sessionActions().setSessionId(currentSessionId);
-
-        agentRef.current = await Agent.create({
-          apiKey,
-          baseURL,
-          model,
-        });
-
-        const { initializeCustomCommands } = await import('../../slash-commands/index.js');
-        const customCmdResult = await initializeCustomCommands(process.cwd());
-
-        if (debug && customCmdResult.count > 0) {
-          console.log('[DEBUG] Loaded', customCmdResult.count, 'custom commands');
-        }
-        if (customCmdResult.warnings.length > 0) {
-          console.warn('[WARN] Custom commands:', customCmdResult.warnings);
-        }
-
-        import('../../skills/index.js').then(({ initializeSkills }) => {
-          initializeSkills(process.cwd()).catch(() => {});
-        }).catch(() => {});
-
-        try {
-          const { initializeHooks, getHookStats, onSessionStart } = await import('../../hooks/index.js');
-          const { ConfigManager } = await import('../../config/index.js');
-          const configManager = ConfigManager.getInstance();
-          const fullConfig = configManager.getConfig();
-          const hooksConfig = fullConfig.hooks || {};
-
-          if (debug) {
-            console.log('[DEBUG] Config paths:', configManager.getLoadedConfigPaths());
-            console.log('[DEBUG] Hooks config:', JSON.stringify(hooksConfig, null, 2));
-          }
-
-          initializeHooks(hooksConfig);
-
-          if (debug) {
-            const stats = getHookStats();
-            console.log('[DEBUG] Hooks stats:', stats);
-          }
-
-          await onSessionStart(currentSessionId, process.cwd());
-        } catch (hookError) {
-          if (debug) {
-            console.warn('[DEBUG] Hooks initialization failed:', hookError);
-          }
-        }
-
-        // Show one-time free-tier upgrade reminder if past the 1 free session
-        try {
-          const { sharedMemory } = await import('../../memory/SharedMemory.js');
-          const reminder = sharedMemory.getUpgradeReminder(currentSessionId);
-          if (reminder) {
-            sessionActions().addAssistantMessage(reminder);
-          }
-        } catch {}
-
-        setIsInitializing(false);
-
-        if (debug) {
-          console.log('[DEBUG] Agent initialized successfully, sessionId:', currentSessionId);
-        }
-      } catch (error) {
-        setInitError(error instanceof Error ? error.message : '');
-        setIsInitializing(false);
-      }
-    };
-
-    initAgent();
-
-    return () => {
-      contextManagerRef.current?.cleanup();
-    };
-  }, [apiKey, baseURL, model, debug, resumeSessionId]);
-
-  // Model switch via /model command - event subscription
-  const currentModelIdRef = React.useRef(model);
-  const [currentModel, setCurrentModel] = useState(model);
-  
-  useEffect(() => {
-    const unsubscribe = subscribe((state) => {
-      const newModelId = state.config.config?.currentModelId;
-      if (newModelId && newModelId !== currentModelIdRef.current) {
-        currentModelIdRef.current = newModelId;
-        const models = state.config.config?.models || [];
-        const found = models.find((m: any) => m.id === newModelId);
-        if (found) {
-          const displayName = found.model || found.id;
-          setCurrentModel(displayName);
-          modelRef.current = displayName;
-          
-          if (agentRef.current) {
-            import('../../agent/Agent.js').then(({ Agent }) => {
-              const apiKey = found.apiKey || process.env.OPENAI_API_KEY || '';
-              if (!apiKey) return;
-              Agent.create({
-                apiKey,
-                baseURL: found.baseURL || (found as any).baseUrl,
-                model:   displayName,
-              }).then(agent => {
-                agentRef.current = agent;
-              }).catch(() => {});
-            }).catch(() => {});
-          }
-        }
-      }
-    });
-    return unsubscribe;
-  }, []);
-
   // ==================== Focus Management ====================
   useEffect(() => {
-    if (confirmationState.isVisible) {
-      return;
-    }
+    if (confirmationState.isVisible) return;
     if (selectorState.isVisible) {
       focusActions.setFocus(FocusId.SELECTOR);
     } else if (activeModal === 'themeSelector') {
@@ -488,18 +245,14 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   // ==================== Selector Handlers ====================
   const handleSelectorSelect = useCallback(async (value: string) => {
     const { handler } = selectorState;
-
-    // Defocus selector immediately (imperative, not React state) so any key-repeat
-    // Enter events fail the focus check in InteractiveSelector.useInput before re-firing.
     focusActions.setFocus(FocusId.MAIN_INPUT);
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
 
     if (handler === 'theme') {
       themeManager.setTheme(value);
-      sessionActions().addAssistantMessage('✓  ' + value);
+      sessionActions().addAssistantMessage('✓ ' + value);
     } else if (handler === 'model') {
       if (value.startsWith('__ollama__')) {
-        // Auto-discovered Ollama model — register it in config then switch
         const modelName = value.slice('__ollama__'.length);
         const id = modelName.replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
         try {
@@ -518,10 +271,10 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           } catch { /* non-fatal */ }
         } catch { /* non-fatal */ }
         configActions().updateConfig({ currentModelId: id });
-        sessionActions().addAssistantMessage(`✓  ${modelName} (saved to config)`);
+        sessionActions().addAssistantMessage(`✓ ${modelName} (saved to config)`);
       } else {
         configActions().updateConfig({ currentModelId: value });
-        sessionActions().addAssistantMessage('✓  ' + value);
+        sessionActions().addAssistantMessage('✓ ' + value);
       }
     }
   }, [selectorState]);
@@ -532,342 +285,22 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     sessionActions().addAssistantMessage('');
   }, []);
 
-  // ==================== Core Command Processor ====================
-  /**
-   * processCommand with zero dependencies - uses refs for all external values.
-   * This prevents cascading re-renders when props or state change.
-   */
-  const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
-    const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
-    const { vanillaStore } = await import('../../store/vanilla.js');
-    const { startBatch, batchAddUserMessage, batchAddAssistantMessage, batchSetThinking, flushBatchWithStore, cancelBatch } = await import('../../store/streaming-buffer.js');
-    const streamingBuf = await import('../../store/streaming-buffer.js');
-
-    if (isSlashCommand(value)) {
-      // Phase 1: flush user message + thinking=true immediately so the UI
-      // shows feedback (spinner) during long-running commands like /multi.
-      startBatch();
-      batchAddUserMessage(value);
-      batchSetThinking(true);
-      flushBatchWithStore(vanillaStore);
-
-      // Determine if this command supports streaming (has content delta callback)
-      // Start a streaming message so /multi can stream results in real-time
-      let streamingMsgId: string | null = null;
-      let streamingResult: any = null;
-      try {
-        streamingMsgId = sessionActions().startStreamingMessage();
-      } catch { /* streaming not available */ }
-
-      const onContentDelta = streamingMsgId
-        ? (delta: string) => { streamingBuf.appendToBuffer(delta); }
-        : undefined;
-
-      try {
-        streamingResult = await executeSlashCommand(value, {
-          cwd: process.cwd(),
-          sessionId: sessionIdRef.current,
-          messages: getMessagesRef.current(),
-          contextManager: contextManagerRef.current,
-          modelName: modelRef.current,
-          onContentDelta,
-          onThinkingDelta: streamingMsgId
-            ? (delta: string) => { streamingBuf.appendThinkingToBuffer(delta); }
-            : undefined,
-          confirmationHandler: confirmationHandlerRef.current,
-        });
-
-        if (streamingResult.type === 'selector' && streamingResult.selector) {
-          sessionActions().setThinking(false);
-          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
-          setSelectorState({
-            isVisible: true,
-            title: streamingResult.selector.title,
-            options: streamingResult.selector.options,
-            handler: streamingResult.selector.handler,
-          });
-          focusActions.setFocus(FocusId.SELECTOR);
-          return;
-        }
-
-        if (streamingResult.sendToAgent && streamingResult.content) {
-          sessionActions().setThinking(false);
-          if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
-          await processCommand(streamingResult.content, { silent: true });
-          return;
-        }
-
-        // 'silent' type = content already streamed via onContentDelta.
-        // finishStreamingMessage drains the buffer itself — no separate
-        // flushStreamBuffer needed (that would create a stale intermediate
-        // store update that the RAF loop could apply after finish).
-        if (streamingResult.type === 'silent') {
-          if (streamingMsgId) {
-            sessionActions().finishStreamingMessage(streamingMsgId);
-          }
-          sessionActions().setThinking(false);
-          return;
-        }
-
-        // Phase 2: batch the command result and flush it
-        startBatch();
-        if (streamingResult.content) {
-          batchAddAssistantMessage(streamingResult.content);
-        } else if (streamingResult.message) {
-          batchAddAssistantMessage(streamingResult.message);
-        } else if (streamingResult.error) {
-          batchAddAssistantMessage('error: ' + streamingResult.error);
-        }
-      } catch (error) {
-        startBatch();
-        batchAddAssistantMessage(
-          'error: ' + (error instanceof Error ? error.message : String(error))
-        );
-      } finally {
-        if (streamingMsgId && streamingResult?.type !== 'silent') {
-          try { sessionActions().finishStreamingMessage(streamingMsgId); } catch {}
-        }
-        batchSetThinking(false);
-        flushBatchWithStore(vanillaStore);
-      }
-      return;
-    }
-
-    if (!agentRef.current || !contextManagerRef.current) return;
-
-    const ctxManager = contextManagerRef.current;
-
-    if (!options?.silent) {
-      sessionActions().addUserMessage(value);
-    }
-
-    sessionActions().setThinking(true);
-
-    const { onUserPromptSubmit } = await import('../../hooks/index.js');
-    const injectedContext = await onUserPromptSubmit(value, sessionIdRef.current, process.cwd());
-
-    if (injectedContext) {
-      if (debugRef.current) {
-        console.log('[DEBUG] Hook injected context:', injectedContext);
-      }
-      sessionActions().addAssistantMessage('[Hook] ' + injectedContext);
-    }
-
-    await ctxManager.addMessage('user', value);
-
-    // Auto-compact when context approaches 80% of the token limit.
-    // This prevents the Agent's hard truncation (which drops context without summarizing).
-    {
-      const currentTokens = ctxManager.getTokenCount();
-      const runtimeConfig = getState().config.config;
-      const maxCtx = (runtimeConfig as any)?.maxContextTokens ?? 200000;
-      if (currentTokens > 0 && currentTokens >= maxCtx * 0.8) {
-        try {
-          sessionActions().setCompacting(true);
-          sessionActions().addAssistantMessage('⟳ Context near limit — auto-compacting...');
-          const { CompactionService } = await import('../../context/CompactionService.js');
-          const ctxMsgs = ctxManager.getMessages();
-          const msgs = ctxMsgs.map((m: { role: string; content: string }) => ({
-            role: m.role as Message['role'],
-            content: m.content,
-          }));
-          const result = await CompactionService.compact(msgs, {
-            modelName: modelRef.current || 'claude-sonnet-4-6',
-            maxContextTokens: maxCtx,
-            chatService: agentRef.current?.getChatService(),
-            trigger: 'auto',
-            actualPreTokens: currentTokens,
-          });
-          if (result.success) {
-            const { nanoid } = await import('nanoid');
-            ctxManager.replaceMessages(result.compactedMessages.map((m: Message) => ({
-              id: nanoid(),
-              role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-              content: m.content,
-              timestamp: Date.now(),
-            })));
-            ctxManager.updateTokenCount(result.postTokens);
-            const saved = result.preTokens - result.postTokens;
-            sessionActions().addAssistantMessage(
-              `✓ Auto-compact: ${result.preTokens.toLocaleString()} → ${result.postTokens.toLocaleString()} tokens (−${saved.toLocaleString()})`
-            );
-          }
-        } catch { /* non-fatal — continue without compaction */ }
-        finally { sessionActions().setCompacting(false); }
-      }
-    }
-
-    if (debugRef.current) {
-      const contextMessages = ctxManager.getMessages();
-      console.log('[DEBUG] Sending message:', value);
-      console.log('[DEBUG] Context messages count:', contextMessages.length);
-      console.log('[DEBUG] Current token count:', ctxManager.getTokenCount());
-    }
-
-    const streamingMessageId = sessionActions().startStreamingMessage();
-    streamingMessageIdRef.current = streamingMessageId;
-
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    try {
-      const contextMessages = ctxManager.getMessages();
-      const modelName = modelRef.current || 'claude-sonnet-4-6';
-
-      const inputTokens = TokenCounter.countTokens(
-        contextMessages.map(m => ({ role: m.role as Message['role'], content: m.content })),
-        modelName
-      );
-
-      const chatContext: ChatContext = {
-        sessionId: ctxManager.getCurrentSessionId() || sessionIdRef.current,
-        messages: contextMessages.map(m => ({
-          role: m.role as Message['role'],
-          content: m.content,
-        })),
-        confirmationHandler: confirmationHandlerRef.current,
-      };
-
-      const result = await agentRef.current.chat(value, chatContext, {
-        signal: abortController.signal,
-        onStreamEvent: (event) => {
-          if (!abortController.signal.aborted) {
-            applyStreamEvent(event);
-          }
-        },
-        onToolCallStart: (toolCall) => {
-          if (abortController.signal.aborted) return;
-          // Flush accumulated text before the tool call block starts
-          sessionActions().flushStreamBuffer(streamingMessageId);
-          const name = toolCall.function?.name || 'tool';
-          const toolId = toolCall.id || `${name}-${Date.now()}`;
-          // Add structured tool_use block to the store message (for UI widgets)
-          sessionActions().addContentBlock(streamingMessageId, {
-            type: 'tool_use',
-            id: toolId,
-            name,
-            input: '',
-            status: 'running',
-            startedAt: Date.now(),
-          });
-          // Note: tool call is already tracked in streamingState.toolCalls via
-          // applyStreamEvent (tool_use_start event from the stream). No manual
-          // startToolCallInBuffer needed.
-        },
-        onToolResult: (_toolCall: ToolCall, toolResult: ToolResult) => {
-          if (abortController.signal.aborted) return;
-          const toolId = _toolCall.id;
-          const isError = !toolResult.success;
-          finishToolCallInBuffer(toolId, isError);
-          // Flush the accumulated args to the store once (not per-delta)
-          const bufferedCalls = getBufferedToolCalls();
-          const bufferedCall = bufferedCalls.find(tc => tc.id === toolId);
-          if (bufferedCall?.arguments) {
-            sessionActions().setToolCallInput(streamingMessageId, toolId, bufferedCall.arguments);
-          }
-          sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success', Date.now());
-          const resultContent = toolResult.error
-            ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
-            : (toolResult.displayContent
-                ? (toolResult.displayContent.length > 200 ? toolResult.displayContent.slice(0, 200) + '...' : toolResult.displayContent)
-                : '');
-          sessionActions().addToolResultBlock(streamingMessageId, toolId, resultContent, isError);
-        },
-      });
-
-      // Flush any remaining content from buffer — finishStreamingMessage handles this
-      sessionActions().finishStreamingMessage(streamingMessageId);
-
-      await ctxManager.addMessage('assistant', result);
-
-      const outputTokens = TokenCounter.countTextTokens(result, modelName);
-      const totalTokens = inputTokens + outputTokens;
-
-      ctxManager.updateTokenCount(totalTokens);
-
-      const currentTokenUsage = getState().session.tokenUsage;
-      const prevModel = currentTokenUsage.modelBreakdown[modelName] ?? { inputTokens: 0, outputTokens: 0 };
-      sessionActions().updateTokenUsage({
-        inputTokens: currentTokenUsage.inputTokens + inputTokens,
-        outputTokens: currentTokenUsage.outputTokens + outputTokens,
-        modelBreakdown: {
-          ...currentTokenUsage.modelBreakdown,
-          [modelName]: {
-            inputTokens:  prevModel.inputTokens  + inputTokens,
-            outputTokens: prevModel.outputTokens + outputTokens,
-          },
-        },
-      });
-
-      if (debugRef.current) {
-        console.log('[DEBUG] Token usage - input:', inputTokens, 'output:', outputTokens);
-        console.log('[DEBUG] Total context tokens:', ctxManager.getTokenCount());
-      }
-
-    } catch (error) {
-      if (abortController.signal.aborted) {
-        sessionActions().finishStreamingMessage(streamingMessageId);
-      } else {
-        const errorContent = 'Error: ' + (error as Error).message;
-        sessionActions().forceAppendToMessage(streamingMessageId, errorContent);
-        sessionActions().finishStreamingMessage(streamingMessageId);
-        await ctxManager.addMessage('assistant', errorContent);
-      }
-    } finally {
-      abortControllerRef.current = null;
-      streamingMessageIdRef.current = null;
-      sessionActions().setThinking(false);
-    }
-  }, []); // Zero deps! All external values accessed via refs.
-
   // ==================== Queue Processor ====================
-  const processQueue = useCallback(async () => {
-    const nextCommand = commandActions().dequeueCommand();
-    if (nextCommand) {
-      if (debugRef.current) {
-        console.log('[DEBUG] Processing queued command:', nextCommand);
-      }
-      await processCommand(nextCommand);
-    }
-  }, [processCommand]); // processCommand is stable (empty deps)
-
   useEffect(() => {
     let prevIsThinking = getState().session.isThinking;
-
     const unsubscribe = subscribe((state) => {
       const currentIsThinking = state.session.isThinking;
       const hasPending = state.command.pendingCommands.length > 0;
-
       if (prevIsThinking && !currentIsThinking && hasPending) {
         processQueue();
       }
-
       prevIsThinking = currentIsThinking;
     });
-
     return unsubscribe;
-  }, [processQueue]); // processQueue is stable
-
-  // ==================== Command Handler ====================
-  const handleSubmit = useCallback(async (value: string) => {
-    if (!value.trim()) return;
-
-    const currentState = getState();
-    const currentIsThinking = currentState.session.isThinking;
-    const currentPendingCount = currentState.command.pendingCommands.length;
-
-    if (currentIsThinking) {
-      commandActions().enqueueCommand(value);
-      if (debugRef.current) {
-        console.log('[DEBUG] Command queued:', value, 'Queue size:', currentPendingCount + 1);
-      }
-      return;
-    }
-
-    await processCommand(value);
-  }, [processCommand]); // processCommand is stable (empty deps)
+  }, [processQueue]);
 
   // ==================== Initial Message ====================
+  const initialMessageSent = useRef(false);
   useEffect(() => {
     if (initialMessage && !initialMessageSent.current && !isInitializing && agentRef.current) {
       initialMessageSent.current = true;
@@ -909,8 +342,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   return (
     <Box flexDirection="column" width="100%">
-      {/* Welcome message stays mounted throughout \u2014 never use an early return above
-          this point that bypasses it, or the animations will restart on every modal open */}
       <WelcomeMessage terminalWidth={terminalWidth - 2} />
 
       {selectorState.isVisible ? (
@@ -927,25 +358,29 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       ) : (
         <>
           {messages.length > 0 && (
-            <>
+            <ErrorBoundary name="MessageList" fallback={<Text color="red">Message list error</Text>}>
               <MessageList
                 terminalWidth={terminalWidth - 2}
                 terminalHeight={terminalHeight}
                 scrollOffset={scrollOffset}
                 onScroll={setScrollOffset}
               />
-              <QueuedCommands />
-            </>
+            </ErrorBoundary>
           )}
+          <QueuedCommands />
 
           {confirmationState.isVisible && confirmationState.details && (
-            <ConfirmationPrompt
-              details={confirmationState.details}
-              onResponse={handleResponse}
-            />
+            <ErrorBoundary name="ConfirmationPrompt" fallback={null}>
+              <ConfirmationPrompt
+                details={confirmationState.details}
+                onResponse={handleResponse}
+              />
+            </ErrorBoundary>
           )}
 
-          <InputArea onSubmit={handleSubmit} />
+          <ErrorBoundary name="InputArea" fallback={<Text color="red">Input error — restart app</Text>}>
+            <InputArea onSubmit={handleSubmit} />
+          </ErrorBoundary>
           <ChatStatusBar
             model={currentModel}
             isScrolledUp={messages.length > 0 && isScrolledUp}

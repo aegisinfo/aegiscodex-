@@ -6,9 +6,47 @@
 import type { Theme } from './types.js';
 import { defaultTheme } from './defaultTheme.js';
 
+const lightTokens = {
+  elevation: {
+    flat: 'rgba(0,0,0,0)',
+    raised: 'rgba(37, 99, 235, 0.06)',
+    overlay: 'rgba(0, 0, 0, 0.15)',
+    sticky: 'rgba(37, 99, 235, 0.1)',
+  },
+  radius: {
+    sm: 0,
+    md: 1,
+    lg: 2,
+    full: 0,
+  },
+  animation: {
+    fast: 80,
+    normal: 150,
+    slow: 300,
+    easing: 'ease-out',
+  },
+  semantic: {
+    interactive: {
+      idle: '#2563eb',
+      hover: '#1d4ed8',
+      active: '#1e40af',
+      disabled: '#9ca3af',
+    },
+    focus: {
+      ring: '#2563eb',
+      glow: 'rgba(37, 99, 235, 0.25)',
+    },
+    code: {
+      background: '#f9fafb',
+      border: '#d1d5db',
+    },
+  },
+};
+
 export const lightTheme: Theme = {
   ...defaultTheme,
   name: 'light',
+  tokens: lightTokens,
   colors: {
     ...defaultTheme.colors,
     // 使用更深的颜色确保对比

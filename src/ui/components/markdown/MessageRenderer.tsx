@@ -154,9 +154,9 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
                     {isStreaming ? (
                       <>
-                        <Text color={theme.colors.primary}>{'□ '}</Text>
+                        <ThinkingIcon />
                         <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
-                        {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w...</Text>}
+                        {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>}
                       </>
                     ) : (
                       <>
@@ -208,42 +208,17 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
           />
         ))}
 
-        {/* Render tool blocks in order — each result appears directly below its tool call */}
-        {hasToolBlocks && (
-          <Box flexDirection="column" marginTop={1}>
-            {contentBlocks!.map((block, idx) => {
-              if (block.type === 'tool_use') {
-                return (
-                  <ToolUseBlockRenderer
-                    key={`tool-${block.id || idx}`}
-                    name={block.name}
-                    input={block.input}
-                    status={block.status}
-                    startedAt={block.startedAt}
-                    completedAt={block.completedAt}
-                    theme={theme}
-                    prefixOffset={prefixOffset}
-                  />
-                )
-              }
-              if (block.type === 'tool_result') {
-                return (
-                  <ToolResultBlockRenderer
-                    key={`result-${block.tool_use_id || idx}`}
-                    content={block.content}
-                    isError={block.is_error}
-                    theme={theme}
-                    prefixOffset={prefixOffset}
-                  />
-                )
-              }
-              return null
-            })}
-          </Box>
+        {/* Tool actions — only shown after streaming completes */}
+        {hasToolBlocks && !isStreaming && (
+          <ActionsBlock
+            contentBlocks={contentBlocks!}
+            theme={theme}
+            prefixOffset={prefixOffset}
+          />
         )}
 
         {isStreaming && (
-          <StreamingCursor prefixOffset={prefixOffset} />
+          <StreamingCursor prefixOffset={prefixOffset} hasContent={content.length > 0 || (thinking?.length ?? 0) > 0} />
         )}
 
         {!isStreaming && (
@@ -272,26 +247,33 @@ MessageSeparator.displayName = 'MessageSeparator'
 
 // ===== Streaming Cursor Component (animated) =====
 
-// Clean blinking cursor — subtle thin bar, no pulsing blue block
-const CURSOR_FRAMES = ['▏', ' ']
-const CURSOR_INTERVAL = 530 // ms — calm blink rate
+// Braille spinner — shown before first token (matches Claude Code style)
+const SPIN_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPIN_INTERVAL = 80
 
-const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
-  ({ prefixOffset }) => {
+// Smooth breathing bar — shown while text is streaming
+const CURSOR_FRAMES = ['▏', '▎', '▍', '▌', '▌', '▍', '▎', '▏', '▏', ' ', ' ', ' ']
+const CURSOR_INTERVAL = 65
+
+const StreamingCursor: React.FC<{ prefixOffset: number; hasContent: boolean }> = React.memo(
+  ({ prefixOffset, hasContent }) => {
     const theme = themeManager.getTheme()
-    const [visible, setVisible] = useState(true)
+    const [frame, setFrame] = useState(0)
 
     useEffect(() => {
-      const interval = setInterval(() => {
-        setVisible(v => !v)
-      }, CURSOR_INTERVAL)
+      setFrame(0)
+      const interval = setInterval(
+        () => setFrame(f => (f + 1) % (hasContent ? CURSOR_FRAMES.length : SPIN_FRAMES.length)),
+        hasContent ? CURSOR_INTERVAL : SPIN_INTERVAL
+      )
       return () => clearInterval(interval)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [hasContent])
 
     return (
       <Box marginLeft={prefixOffset}>
-        <Text color={theme.colors.primary}>{visible ? CURSOR_FRAMES[0] : CURSOR_FRAMES[1]}</Text>
+        <Text color={theme.colors.primary}>
+          {hasContent ? CURSOR_FRAMES[frame] : SPIN_FRAMES[frame]}
+        </Text>
       </Box>
     )
   }
@@ -299,20 +281,23 @@ const StreamingCursor: React.FC<{ prefixOffset: number }> = React.memo(
 
 StreamingCursor.displayName = 'StreamingCursor'
 
-// ===== Tool Call Visual Components =====
+// ===== Animated thinking icon =====
+const THINK_FRAMES = ['◌', '○', '◎', '●', '◎', '○']
+const THINK_INTERVAL = 180
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const SPINNER_INTERVAL = 150
-
-const ToolSpinner: React.FC<{ color: string }> = React.memo(({ color }) => {
+const ThinkingIcon: React.FC = React.memo(() => {
+  const theme = themeManager.getTheme()
   const [frame, setFrame] = useState(0)
   useEffect(() => {
-    const timer = setInterval(() => setFrame(f => (f + 1) % SPINNER_FRAMES.length), SPINNER_INTERVAL)
-    return () => clearInterval(timer)
+    const t = setInterval(() => setFrame(f => (f + 1) % THINK_FRAMES.length), THINK_INTERVAL)
+    return () => clearInterval(t)
   }, [])
-  return <Text color={color}>{SPINNER_FRAMES[frame]}</Text>
+  return <Text color={theme.colors.primary}>{THINK_FRAMES[frame]}{' '}</Text>
 })
-ToolSpinner.displayName = 'ToolSpinner'
+ThinkingIcon.displayName = 'ThinkingIcon'
+
+// ===== Tool Call Visual Components =====
+
 
 function shortenPath(p: string): string {
   if (p.length <= 45) return p
@@ -362,95 +347,81 @@ function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
-// ===== Tool Use Block Component =====
+// ===== VS Code diff colors reused for action status =====
+const ACTION_OK  = '#3fb950'
+const ACTION_ERR = '#f85149'
 
-interface ToolUseBlockRendererProps {
-  name: string
-  input: string
-  status: ToolCallStatus
-  startedAt: number
-  completedAt?: number
+// ===== ActionsBlock — shown once after streaming completes =====
+
+interface ActionsBlockProps {
+  contentBlocks: ContentBlock[]
   theme: any
   prefixOffset: number
 }
 
-const ToolUseBlockRenderer: React.FC<ToolUseBlockRendererProps> = ({
-  name,
-  input,
-  status,
-  startedAt,
-  completedAt,
-  theme,
-  prefixOffset,
-}) => {
-  const summary = useMemo(() => getToolSummary(name, input), [name, input])
-  const { label, path } = useMemo(() => splitToolSummary(summary), [summary])
-  const isRunning = status === 'running'
-  const isError = status === 'error'
-  const elapsed = !isRunning && completedAt ? formatElapsed(completedAt - startedAt) : null
+const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefixOffset }) => {
+  const toolCount = contentBlocks.filter(b => b.type === 'tool_use').length
+  if (toolCount === 0) return null
 
   return (
-    <Box marginLeft={prefixOffset + 2} marginY={0}>
-      {isRunning ? (
-        <>
-          <ToolSpinner color={theme.colors.primary} />
-          <Text color={theme.colors.text.secondary}>{' '}{label}</Text>
-          {path && <Text color={theme.colors.primary}>{path}</Text>}
-        </>
-      ) : isError ? (
-        <>
-          <Text color={theme.colors.error}>{'• '}</Text>
-          <Text color={theme.colors.text.muted} dimColor>{label}</Text>
-          {path && <Text color={theme.colors.primary} dimColor>{path}</Text>}
-          {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
-        </>
-      ) : (
-        <>
-          <Text color={theme.colors.success}>{'• '}</Text>
-          <Text color={theme.colors.text.secondary}>{label}</Text>
-          {path && <Text color={theme.colors.primary}>{path}</Text>}
-          {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
-        </>
-      )}
-    </Box>
-  )
-}
+    <Box flexDirection="column" marginTop={1} marginLeft={prefixOffset}>
+      {/* Section header */}
+      <Box marginBottom={0}>
+        <Text color={theme.colors.text.muted} dimColor>
+          {'── '}{toolCount} action{toolCount !== 1 ? 's' : ''}{' ──'}
+        </Text>
+      </Box>
 
-// ===== Tool Result Block Component =====
+      {/* Each tool_use + its immediate tool_result */}
+      {contentBlocks.map((block, idx) => {
+        if (block.type === 'tool_use') {
+          const result = contentBlocks.find(
+            b => b.type === 'tool_result' && b.tool_use_id === block.id
+          ) as (ContentBlock & { type: 'tool_result' }) | undefined
 
-interface ToolResultBlockRendererProps {
-  content: string
-  isError: boolean
-  theme: any
-  prefixOffset: number
-}
+          const isError  = block.status === 'error'
+          const elapsed  = block.completedAt
+            ? formatElapsed(block.completedAt - block.startedAt)
+            : null
+          const summary  = getToolSummary(block.name, block.input)
+          const { label, path } = splitToolSummary(summary)
+          const resultLines = result?.content
+            ? result.content.split('\n').filter(l => l.trim()).slice(0, 3)
+            : []
 
-const ToolResultBlockRenderer: React.FC<ToolResultBlockRendererProps> = ({
-  content,
-  isError,
-  theme,
-  prefixOffset,
-}) => {
-  const lines = useMemo(() => {
-    if (!content) return []
-    const all = content.split('\n').filter(l => l.trim())
-    return all.slice(0, 4)
-  }, [content])
-
-  if (lines.length === 0) return null
-
-  return (
-    <Box flexDirection="column" marginLeft={prefixOffset + 2} marginBottom={0}>
-      {lines.map((line, i) => (
-        <Box key={i}>
-          <Text color={theme.colors.text.muted} dimColor>
-            {i === 0 ? '⎿  ' : '   '}
-          </Text>
-          <Text color={isError ? theme.colors.error : theme.colors.text.muted} dimColor wrap="wrap">
-            {line.length > 120 ? line.slice(0, 117) + '…' : line}
-          </Text>
-        </Box>
-      ))}
+          return (
+            <Box key={`action-${block.id || idx}`} flexDirection="column" marginTop={0}>
+              <Box>
+                <Text color={isError ? ACTION_ERR : ACTION_OK} bold>
+                  {isError ? '✗ ' : '✓ '}
+                </Text>
+                <Text color={theme.colors.text.primary} bold>{label}</Text>
+                {path && (
+                  <Text color={isError ? ACTION_ERR : ACTION_OK}>{path}</Text>
+                )}
+                {elapsed && (
+                  <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>
+                )}
+              </Box>
+              {resultLines.map((line, i) => (
+                <Box key={i} marginLeft={2}>
+                  <Text color={theme.colors.text.muted} dimColor>
+                    {i === 0 ? '⎿  ' : '   '}
+                  </Text>
+                  <Text
+                    color={isError ? ACTION_ERR : theme.colors.text.muted}
+                    dimColor={!isError}
+                    wrap="wrap"
+                  >
+                    {line.length > 110 ? line.slice(0, 107) + '…' : line}
+                  </Text>
+                </Box>
+              ))}
+            </Box>
+          )
+        }
+        return null
+      })}
     </Box>
   )
 }
@@ -633,6 +604,17 @@ const stripMarkdownForWidth = (text: string): string => {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 }
 
+// VS Code diff colors — reused for Before/After tables
+const VS_TABLE_DEL = '#f85149'
+const VS_TABLE_ADD = '#3fb950'
+
+function getDiffColumnColor(header: string): string | null {
+  const h = header.trim().toLowerCase()
+  if (/^(before|old|previous|removed?|from)$/.test(h)) return VS_TABLE_DEL
+  if (/^(after|new|updated?|added?|to)$/.test(h))      return VS_TABLE_ADD
+  return null
+}
+
 const TableRenderer: React.FC<
   {
     headers: string[]
@@ -650,6 +632,10 @@ const TableRenderer: React.FC<
     )
     return Math.max(headerWidth, maxRowWidth) + 2
   })
+
+  // Detect if any column is a diff column (Before/After/etc.)
+  const diffColors = headers.map(h => getDiffColumnColor(h))
+  const isDiffTable = diffColors.some(c => c !== null)
 
   const renderCell = (
     content: string,
@@ -673,18 +659,17 @@ const TableRenderer: React.FC<
     <Box flexDirection="column" marginY={1}>
       <Box>
         <Text color={theme.colors.border.light}>│</Text>
-        {headers.map((header, index) => (
-          <React.Fragment key={index}>
-            <Text bold color={theme.colors.primary}>
-              {renderCell(
-                header,
-                columnWidths[index],
-                alignments[index] || 'left',
-              )}
-            </Text>
-            <Text color={theme.colors.border.light}>│</Text>
-          </React.Fragment>
-        ))}
+        {headers.map((header, index) => {
+          const diffColor = diffColors[index]
+          return (
+            <React.Fragment key={index}>
+              <Text bold color={diffColor ?? theme.colors.primary}>
+                {renderCell(header, columnWidths[index], alignments[index] || 'left')}
+              </Text>
+              <Text color={theme.colors.border.light}>│</Text>
+            </React.Fragment>
+          )
+        })}
       </Box>
 
       <Box>
@@ -709,10 +694,15 @@ const TableRenderer: React.FC<
               columnWidths[colIndex],
               alignments[colIndex] || 'left',
             )
+            const diffColor = diffColors[colIndex]
             const hasInlineFormat = /\*\*|`|~~|\[.*\]\(/.test(cellContent)
             return (
               <React.Fragment key={colIndex}>
-                {hasInlineFormat ? (
+                {diffColor ? (
+                  <Text color={diffColor} dimColor={rowIndex % 2 === 0}>
+                    {paddedContent}
+                  </Text>
+                ) : hasInlineFormat ? (
                   <Text>
                     <InlineText content={paddedContent} theme={theme} />
                   </Text>
