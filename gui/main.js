@@ -252,8 +252,33 @@ function getCloudConfig() {
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
-let mainWindow = null;
-let ptyProcess = null;
+let mainWindow  = null;
+let ptyProcess  = null;
+let shellProcess = null;
+
+function spawnShell(cols, rows) {
+  if (shellProcess) { shellProcess.kill(); shellProcess = null; }
+
+  let pty;
+  try { pty = require("node-pty"); } catch { return false; }
+
+  const shell = process.platform === "win32"
+    ? "cmd.exe"
+    : (process.env.SHELL || "/bin/bash");
+
+  shellProcess = pty.spawn(shell, [], {
+    name: "xterm-256color",
+    cols: cols || 120,
+    rows: rows || 10,
+    cwd:  os.homedir(),
+    env:  { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", FORCE_COLOR: "3" },
+  });
+
+  shellProcess.onData(data  => mainWindow?.webContents.send("shell-data", data));
+  shellProcess.onExit(() => { mainWindow?.webContents.send("shell-exit"); shellProcess = null; });
+
+  return true;
+}
 
 function createWindow() {
   const icon = getIcon();
@@ -292,7 +317,8 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     ptyProcess?.kill();
-    ptyProcess = null;
+    shellProcess?.kill();
+    ptyProcess = shellProcess = null;
     mainWindow = null;
   });
 }
@@ -378,6 +404,11 @@ ipcMain.handle("pty-kill", () => {
   ptyProcess?.kill();
   ptyProcess = null;
 });
+
+ipcMain.handle("shell-spawn",  (_, { cols, rows }) => spawnShell(cols, rows));
+ipcMain.handle("shell-write",  (_, data)           => { if (shellProcess) shellProcess.write(data); });
+ipcMain.handle("shell-resize", (_, { cols, rows }) => { if (shellProcess) shellProcess.resize(cols, rows); });
+ipcMain.handle("shell-kill",   ()                  => { shellProcess?.kill(); shellProcess = null; });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {

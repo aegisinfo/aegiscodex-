@@ -24,10 +24,12 @@ function switchTab(tab) {
 }
 
 // ── xterm.js setup ────────────────────────────────────────────────────────────
-let term     = null;
-let fitAddon = null;
+let term         = null;
+let fitAddon     = null;
+let shellTerm    = null;
+let shellFit     = null;
 let lastResumeId = null;
-let _spawning = false;
+let _spawning    = false;
 
 function initTerminal() {
   const container = document.getElementById("xterm-container");
@@ -108,6 +110,9 @@ function initTerminal() {
     const dot = document.getElementById("pty-dot");
     if (!dot.classList.contains("on")) spawnSession();
   });
+
+  initShell();
+  initResizer();
 }
 
 // ── PTY control ───────────────────────────────────────────────────────────────
@@ -161,6 +166,105 @@ async function loadHistoryAndResume() {
 function killPty() {
   AEGIS.ptyKill();
   setPtyStatus(false, "killed");
+}
+
+// ── Shell terminal (bottom pane) ──────────────────────────────────────────────
+function initShell() {
+  const container = document.getElementById("shell-container");
+  if (!container) return;
+
+  shellTerm = new Terminal({
+    fontFamily: '"Cascadia Code","Fira Code","JetBrains Mono","Consolas",monospace',
+    fontSize:   13,
+    lineHeight: 1.25,
+    cursorBlink: true,
+    cursorStyle: "bar",
+    theme: {
+      background:  "#000000",
+      foreground:  "#c8d8e8",
+      cursor:      "#00c8b4",
+      selectionBackground: "rgba(0,200,180,.25)",
+      black:"#04060a",red:"#e04444",green:"#1ab87a",yellow:"#e89020",
+      blue:"#5a7fd4",magenta:"#a06ad4",cyan:"#00c8b4",white:"#c8d8e8",
+      brightBlack:"#2e4055",brightRed:"#f06060",brightGreen:"#20d890",
+      brightYellow:"#f0a030",brightBlue:"#7a9fe4",brightMagenta:"#c090e0",
+      brightCyan:"#20e0d0",brightWhite:"#e8f0f8",
+    },
+    scrollback: 2000,
+  });
+
+  shellFit = new FitAddon.FitAddon();
+  shellTerm.loadAddon(shellFit);
+  shellTerm.loadAddon(new WebLinksAddon.WebLinksAddon((_, url) => AEGIS.openExternal(url)));
+  shellTerm.open(container);
+
+  shellTerm.onData(data => AEGIS.shellWrite(data));
+  AEGIS.onShellData(data => shellTerm.write(data));
+  AEGIS.onShellExit(() => shellTerm.writeln("\r\n\x1b[2m[shell exited — press Enter to restart]\x1b[0m"));
+
+  shellTerm.onKey(({ key }) => {
+    // Restart shell on Enter if it exited
+  });
+
+  const ro = new ResizeObserver(() => {
+    if (!shellFit) return;
+    try {
+      shellFit.fit();
+      const { cols, rows } = shellTerm;
+      if (cols > 0 && rows > 0) AEGIS.shellResize({ cols, rows });
+    } catch(_) {}
+  });
+  ro.observe(container);
+
+  requestAnimationFrame(() => {
+    shellFit.fit();
+    AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+  });
+}
+
+// ── Draggable resizer between aegiscode and shell ─────────────────────────────
+function initResizer() {
+  const resizer = document.getElementById("term-resizer");
+  const top     = document.querySelector(".term-top");
+  const bottom  = document.querySelector(".term-bottom");
+  if (!resizer || !top || !bottom) return;
+
+  let dragging = false, startY = 0, startTop = 0, startBot = 0;
+
+  resizer.addEventListener("mousedown", e => {
+    dragging = true;
+    startY   = e.clientY;
+    startTop = top.offsetHeight;
+    startBot = bottom.offsetHeight;
+    resizer.classList.add("dragging");
+    document.body.style.cursor     = "ns-resize";
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const dy      = e.clientY - startY;
+    const newTop  = Math.max(80,  startTop + dy);
+    const newBot  = Math.max(60,  startBot - dy);
+    top.style.flex   = "none";
+    top.style.height = newTop + "px";
+    bottom.style.height = newBot + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.body.style.cursor     = "";
+    document.body.style.userSelect = "";
+    requestAnimationFrame(() => {
+      fitAddon?.fit();
+      shellFit?.fit();
+      if (term     && term.cols     > 0) AEGIS.ptyResize  ({ cols: term.cols,     rows: term.rows });
+      if (shellTerm && shellTerm.cols > 0) AEGIS.shellResize({ cols: shellTerm.cols, rows: shellTerm.rows });
+    });
+  });
 }
 
 // ── History ───────────────────────────────────────────────────────────────────

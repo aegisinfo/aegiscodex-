@@ -15,8 +15,15 @@ contextBridge.exposeInMainWorld("AEGIS", {
   ptyResize: (opts)       => ipcRenderer.invoke("pty-resize", opts),
   ptyKill:   ()           => ipcRenderer.invoke("pty-kill"),
 
-  onPtyData: (cb)         => ipcRenderer.on("pty-data", (_, d) => cb(d)),
-  onPtyExit: (cb)         => ipcRenderer.on("pty-exit", (_, c) => cb(c)),
+  onPtyData: (cb)         => ipcRenderer.on("pty-data",   (_, d) => cb(d)),
+  onPtyExit: (cb)         => ipcRenderer.on("pty-exit",   (_, c) => cb(c)),
+
+  shellSpawn:  (opts)     => ipcRenderer.invoke("shell-spawn",  opts),
+  shellWrite:  (data)     => ipcRenderer.invoke("shell-write",  data),
+  shellResize: (opts)     => ipcRenderer.invoke("shell-resize", opts),
+  shellKill:   ()         => ipcRenderer.invoke("shell-kill"),
+  onShellData: (cb)       => ipcRenderer.on("shell-data", (_, d) => cb(d)),
+  onShellExit: (cb)       => ipcRenderer.on("shell-exit", ()     => cb()),
 
   getMemoryStats:  ()      => ipcRenderer.invoke("get-memory-stats"),
   searchMemory:    (q)     => ipcRenderer.invoke("search-memory", q),
