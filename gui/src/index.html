@@ -70,6 +70,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 
 /* ── Settings panel ── */
 #tab-settings{}
+#settings-content{display:flex;flex-direction:column;flex:1;min-height:0}
 .settings-body{flex:1;min-height:0;overflow-y:auto;padding:20px 24px}
 .settings-section{margin-bottom:28px}
 .settings-section h3{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)}
@@ -101,7 +102,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .settings-footer{display:flex;align-items:center;padding:14px 24px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)}
 
 /* ── History panel ── */
-#tab-history{flex:1;min-height:0;overflow-y:auto;padding:16px}
+#tab-history{overflow-y:auto;padding:16px}
 .history-item{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s}
 .history-item:hover{border-color:var(--border2);background:var(--surface2)}
 .history-item:hover .history-resume{opacity:1}
@@ -113,7 +114,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .history-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
 
 /* ── Cloud panel ── */
-#tab-cloud{flex:1;min-height:0;overflow-y:auto;padding:24px}
+#tab-cloud{overflow-y:auto;padding:24px}
 .cloud-status{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:20px}
 .cloud-dot{width:10px;height:10px;border-radius:50%}
 .cloud-label{font-size:13px;font-weight:600}
@@ -125,7 +126,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .cloud-actions{margin-top:20px;display:flex;gap:8px;flex-wrap:wrap}
 
 /* ── Memory panel ── */
-#tab-memory{overflow:hidden;display:flex;flex-direction:column}
+#tab-memory{overflow:hidden}
 .memory-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
 .memory-search{flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
 .memory-search:focus{border-color:var(--teal)}
@@ -261,7 +262,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 
     <!-- Settings — rendered dynamically by loadSettings() -->
     <div class="panel" id="tab-settings">
-      <div id="settings-content" style="display:flex;flex-direction:column;height:100%"></div>
+      <div id="settings-content"></div>
     </div>
 
   </div><!-- .content -->
