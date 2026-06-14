@@ -540,6 +540,7 @@ const KEY_MAP = {
   groq:      "GROQ_API_KEY",
   gemini:    "GEMINI_API_KEY",
   ollama:    "OLLAMA_BASE_URL",
+  memtoken:  "AEGIS_MEMORY_TOKEN",
 };
 
 function setApiDot(id, value) {
@@ -557,12 +558,14 @@ function toggleKeyVis(id, inputId) {
 }
 
 async function loadSettings() {
-  const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
+  const [env, cfg, memStatus] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig(), AEGIS.getMemoryStatus()]);
   // cache for saveSettings
   __cache._env = env; __cache._cfg = cfg;
 
-  const cloudKey = cfg?.aegiscloud?.api_key || "";
-  const syncOn   = cfg?.aegiscloud?.syncConversations !== false;
+  const cloudKey   = cfg?.aegiscloud?.api_key || "";
+  const syncOn     = cfg?.aegiscloud?.syncConversations !== false;
+  const memToken   = env["AEGIS_MEMORY_TOKEN"] || "";
+  const memActive  = memStatus?.subscribed || !!memToken;
 
   const PROVIDERS = [
     { id: "anthropic", label: "Anthropic (Claude)", envKey: "ANTHROPIC_API_KEY", ph: "sk-ant-…",              type: "password" },
@@ -598,6 +601,28 @@ async function loadSettings() {
         <h3>AI Provider Keys</h3>
         <div class="section-hint">Saved to ~/.aegiscode/.env — shared with the CLI</div>
         ${providerRows}
+      </div>
+
+      <div class="settings-section">
+        <h3>AEGIS Memory</h3>
+        <div class="section-hint">Paste your token to activate cross-session memory</div>
+        <div class="api-row">
+          <div class="api-row-info">
+            <div class="api-row-label" style="display:flex;align-items:center;gap:8px">
+              Memory Token
+              <span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;letter-spacing:.5px;
+                background:${memActive ? "rgba(26,184,122,.15)" : "rgba(155,155,152,.1)"};
+                color:${memActive ? "#1ab87a" : "#9b9b98"}">
+                ${memActive ? "● active" : "○ inactive"}
+              </span>
+            </div>
+            <div class="api-row-var">AEGIS_MEMORY_TOKEN</div>
+          </div>
+          <input class="api-row-input" type="password" id="key-memtoken"
+                 placeholder="pUm-…" autocomplete="off" value="${escAttr(memToken)}">
+          <button class="api-row-toggle" onclick="toggleKeyVis('memtoken')">show</button>
+          <div class="api-dot${memToken ? " set" : ""}" id="dot-memtoken"></div>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -644,6 +669,15 @@ async function saveSettings() {
     setApiDot(id, val);
   });
   await AEGIS.saveEnv(env);
+
+  // Update memory status badge
+  const memTokenVal = (document.getElementById("key-memtoken")?.value || "").trim();
+  const memBadge = document.querySelector("#key-memtoken")?.closest(".api-row")?.querySelector(".api-row-label span");
+  if (memBadge) {
+    memBadge.textContent = memTokenVal ? "● active" : "○ inactive";
+    memBadge.style.background = memTokenVal ? "rgba(26,184,122,.15)" : "rgba(155,155,152,.1)";
+    memBadge.style.color = memTokenVal ? "#1ab87a" : "#9b9b98";
+  }
 
   // Write cloud config to config.json
   const cloudKey = (document.getElementById("s-cloudkey")?.value || "").trim();

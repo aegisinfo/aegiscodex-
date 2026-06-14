@@ -52,6 +52,7 @@ const ENV_PATH = path.join(os.homedir(), ".aegiscode", ".env");
 const KNOWN_ENV_KEYS = [
   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY",
   "GROQ_API_KEY", "GEMINI_API_KEY", "OLLAMA_BASE_URL",
+  "AEGIS_MEMORY_TOKEN",
 ];
 
 function parseEnvFile(filePath) {
@@ -100,6 +101,15 @@ function saveEnv(data) {
 
   fs.mkdirSync(path.dirname(ENV_PATH), { recursive: true });
   fs.writeFileSync(ENV_PATH, lines.join("\n") + "\n");
+
+  // Keep memory.token in sync with AEGIS_MEMORY_TOKEN from .env
+  const token = updated["AEGIS_MEMORY_TOKEN"];
+  if (token && token.trim()) {
+    fs.mkdirSync(path.dirname(TOKEN_PATH), { recursive: true });
+    fs.writeFileSync(TOKEN_PATH, token.trim());
+  } else if (fs.existsSync(TOKEN_PATH)) {
+    fs.unlinkSync(TOKEN_PATH);
+  }
 }
 
 // ── Memory ─────────────────────────────────────────────────────────────────────
