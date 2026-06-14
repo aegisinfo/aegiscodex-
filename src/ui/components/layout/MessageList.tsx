@@ -26,8 +26,9 @@ interface MessageListProps {
   onScroll: (offset: number) => void;
 }
 
-const RAF_INTERVAL_MS = 30;  // ~33fps redraws — 2.7x faster than 80ms, content appears without perceptible delay
-const CONTENT_THRESHOLD = 1; // show every buffered delta at each RAF tick
+const RAF_INTERVAL_MS = 30;   // ~33fps redraws
+const CONTENT_THRESHOLD = 1;  // re-render on every content character
+const THINKING_THRESHOLD = 40; // re-render thinking every 40 chars (parseMarkdown is expensive)
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
 
 // How many messages fit on screen (rough estimate)
@@ -94,7 +95,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         const deltaContent = buffer.content.length - updatedLastLen.content;
         const deltaThinking = buffer.thinking.length - updatedLastLen.thinking;
 
-        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= CONTENT_THRESHOLD) {
+        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= THINKING_THRESHOLD) {
           lastContentLenRef.current[streamingMsg.id] = {
             content: buffer.content.length,
             thinking: buffer.thinking.length,

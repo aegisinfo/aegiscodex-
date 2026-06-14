@@ -113,28 +113,68 @@ export class OpenAIChatService implements IChatService {
 
       const toolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
       const adapter = streamCallbacks?.onStreamEvent ? new OpenAIEventAdapter() : null;
+      let inOllamaThinkBlock = false;
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;
         if (!delta) continue;
 
+        // For ollama: extract <think>…</think> from delta.content before adapter/callbacks.
+        // Ollama embeds thinking in content as tags rather than a separate reasoning_content field.
+        let adaptDelta = delta as Parameters<typeof OpenAIEventAdapter.prototype.adapt>[0];
+        if (isOllama && delta.content) {
+          let remaining = delta.content;
+          let plainContent = '';
+          let thinkContent = '';
+
+          while (remaining.length > 0) {
+            if (inOllamaThinkBlock) {
+              const closeIdx = remaining.indexOf('</think>');
+              if (closeIdx === -1) {
+                thinkContent += remaining;
+                remaining = '';
+              } else {
+                thinkContent += remaining.slice(0, closeIdx);
+                remaining = remaining.slice(closeIdx + 8);
+                inOllamaThinkBlock = false;
+              }
+            } else {
+              const openIdx = remaining.indexOf('<think>');
+              if (openIdx === -1) {
+                plainContent += remaining;
+                remaining = '';
+              } else {
+                plainContent += remaining.slice(0, openIdx);
+                remaining = remaining.slice(openIdx + 7);
+                inOllamaThinkBlock = true;
+              }
+            }
+          }
+
+          adaptDelta = {
+            ...delta,
+            content: plainContent || null,
+            reasoning_content: thinkContent || null,
+          } as Parameters<typeof OpenAIEventAdapter.prototype.adapt>[0];
+        }
+
         // Unified event path: convert chunk to AnthropicStreamEvents and emit
         if (adapter && streamCallbacks?.onStreamEvent) {
-          const events = adapter.adapt(delta as Parameters<typeof adapter.adapt>[0]);
+          const events = adapter.adapt(adaptDelta);
           for (const event of events) {
             streamCallbacks.onStreamEvent(event);
           }
         }
 
         // Legacy individual callbacks (still called for backward compat)
-        if (delta.content) {
-          content += delta.content;
-          streamCallbacks?.onContentDelta?.(delta.content);
+        if (adaptDelta.content) {
+          content += adaptDelta.content;
+          streamCallbacks?.onContentDelta?.(adaptDelta.content);
         }
 
-        const reasoning = (delta as Record<string, unknown>).reasoning_content
-          || (delta as Record<string, unknown>).thinking
-          || (delta as Record<string, unknown>).reasoning;
+        const reasoning = (adaptDelta as Record<string, unknown>).reasoning_content
+          || (adaptDelta as Record<string, unknown>).thinking
+          || (adaptDelta as Record<string, unknown>).reasoning;
         if (reasoning && typeof reasoning === 'string') {
           reasoningContent += reasoning;
           streamCallbacks?.onThinkingDelta?.(reasoning);
