@@ -77,9 +77,6 @@ function loadEnv() {
   const stored  = parseEnvFile(storedPath);
   const project = parseEnvFile(projectPath);
 
-  console.log("[aegis-gui] loadEnv stored keys:", Object.keys(stored));
-  console.log("[aegis-gui] loadEnv project keys:", Object.keys(project));
-
   const merged = {};
   for (const key of KNOWN_ENV_KEYS) {
     merged[key] = stored[key] || project[key] || process.env[key] || "";
@@ -88,10 +85,6 @@ function loadEnv() {
   for (const [k, v] of Object.entries({ ...project, ...stored })) {
     if (!(k in merged)) merged[k] = v;
   }
-
-  console.log("[aegis-gui] loadEnv result:", Object.fromEntries(
-    Object.entries(merged).map(([k, v]) => [k, v ? v.slice(0, 6) + "…" : "(empty)"])
-  ));
 
   return merged;
 }
