@@ -34,7 +34,6 @@ jobs:
           retention-days: 30
 
       - name: Deploy to aegis1
-        if: ${{ secrets.AEGIS1_TOKEN != '' }}
         shell: bash
         env:
           AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
