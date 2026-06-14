@@ -288,6 +288,12 @@ async function saveSettings() {
   note.style.display = "inline";
   setTimeout(() => { note.style.display = "none"; }, 2000);
 
+  // Hide setup banner if key now present
+  if (apiKey) {
+    const banner = document.getElementById("setup-banner");
+    if (banner) banner.style.display = "none";
+  }
+
   // Update terminal model display
   loadTerminalModel(cfg);
 }
@@ -419,7 +425,7 @@ async function renderMemoryActiveView(status, query) {
   if (!listEl) return;
 
   if (!entries.length) {
-    listEl.innerHTML = `<div class="memory-empty">⬡<br><br>${query ? "No results for "" + escHtml(query) + """ : "Memory is empty."}</div>`;
+    listEl.innerHTML = `<div class="memory-empty">⬡<br><br>${query ? 'No results for &ldquo;' + escHtml(query) + '&rdquo;' : "Memory is empty."}</div>`;
     return;
   }
 
@@ -483,6 +489,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();
   loadTerminalModel(cfg);
+
+  // Show setup banner if no API key configured
+  const hasKey = !!(cfg?.default?.apiKey || cfg?.models?.find(m => m.apiKey));
+  if (!hasKey) {
+    const banner = document.getElementById("setup-banner");
+    if (banner) banner.style.display = "flex";
+  }
 
   // Show version in sidebar
   const verEl = document.getElementById("nav-version");
