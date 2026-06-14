@@ -78,6 +78,10 @@ async function main(): Promise<void> {
   // 2. 启动版本检查（不等待，与后续流程并行执
   versionCheckPromise = checkVersionOnStartup();
 
+  // Verify memory token against server (cached 24 h — runs in parallel with startup)
+  const { sharedMemory } = await import('./memory/SharedMemory.js');
+  sharedMemory.initVerification().catch(() => {});
+
   // Handle --model flag: aegis --model deepseek "question"
   // or aegis --model council "question" for council vote
   const modelArg = process.argv.find(a => a.startsWith('--model='))?.split('=')[1]

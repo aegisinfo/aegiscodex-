@@ -24,6 +24,10 @@ const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
 const OLLAMA_EMBED_URL  = process.env.AEGIS_OLLAMA_EMBED_URL || 'http://localhost:11434/api/embed';
 
+// ── Token verification ───────────────────────────────────────────────────────
+const VERIFY_URL          = 'https://aegiscloud.org/api/verify-token';
+const VERIFY_CACHE_MS     = 24 * 60 * 60 * 1000; // 24 hours
+
 // ── Constants ────────────────────────────────────────────────────────────────
 const VECTOR_DIM_XENOVA = 384;  // all-MiniLM-L6-v2 output dimension
 const VECTOR_DIM_OLLAMA = 768;  // nomic-embed-text output dimension
@@ -719,42 +723,80 @@ export class SharedMemory {
   // ── Subscription / free-tier helpers ────────────────────────────────────
 
   isSubscribed(): boolean {
-    // 1. Check memory.token file (simplest flow: put token in file after Stripe payment)
-    try {
-      if (fs.existsSync(MEMORY_TOKEN_FILE)) {
-        const fileToken = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
-        if (fileToken.length >= 20) {
-          try {
-            const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-            if (isExpired(cfg?.memory?.expiresAt)) return false;
-            if (!cfg?.memory?.subscribed) {
-              const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: fileToken, activatedAt: new Date().toISOString() } };
-              fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-            }
-          } catch {}
-          return true;
-        }
-      }
-    } catch {}
-
-    // 2. Check environment variable (env tokens never expire)
-    if (process.env.AEGIS_MEMORY_TOKEN) {
-      try {
-        const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-        if (!cfg?.memory?.subscribed) {
-          const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: process.env.AEGIS_MEMORY_TOKEN, activatedAt: new Date().toISOString() } };
-          fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-        }
-      } catch {}
-      return true;
-    }
-
-    // 3. Check config.json
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
       if (cfg?.memory?.subscribed !== true) return false;
-      return !isExpired(cfg?.memory?.expiresAt);
+      if (isExpired(cfg?.memory?.expiresAt)) return false;
+      // Require a server-verified timestamp within the cache window
+      const lv = cfg?.memory?.lastVerified;
+      if (!lv) return false;
+      return Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS;
     } catch { return false; }
+  }
+
+  /**
+   * Call once at startup. Finds the token (env var or memory.token file),
+   * verifies it against aegiscloud.org, and caches the result in config.json.
+   * No-op if verification is still fresh (< 24 h).
+   * Clears subscription if the server rejects the token.
+   */
+  async initVerification(): Promise<void> {
+    const token =
+      (process.env.AEGIS_MEMORY_TOKEN || '').trim() ||
+      (fs.existsSync(MEMORY_TOKEN_FILE)
+        ? fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim()
+        : '');
+
+    if (!token || token.length < 10) return;
+
+    // Check cache — skip network call if still fresh
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const lv  = cfg?.memory?.lastVerified;
+      if (cfg?.memory?.subscribed && lv && Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS) {
+        return; // still valid
+      }
+    } catch {}
+
+    // Call server
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(VERIFY_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': token },
+        body:    JSON.stringify({ token }),
+        signal:  controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json() as { valid?: boolean; expiresAt?: string };
+
+      const cfg = (() => { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; } })();
+
+      if (data.valid) {
+        const updated = {
+          ...cfg,
+          memory: {
+            ...cfg.memory,
+            subscribed:    true,
+            token,
+            lastVerified:  new Date().toISOString(),
+            activatedAt:   cfg?.memory?.activatedAt || new Date().toISOString(),
+            expiresAt:     data.expiresAt || null,
+          },
+        };
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+      } else {
+        // Invalid token — revoke subscription
+        const updated = {
+          ...cfg,
+          memory: { ...cfg.memory, subscribed: false, lastVerified: null },
+        };
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+      }
+    } catch {
+      // Network error — do not revoke (allow offline use if previously verified)
+    }
   }
 
   /** Returns true only for write operations: subscribed, or this IS the free-tier session. */
