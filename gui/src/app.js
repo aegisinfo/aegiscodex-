@@ -1,6 +1,19 @@
 "use strict";
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
+const __cache = { _t: {} };
+function cache(key, ttlMs, fetcher) {
+  const c = __cache[key];
+  if (c && Date.now() - c.ts < ttlMs) return c.v;
+  const v = fetcher();
+  __cache[key] = { v, ts: Date.now() };
+  return v;
+}
+function invalidateCache(key) { delete __cache[key]; }
+function invalidateCachePrefix(prefix) {
+  for (const k of Object.keys(__cache)) if (k.startsWith(prefix)) delete __cache[k];
+}
+
 function switchTab(tab) {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
@@ -40,12 +53,16 @@ function tryWebGL(t) {
   } catch (_) {}
 }
 
-// Batch writes to one per animation frame — eliminates per-chunk reflow lag
+// Batch writes to one per animation frame — eliminates per-chunk reflow lag.
+// Always scrolls to bottom so the input bar stays visible during streaming.
 function makeBatchedWriter(t) {
   let buf = "", raf = null;
   return data => {
     buf += data;
-    if (!raf) raf = requestAnimationFrame(() => { t.write(buf); buf = ""; raf = null; });
+    if (!raf) raf = requestAnimationFrame(() => {
+      const chunk = buf; buf = ""; raf = null;
+      t.write(chunk, () => t.scrollToBottom());
+    });
   };
 }
 
@@ -134,14 +151,19 @@ function initTerminal() {
     term.writeln(`\x1b[2m[press any key or click ↺ New session to restart]\x1b[0m`);
   });
 
-  // Resize observer — skip when container is hidden (cols/rows = 0)
+  // Resize observer — debounced to avoid layout thrash
+  let _roTimer = null;
   const ro = new ResizeObserver(() => {
     if (!fitAddon) return;
-    try {
-      fitAddon.fit();
-      const { cols, rows } = term;
-      if (cols > 0 && rows > 0) AEGIS.ptyResize({ cols, rows });
-    } catch(_) {}
+    if (_roTimer) return;
+    _roTimer = requestAnimationFrame(() => {
+      _roTimer = null;
+      try {
+        fitAddon.fit();
+        const { cols, rows } = term;
+        if (cols > 0 && rows > 0) AEGIS.ptyResize({ cols, rows });
+      } catch(_) {}
+    });
   });
   ro.observe(container);
 
@@ -260,6 +282,16 @@ function killPty() {
 }
 
 // ── Shell terminal (bottom pane) ──────────────────────────────────────────────
+function spawnShell() {
+  if (shellTerm) {
+    AEGIS.shellKill();
+    requestAnimationFrame(() => {
+      shellFit.fit();
+      AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+    });
+  }
+}
+
 function initShell() {
   const container = document.getElementById("shell-container");
   if (!container) return;
@@ -296,16 +328,21 @@ function initShell() {
   AEGIS.onShellExit(() => shellTerm.writeln("\r\n\x1b[2m[shell exited — press Enter to restart]\x1b[0m"));
 
   shellTerm.onKey(({ key }) => {
-    // Restart shell on Enter if it exited
+    if (key === "\r") spawnShell();
   });
 
+  let _shTimer = null;
   const ro = new ResizeObserver(() => {
     if (!shellFit) return;
-    try {
-      shellFit.fit();
-      const { cols, rows } = shellTerm;
-      if (cols > 0 && rows > 0) AEGIS.shellResize({ cols, rows });
-    } catch(_) {}
+    if (_shTimer) return;
+    _shTimer = requestAnimationFrame(() => {
+      _shTimer = null;
+      try {
+        shellFit.fit();
+        const { cols, rows } = shellTerm;
+        if (cols > 0 && rows > 0) AEGIS.shellResize({ cols, rows });
+      } catch(_) {}
+    });
   });
   ro.observe(container);
 
@@ -468,6 +505,8 @@ function toggleKeyVis(id, inputId) {
 
 async function loadSettings() {
   const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
+  // cache for saveSettings
+  __cache._env = env; __cache._cfg = cfg;
 
   const cloudKey = cfg?.aegiscloud?.api_key || "";
   const syncOn   = cfg?.aegiscloud?.syncConversations !== false;
@@ -539,7 +578,8 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
+  const env = __cache._env || await AEGIS.getEnv();
+  const cfg = __cache._cfg || await AEGIS.getConfig();
 
   // Write provider keys to .env
   Object.entries(KEY_MAP).forEach(([id, envKey]) => {
@@ -565,6 +605,7 @@ async function saveSettings() {
     };
   }
   await AEGIS.saveConfig(cfg);
+  invalidateCachePrefix("cfg");
 
   const note = document.getElementById("save-note");
   note.style.display = "inline";
@@ -731,8 +772,9 @@ async function renderMemoryActiveView(status, query) {
       </div>`;
   }).join("");
 
-  // Show "show more" buttons for long entries
-  entries.forEach((e, i) => {
+  // Show "show more" buttons for long entries (only first 200 rendered)
+  const maxRender = 200;
+  entries.slice(0, maxRender).forEach((e, i) => {
     if ((e.content || "").length > 180) {
       const btn = document.getElementById(`mx-${i}`);
       if (btn) btn.style.display = "block";
