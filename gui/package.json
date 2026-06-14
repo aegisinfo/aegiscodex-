@@ -2,6 +2,11 @@
   "name": "aegiscode-gui",
   "version": "1.0.0",
   "description": "AEGIS Code — Desktop GUI",
+  "author": {
+    "name": "Niklas Borneklint",
+    "email": "nborneklint@gmail.com"
+  },
+  "homepage": "https://aegiscloud.org/aegiscode",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

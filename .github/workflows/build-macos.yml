@@ -1,0 +1,50 @@
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build CLI bundle
+        run: npm ci && node esbuild.mjs
+
+      - name: Install GUI deps
+        working-directory: gui
+        run: npm ci
+
+      - name: Build DMG
+        working-directory: gui
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: node build-prod.mjs --mac
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-gui-dmg
+          path: gui/dist/*.dmg
+          retention-days: 30
+
+      - name: Deploy to aegis1
+        if: ${{ secrets.AEGIS1_TOKEN != '' }}
+        env:
+          AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
+        run: |
+          DMG=$(ls gui/dist/*.dmg | head -1)
+          git clone https://x-access-token:${AEGIS1_TOKEN}@github.com/aegisinfo/aegis1.git aegis1-repo
+          mkdir -p aegis1-repo/static/downloads
+          cp "$DMG" aegis1-repo/static/downloads/aegis-gui.dmg
+          cd aegis1-repo
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add static/downloads/aegis-gui.dmg
+          git commit -m "deploy: update aegis-gui.dmg [skip ci]"
+          git push

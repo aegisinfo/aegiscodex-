@@ -1,0 +1,51 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build CLI bundle
+        run: npm ci && node esbuild.mjs
+
+      - name: Install GUI deps
+        working-directory: gui
+        run: npm ci
+
+      - name: Build EXE
+        working-directory: gui
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: node build-prod.mjs --win
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-gui-exe
+          path: gui/dist/*.exe
+          retention-days: 30
+
+      - name: Deploy to aegis1
+        if: ${{ secrets.AEGIS1_TOKEN != '' }}
+        shell: bash
+        env:
+          AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
+        run: |
+          EXE=$(ls gui/dist/*.exe | grep -v unpacked | head -1)
+          git clone https://x-access-token:${AEGIS1_TOKEN}@github.com/aegisinfo/aegis1.git aegis1-repo
+          mkdir -p aegis1-repo/static/downloads
+          cp "$EXE" aegis1-repo/static/downloads/aegis-gui-setup.exe
+          cd aegis1-repo
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add static/downloads/aegis-gui-setup.exe
+          git commit -m "deploy: update aegis-gui-setup.exe [skip ci]"
+          git push
