@@ -2363,7 +2363,7 @@ const cloudCommand: SlashCommand = {
   name: 'cloud',
   description: 'Manage AEGIS Cloud sync (aegiscloud.org)',
   category: 'config',
-  usage: '/cloud [status | key <api_key> | sync on|off]',
+  usage: '/cloud [status | key <api_key> | activate | deactivate]',
   fullDescription: 'Connect aegis-cli to aegiscloud.org. Conversations are uploaded automatically on exit.',
   async handler(args: string): Promise<SlashCommandResult> {
     const fs   = await import('fs');
@@ -2389,15 +2389,15 @@ const cloudCommand: SlashCommand = {
       };
     }
 
-    // /cloud sync on|off
-    if (trimmed === 'sync on' || trimmed === 'sync off') {
-      const enable = trimmed === 'sync on';
+    // /cloud sync on|off  (also: activate / deactivate)
+    if (trimmed === 'sync on' || trimmed === 'activate' || trimmed === 'sync off' || trimmed === 'deactivate') {
+      const enable = trimmed === 'sync on' || trimmed === 'activate';
       cfg.aegiscloud = { ...cloud, syncConversations: enable };
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
       return {
         success: true,
         type: 'success',
-        message: `Conversation sync: ${enable ? '✓ enabled' : '✗ disabled'}`,
+        message: `Cloud sync: ${enable ? '✓ activated — conversations will upload on exit' : '✗ deactivated'}`,
       };
     }
 
@@ -2424,9 +2424,9 @@ const cloudCommand: SlashCommand = {
       lines.push('  3. Run: `/cloud key <your_api_key>`');
     } else {
       lines.push('Commands:');
-      lines.push('  `/cloud sync on`  — enable auto-upload on exit');
-      lines.push('  `/cloud sync off` — disable auto-upload');
-      lines.push('  `/cloud key <k>`  — update API key');
+      lines.push('  `/cloud activate`   — enable auto-upload on exit');
+      lines.push('  `/cloud deactivate` — disable auto-upload');
+      lines.push('  `/cloud key <k>`    — update API key');
     }
 
     return { success: true, type: 'info', content: lines.join('\n') };
