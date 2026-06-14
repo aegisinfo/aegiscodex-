@@ -27,8 +27,8 @@ interface MessageListProps {
 }
 
 const RAF_INTERVAL_MS = 30;   // ~33fps redraws
-const CONTENT_THRESHOLD = 1;  // re-render on every content character
-const THINKING_THRESHOLD = 40; // re-render thinking every 40 chars (parseMarkdown is expensive)
+const CONTENT_THRESHOLD = 1;   // re-render on every content character
+const THINKING_THRESHOLD = 200; // only update word count every 200 thinking chars
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
 
 // How many messages fit on screen (rough estimate)

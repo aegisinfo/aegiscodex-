@@ -158,27 +158,28 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     return (
       <Box flexDirection="column" marginBottom={1}>
-        {filteredThinkingBlocks.length > 0 && (
+        {!!thinking && (
           <Box flexDirection="column" marginBottom={1}>
-            {isThinkingExpanded ? (
+            {isStreaming ? (
+              /* During streaming: only header, no content blocks — prevents
+                 full-screen Ink redraws on every thinking character (xterm/GNOME issue) */
+              <Box marginBottom={0}>
+                <Text color={theme.colors.text.muted} dimColor>
+                  {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
+                  <ThinkingIcon />
+                  <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
+                  {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>}
+                </Text>
+              </Box>
+            ) : isThinkingExpanded ? (
               <>
                 <Box marginBottom={0}>
                   <Text color={theme.colors.text.muted} dimColor>
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                    {isStreaming ? (
-                      <>
-                        <ThinkingIcon />
-                        <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
-                        {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>}
-                      </>
-                    ) : (
-                      <>
-                        <Text color={theme.colors.primary}>{'□ '}</Text>
-                        <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
-                        {thinkingWordCount > 0 && (
-                          <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
-                        )}
-                      </>
+                    <Text color={theme.colors.primary}>{'□ '}</Text>
+                    <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
+                    {thinkingWordCount > 0 && (
+                      <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
                     )}
                   </Text>
                 </Box>
