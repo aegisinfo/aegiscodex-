@@ -235,67 +235,86 @@ function sendCloudCmd(cmd) {
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
-async function loadSettings() {
-  const cfg = await AEGIS.getConfig();
-  const model = cfg?.models?.find(m => m.id === cfg?.currentModelId) || cfg?.default || {};
+const KEY_MAP = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai:    "OPENAI_API_KEY",
+  deepseek:  "DEEPSEEK_API_KEY",
+  groq:      "GROQ_API_KEY",
+  gemini:    "GEMINI_API_KEY",
+  ollama:    "OLLAMA_BASE_URL",
+};
 
-  document.getElementById("s-apikey").value   = model.apiKey  || "";
-  document.getElementById("s-model").value    = model.model   || "";
-  document.getElementById("s-baseurl").value  = model.baseURL || "";
-  document.getElementById("s-cloudkey").value = cfg?.aegiscloud?.api_key || "";
-  document.getElementById("s-cloudsync").value = cfg?.aegiscloud?.syncConversations === false ? "off" : "on";
+function setApiDot(id, value) {
+  const dot = document.getElementById("dot-" + id);
+  if (dot) dot.classList.toggle("set", !!value);
+}
+
+function toggleKeyVis(id, inputId) {
+  const el = document.getElementById(inputId || "key-" + id);
+  if (!el) return;
+  const showing = el.type === "text";
+  el.type = showing ? "password" : "text";
+  const btn = el.nextElementSibling;
+  if (btn && btn.classList.contains("api-row-toggle")) btn.textContent = showing ? "show" : "hide";
+}
+
+async function loadSettings() {
+  const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
+
+  Object.entries(KEY_MAP).forEach(([id, envKey]) => {
+    const el = document.getElementById("key-" + id);
+    if (el) el.value = env[envKey] || "";
+    setApiDot(id, env[envKey]);
+  });
+
+  const cloudKey = cfg?.aegiscloud?.api_key || "";
+  const cloudEl  = document.getElementById("s-cloudkey");
+  if (cloudEl) { cloudEl.value = cloudKey; setApiDot("cloudkey", cloudKey); }
+
+  const syncEl = document.getElementById("s-cloudsync");
+  if (syncEl) syncEl.value = cfg?.aegiscloud?.syncConversations === false ? "off" : "on";
 }
 
 async function saveSettings() {
-  const cfg = await AEGIS.getConfig();
+  const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
 
-  // Update model config
-  const apiKey  = document.getElementById("s-apikey").value.trim();
-  const model   = document.getElementById("s-model").value.trim();
-  const baseURL = document.getElementById("s-baseurl").value.trim();
-  const cloudKey = document.getElementById("s-cloudkey").value.trim();
-  const syncOn   = document.getElementById("s-cloudsync").value === "on";
+  // Write provider keys to .env
+  Object.entries(KEY_MAP).forEach(([id, envKey]) => {
+    const el  = document.getElementById("key-" + id);
+    const val = el ? el.value.trim() : "";
+    if (val) env[envKey] = val;
+    else     delete env[envKey];
+    setApiDot(id, val);
+  });
+  await AEGIS.saveEnv(env);
 
-  // Patch into existing config structure
-  if (!cfg.models) cfg.models = [];
-  const existing = cfg.models.find(m => m.id === cfg.currentModelId);
-  if (existing) {
-    if (apiKey)  existing.apiKey  = apiKey;
-    if (model)   existing.model   = model;
-    if (baseURL) existing.baseURL = baseURL;
-  } else if (apiKey || model) {
-    const id = "default";
-    cfg.models.push({ id, apiKey, model, baseURL });
-    cfg.currentModelId = id;
-  }
-
-  if (!cfg.default) cfg.default = {};
-  if (apiKey)  cfg.default.apiKey  = apiKey;
-  if (model)   cfg.default.model   = model;
-  if (baseURL) cfg.default.baseURL = baseURL;
+  // Write cloud config to config.json
+  const cloudKey = (document.getElementById("s-cloudkey")?.value || "").trim();
+  const syncOn   = document.getElementById("s-cloudsync")?.value === "on";
+  setApiDot("cloudkey", cloudKey);
 
   if (cloudKey || cfg.aegiscloud) {
     cfg.aegiscloud = {
-      ...cfg.aegiscloud,
+      ...(cfg.aegiscloud || {}),
       ...(cloudKey ? { api_key: cloudKey } : {}),
       syncConversations: syncOn,
     };
   }
-
   await AEGIS.saveConfig(cfg);
 
   const note = document.getElementById("save-note");
   note.style.display = "inline";
   setTimeout(() => { note.style.display = "none"; }, 2000);
 
-  // Hide setup banner if key now present
-  if (apiKey) {
+  // Hide setup banner if any provider key is now set
+  const anyKey = Object.keys(KEY_MAP).some(id => {
+    const el = document.getElementById("key-" + id);
+    return el && el.value.trim();
+  });
+  if (anyKey) {
     const banner = document.getElementById("setup-banner");
     if (banner) banner.style.display = "none";
   }
-
-  // Update terminal model display
-  loadTerminalModel(cfg);
 }
 
 function loadTerminalModel(cfg) {
@@ -488,10 +507,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();
-  loadTerminalModel(cfg);
 
-  // Show setup banner if no API key configured
-  const hasKey = !!(cfg?.default?.apiKey || cfg?.models?.find(m => m.apiKey));
+  // Show setup banner if no provider key configured in .env
+  const env = await AEGIS.getEnv();
+  const hasKey = Object.values(KEY_MAP).some(k => env[k]);
   if (!hasKey) {
     const banner = document.getElementById("setup-banner");
     if (banner) banner.style.display = "flex";

@@ -2,6 +2,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("AEGIS", {
+  getEnv:       ()        => ipcRenderer.invoke("get-env"),
+  saveEnv:      (d)       => ipcRenderer.invoke("save-env", d),
   getConfig:    ()        => ipcRenderer.invoke("get-config"),
   saveConfig:   (d)       => ipcRenderer.invoke("save-config", d),
   getHistory:   ()        => ipcRenderer.invoke("get-history"),

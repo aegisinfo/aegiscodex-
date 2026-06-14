@@ -45,6 +45,28 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
 }
 
+// ── .env file (API keys) ──────────────────────────────────────────────────────
+const ENV_PATH = path.join(os.homedir(), ".aegiscode", ".env");
+
+function loadEnv() {
+  try {
+    return Object.fromEntries(
+      fs.readFileSync(ENV_PATH, "utf8").split("\n")
+        .map(l => l.match(/^([A-Z_]+)=(.*)$/))
+        .filter(Boolean)
+        .map(m => [m[1], m[2].trim()])
+    );
+  } catch { return {}; }
+}
+
+function saveEnv(data) {
+  const lines = Object.entries(data)
+    .filter(([, v]) => v && v.trim())
+    .map(([k, v]) => `${k}=${v.trim()}`);
+  fs.mkdirSync(path.dirname(ENV_PATH), { recursive: true });
+  fs.writeFileSync(ENV_PATH, lines.join("\n") + "\n");
+}
+
 // ── Memory ─────────────────────────────────────────────────────────────────────
 const MEMORY_PATH = path.join(os.homedir(), ".aegiscode", "memory", "shared.json");
 
@@ -281,6 +303,9 @@ ipcMain.handle("search-memory",      (_, q)       => searchMemory(q));
 ipcMain.handle("clear-memory",       ()           => clearMemory());
 ipcMain.handle("get-memory-status",  ()           => getMemoryStatus());
 ipcMain.handle("activate-memory",    (_, token)   => activateMemory(token));
+
+ipcMain.handle("get-env",       ()        => loadEnv());
+ipcMain.handle("save-env",      (_, d)    => { saveEnv(d); return true; });
 
 ipcMain.handle("get-config",    ()        => loadConfig());
 ipcMain.handle("save-config",   (_, d)    => { saveConfig(d); return true; });
