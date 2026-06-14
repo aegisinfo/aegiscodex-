@@ -332,11 +332,11 @@ function renderMemorySubscribeView() {
       </div>
       <div class="mem-price">$2<span style="font-size:14px;font-weight:400;color:var(--text2)">/month</span></div>
       <div class="mem-price-sub">Billed via Stripe · cancel anytime</div>
-      <button class="mem-subscribe-btn" onclick="openStripe()">Subscribe &amp; get token ↗</button>
+      <button class="mem-subscribe-btn" onclick="openStripe()">Subscribe &amp; get API key ↗</button>
       <div class="mem-divider"></div>
-      <div class="mem-activate-label">Already have a token? Paste it here:</div>
+      <div class="mem-activate-label">Paste your API key from the activation email:</div>
       <div class="mem-token-row">
-        <input class="mem-token-input" id="mem-token-input" placeholder="Paste activation token…" autocomplete="off">
+        <input class="mem-token-input" id="mem-token-input" placeholder="Paste API key…" autocomplete="off">
         <button class="mem-token-btn" onclick="submitToken()">Activate</button>
       </div>
       <div class="mem-activate-msg" id="mem-activate-msg"></div>

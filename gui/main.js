@@ -81,30 +81,28 @@ function getMemoryStatus() {
   };
 }
 
-async function activateMemory(token) {
-  if (!token || token.length < 20) {
-    return { ok: false, error: "Invalid token — paste the full token from your activation email" };
+async function activateMemory(apiKey) {
+  if (!apiKey || apiKey.length < 16) {
+    return { ok: false, error: "Invalid key — paste the full API key from your activation email" };
   }
 
-  // Write token file
+  const key = apiKey.trim();
+
+  // Write token file (CLI compatibility)
   try {
     fs.mkdirSync(path.dirname(TOKEN_PATH), { recursive: true });
-    fs.writeFileSync(TOKEN_PATH, token.trim());
+    fs.writeFileSync(TOKEN_PATH, key);
   } catch {}
 
   // Best-effort remote verification
-  let email = "stripe-user";
-  let plan  = "semantic-memory";
+  let email     = "stripe-user";
+  let plan      = "semantic-memory";
   let expiresAt = null;
 
   try {
-    const cfg    = loadConfig();
-    const apiKey = cfg?.aegiscloud?.api_key || "";
-    const headers = { "Content-Type": "application/json" };
-    if (apiKey) headers["X-API-Key"] = apiKey;
-
-    const res    = await fetch(VERIFY_URL, { method: "POST", headers, body: JSON.stringify({ token }) });
-    const result = await res.json();
+    const headers = { "Content-Type": "application/json", "X-API-Key": key };
+    const res     = await fetch(VERIFY_URL, { method: "POST", headers, body: JSON.stringify({ token: key }) });
+    const result  = await res.json();
     if (result.valid) {
       email     = result.email     || email;
       plan      = result.plan      || plan;
@@ -112,13 +110,18 @@ async function activateMemory(token) {
     }
   } catch { /* offline activation */ }
 
-  // Save to config
+  // Save key as both cloud API key AND memory activation
   try {
     const cfg = loadConfig();
+    cfg.aegiscloud = {
+      ...(cfg.aegiscloud || {}),
+      api_key:           key,
+      syncConversations: true,
+    };
     cfg.memory = {
       ...(cfg.memory || {}),
       subscribed:    true,
-      token:         token.trim(),
+      token:         key,
       activatedAt:   new Date().toISOString(),
       verifiedEmail: email,
       plan,
