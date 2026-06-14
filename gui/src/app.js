@@ -260,6 +260,9 @@ function toggleKeyVis(id, inputId) {
 
 async function loadSettings() {
   const [env, cfg] = await Promise.all([AEGIS.getEnv(), AEGIS.getConfig()]);
+  console.log("[aegis-gui] loadSettings env:", Object.fromEntries(
+    Object.entries(env).map(([k, v]) => [k, v ? v.slice(0, 6) + "…" : "(empty)"])
+  ));
 
   Object.entries(KEY_MAP).forEach(([id, envKey]) => {
     const el = document.getElementById("key-" + id);

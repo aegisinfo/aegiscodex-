@@ -71,19 +71,28 @@ function parseEnvFile(filePath) {
 }
 
 function loadEnv() {
-  // Priority (highest → lowest):
-  // 1. ~/.aegiscode/.env  — GUI-saved keys
-  // 2. <project>/.env     — project-level keys (one dir above gui/)
-  // 3. process.env        — system / shell-exported keys
-  const stored  = parseEnvFile(ENV_PATH);
-  const project = parseEnvFile(path.join(__dirname, "..", ".env"));
+  const storedPath  = ENV_PATH;
+  const projectPath = path.join(__dirname, "..", ".env");
+
+  const stored  = parseEnvFile(storedPath);
+  const project = parseEnvFile(projectPath);
+
+  console.log("[aegis-gui] loadEnv stored keys:", Object.keys(stored));
+  console.log("[aegis-gui] loadEnv project keys:", Object.keys(project));
 
   const merged = {};
   for (const key of KNOWN_ENV_KEYS) {
     merged[key] = stored[key] || project[key] || process.env[key] || "";
   }
-  // Also carry over any non-provider keys from ~/.aegiscode/.env
-  Object.assign(merged, { ...project, ...stored, ...merged });
+  // Carry over non-provider keys (e.g. AEGIS_MEMORY_TOKEN) without overwriting above
+  for (const [k, v] of Object.entries({ ...project, ...stored })) {
+    if (!(k in merged)) merged[k] = v;
+  }
+
+  console.log("[aegis-gui] loadEnv result:", Object.fromEntries(
+    Object.entries(merged).map(([k, v]) => [k, v ? v.slice(0, 6) + "…" : "(empty)"])
+  ));
+
   return merged;
 }
 
@@ -269,6 +278,13 @@ function createWindow() {
 
   mainWindow.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("file://")) { e.preventDefault(); shell.openExternal(url); }
+  });
+
+  // Ctrl+Shift+I → DevTools
+  mainWindow.webContents.on("before-input-event", (_, input) => {
+    if (input.control && input.shift && input.key === "I") {
+      mainWindow.webContents.openDevTools();
+    }
   });
 
   mainWindow.loadFile(path.join(__dirname, "src", "index.html"));
