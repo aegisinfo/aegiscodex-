@@ -43,6 +43,40 @@ bash install.sh
 
 ---
 
+## Desktop GUI
+
+aegiscode ships with an Electron desktop app — same AI, same memory, with a native window.
+
+**Install:**
+
+```bash
+git clone https://github.com/aegisinfo/aegiscode
+cd aegiscode
+bash gui/install.sh
+```
+
+`gui/install.sh` installs dependencies and creates an `ags` launcher in `~/.local/bin`.
+
+**Launch:**
+
+```bash
+ags
+```
+
+**Tabs:**
+
+| Tab | Description |
+|-----|-------------|
+| Terminal ⌨ | Full aegiscode session with true color and resize support |
+| History ◷ | Browse and resume past sessions |
+| Memory ⬡ | Search stored memory entries, view stats, manage subscription |
+| Cloud ⬡ | Cloud sync status and API key |
+| Settings ⚙ | Configure API key and model |
+
+Memory and cloud sync are activated by pasting your API key in the Memory tab after subscribing at [aegiscloud.org](https://aegiscloud.org).
+
+---
+
 ## First run
 
 Run `aegis` — if no API keys are configured, an interactive setup guide launches automatically:
