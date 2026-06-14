@@ -540,7 +540,7 @@ const KEY_MAP = {
   groq:      "GROQ_API_KEY",
   gemini:    "GEMINI_API_KEY",
   ollama:    "OLLAMA_BASE_URL",
-  memtoken:  "AEGIS_MEMORY_TOKEN",
+  // memtoken handled separately (requires server verification)
 };
 
 function setApiDot(id, value) {
@@ -655,6 +655,19 @@ async function loadSettings() {
   `;
 }
 
+function _showSaveNote(msg, isError) {
+  const note = document.getElementById("save-note");
+  if (!note) return;
+  note.textContent  = msg;
+  note.style.color  = isError ? "var(--red, #e04444)" : "";
+  note.style.display = "inline";
+  setTimeout(() => {
+    note.style.display = "none";
+    note.textContent = "✓ Saved";
+    note.style.color = "";
+  }, isError ? 5000 : 2000);
+}
+
 async function saveSettings() {
   const env = __cache._env || await AEGIS.getEnv();
   const cfg = __cache._cfg || await AEGIS.getConfig();
@@ -668,15 +681,39 @@ async function saveSettings() {
     else     delete env[envKey];
     setApiDot(id, val);
   });
+
+  // ── Memory token — server verification required ───────────────────────────
+  const memTokenEl  = document.getElementById("key-memtoken");
+  const memTokenVal = (memTokenEl?.value || "").trim();
+  const existingTok = (env["AEGIS_MEMORY_TOKEN"] || "").trim();
+
+  if (memTokenVal && memTokenVal !== existingTok) {
+    // New token entered — verify against aegiscloud.org before saving
+    _showSaveNote("Verifying token…", false);
+    const result = await AEGIS.verifyMemoryToken(memTokenVal);
+    if (!result.ok) {
+      if (memTokenEl) memTokenEl.value = existingTok; // restore old value
+      setApiDot("memtoken", existingTok);
+      _showSaveNote("✗ " + result.error, true);
+      return; // abort — don't save anything
+    }
+    env["AEGIS_MEMORY_TOKEN"] = memTokenVal;
+    setApiDot("memtoken", memTokenVal);
+  } else if (!memTokenVal && existingTok) {
+    // Token cleared
+    delete env["AEGIS_MEMORY_TOKEN"];
+    setApiDot("memtoken", "");
+  }
+
   await AEGIS.saveEnv(env);
 
   // Update memory status badge
-  const memTokenVal = (document.getElementById("key-memtoken")?.value || "").trim();
-  const memBadge = document.querySelector("#key-memtoken")?.closest(".api-row")?.querySelector(".api-row-label span");
+  const savedTok  = (env["AEGIS_MEMORY_TOKEN"] || "").trim();
+  const memBadge  = memTokenEl?.closest(".api-row")?.querySelector(".api-row-label span");
   if (memBadge) {
-    memBadge.textContent = memTokenVal ? "● active" : "○ inactive";
-    memBadge.style.background = memTokenVal ? "rgba(26,184,122,.15)" : "rgba(155,155,152,.1)";
-    memBadge.style.color = memTokenVal ? "#1ab87a" : "#9b9b98";
+    memBadge.textContent       = savedTok ? "● active" : "○ inactive";
+    memBadge.style.background  = savedTok ? "rgba(26,184,122,.15)" : "rgba(155,155,152,.1)";
+    memBadge.style.color       = savedTok ? "#1ab87a" : "#9b9b98";
   }
 
   // Write cloud config to config.json
@@ -694,9 +731,7 @@ async function saveSettings() {
   await AEGIS.saveConfig(cfg);
   invalidateCachePrefix("cfg");
 
-  const note = document.getElementById("save-note");
-  note.style.display = "inline";
-  setTimeout(() => { note.style.display = "none"; }, 2000);
+  _showSaveNote("✓ Saved", false);
 
   // Hide setup banner if any provider key is now set
   const anyKey = Object.keys(KEY_MAP).some(id => {

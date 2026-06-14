@@ -434,6 +434,34 @@ ipcMain.handle("clear-memory",       ()           => clearMemory());
 ipcMain.handle("get-memory-status",  ()           => getMemoryStatus());
 ipcMain.handle("activate-memory",    (_, token)   => activateMemory(token));
 
+ipcMain.handle("verify-memory-token", async (_, token) => {
+  if (!token || token.trim().length < 10) {
+    return { ok: false, error: "Token too short — paste the full token from your activation email" };
+  }
+  const key = token.trim();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(VERIFY_URL, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": key },
+      body:    JSON.stringify({ token: key }),
+      signal:  controller.signal,
+    });
+    clearTimeout(timer);
+    const result = await res.json();
+    if (!result.valid) {
+      return { ok: false, error: result.error || "Token not recognized — check your activation email" };
+    }
+    return { ok: true, email: result.email || null, plan: result.plan || null };
+  } catch (e) {
+    if (e.name === "AbortError") {
+      return { ok: false, error: "Could not reach aegiscloud.org — check your connection" };
+    }
+    return { ok: false, error: "Verification failed — check your connection and try again" };
+  }
+});
+
 ipcMain.handle("get-version",  ()        => require("./package.json").version);
 ipcMain.handle("get-env",      ()        => loadEnv());
 ipcMain.handle("save-env",     (_, d)    => { saveEnv(d); return true; });

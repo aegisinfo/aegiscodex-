@@ -30,7 +30,8 @@ contextBridge.exposeInMainWorld("AEGIS", {
   searchMemory:    (q)     => ipcRenderer.invoke("search-memory", q),
   clearMemory:     ()      => ipcRenderer.invoke("clear-memory"),
   getMemoryStatus: ()      => ipcRenderer.invoke("get-memory-status"),
-  activateMemory:  (token) => ipcRenderer.invoke("activate-memory", token),
+  activateMemory:      (token) => ipcRenderer.invoke("activate-memory", token),
+  verifyMemoryToken:   (token) => ipcRenderer.invoke("verify-memory-token", token),
 
   getFilePath: (file) => webUtils.getPathForFile(file),
   copyText:    (text) => clipboard.writeText(text),
