@@ -54,15 +54,22 @@ import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis
 
     const result = JavaScriptObfuscator.obfuscate(body, {
       compact: true,
-      controlFlowFlattening: false,
-      stringArray: true,
-      stringArrayEncoding: ['base64'],
-      stringArrayThreshold: 0.5,
-      identifierNamesGenerator: 'hexadecimal',
-      selfDefending: false,
+      controlFlowFlattening: true,
+      controlFlowFlatteningThreshold: 0.5,
       deadCodeInjection: false,
+      stringArray: true,
+      stringArrayEncoding: ['rc4'],
+      stringArrayThreshold: 0.85,
+      stringArrayRotate: true,
+      stringArrayShuffle: true,
+      splitStrings: true,
+      splitStringsChunkLength: 8,
+      identifierNamesGenerator: 'mangled',
+      renameGlobals: false,
+      selfDefending: true,
       debugProtection: false,
       disableConsoleOutput: false,
+      sourceMap: false,
     });
 
     writeFileSync('dist/main.js', shebang + result.getObfuscatedCode(), 'utf8');
