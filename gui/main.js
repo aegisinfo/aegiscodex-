@@ -332,6 +332,7 @@ function createWindow() {
     minHeight:       520,
     title:           "AEGIS Code",
     backgroundColor: "#04060a",
+    backgroundThrottling: false,   // hindrar throttling vid terminalströmning
     // hiddenInset gives the macOS traffic-light overlay; default works on Win/Linux
     titleBarStyle:   process.platform === "darwin" ? "hiddenInset" : "default",
     icon,

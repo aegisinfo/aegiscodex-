@@ -16,8 +16,8 @@
   --red:#e04444;--amber:#e89020;
   --sidebar:200px;
   --lattice:
-    repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(0,180,200,.04) 28px,rgba(0,180,200,.04) 29px),
-    repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(0,180,200,.04) 28px,rgba(0,180,200,.04) 29px);
+    repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px),
+    repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px);
 }
 
 html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;overflow:hidden}
@@ -61,19 +61,18 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 
 /* ── Terminal panel ── */
 #tab-terminal{background:#000}
-.term-split{display:flex;flex-direction:column;flex:1;overflow:hidden}
-.term-top{flex:1;min-height:80px;overflow:hidden}
-#xterm-container{width:100%;height:100%}
+.term-split{display:flex;flex-direction:column;flex:1;overflow:hidden;background:#000;position:relative}
+.term-top{flex:1;min-height:80px;overflow:hidden;background:#000}
+#xterm-container{width:100%;height:100%;background:#000}
 .term-resizer{height:5px;background:var(--border);cursor:ns-resize;flex-shrink:0;transition:background .15s;position:relative}
 .term-resizer:hover,.term-resizer.dragging{background:var(--teal)}
 .term-resizer::before{content:"";position:absolute;inset:-4px 0;cursor:ns-resize}
-.term-bottom{height:220px;min-height:60px;display:flex;flex-direction:column;flex-shrink:0}
+.term-bottom{height:220px;min-height:60px;display:flex;flex-direction:column;flex-shrink:0;background:#000}
 .term-bottom-bar{display:flex;align-items:center;gap:8px;padding:3px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;-webkit-app-region:no-drag}
 .term-bottom-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .term-bottom-cwd{font-size:10px;color:var(--text2);font-family:monospace;margin-left:4px}
-#shell-container{flex:1;overflow:hidden}
+#shell-container{flex:1;overflow:hidden;background:#000}
 /* Drag-drop overlay */
-.term-split{position:relative}
 #drag-overlay{display:none;position:absolute;inset:0;z-index:50;flex-direction:column;pointer-events:none}
 #drag-overlay.active{display:flex;pointer-events:all}
 #drag-overlay-top,#drag-overlay-bottom{flex:1;border:2px dashed transparent;box-sizing:border-box;transition:border-color .1s,background .1s}
@@ -116,7 +115,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 
 /* ── History panel ── */
 #tab-history{overflow-y:auto;padding:16px}
-.history-item{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s;content-visibility:auto;contain-intrinsic-size:48px}
+.history-item{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s}
 .history-item:hover{border-color:var(--border2);background:var(--surface2)}
 .history-item:hover .history-resume{opacity:1}
 .history-icon{font-size:16px;opacity:.5}
@@ -149,7 +148,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .mem-stat-val{font-size:18px;font-weight:700;color:var(--teal)}
 .mem-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
 .memory-list{flex:1;min-height:0;overflow-y:auto;padding:8px}
-.mem-entry{padding:10px 12px;margin-bottom:5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:border-color .15s;content-visibility:auto;contain-intrinsic-size:80px}
+.mem-entry{padding:10px 12px;margin-bottom:5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:border-color .15s}
 .mem-entry:hover{border-color:var(--border2)}
 .mem-entry-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .mem-tag{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid}

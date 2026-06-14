@@ -46,23 +46,34 @@ function tryWebGL(t) {
       t.unicode.activeVersion = "11";
     }
   } catch (_) {}
+  // WebGL-renderer — fallbackar tyst till canvas om GPU/drivrutin inte stödjer
   try {
     const gl = new WebglAddon.WebglAddon();
-    gl.onContextLoss(() => gl.dispose());
+    gl.onContextLoss(() => { gl.dispose(); });
+    // Testa att WebGL faktiskt fungerar
     t.loadAddon(gl);
-  } catch (_) {}
+    // Verifiera genom att kolla renderer typ
+    requestAnimationFrame(() => {
+      try { gl._canvas?.getContext?.("webgl2"); } catch {}
+    });
+  } catch (_) {
+    // Fallback till canvas renderas automatiskt av xterm.js
+  }
 }
 
-// Batch writes to one per animation frame — eliminates per-chunk reflow lag.
-// Always scrolls to bottom so the input bar stays visible during streaming.
+// Batch writes till en per animation frame — eliminerar per-chunk reflow lag.
+// Scrollar alltid till botten så input-baren syns under strömning.
 function makeBatchedWriter(t) {
-  let buf = "", raf = null;
+  let buf = "", raf = null, destroyed = false;
   return data => {
+    if (destroyed || !t || !t.element) return;
     buf += data;
     if (!raf) raf = requestAnimationFrame(() => {
       const chunk = buf; buf = ""; raf = null;
-      t.write(chunk);
-      t.scrollToBottom();
+      try {
+        t.write(chunk);
+        t.scrollToBottom();
+      } catch (_) { destroyed = true; }
     });
   };
 }
@@ -110,7 +121,7 @@ function initTerminal() {
       brightCyan:    "#20e0d0",
       brightWhite:   "#e8f0f8",
     },
-    allowTransparency: true,
+    allowTransparency: false,
     scrollback: 10000,
     rightClickSelectsWord: true,
     fastScrollModifier: "shift",
@@ -152,11 +163,11 @@ function initTerminal() {
     term.writeln(`\x1b[2m[press any key or click ↺ New session to restart]\x1b[0m`);
   });
 
-  // Resize observer — debounced to avoid layout thrash
+  // Resize observer — debounced för att undvika layout-thrashing
   let _roTimer = null;
   const ro = new ResizeObserver(() => {
     if (!fitAddon) return;
-    if (_roTimer) return;
+    if (_roTimer) cancelAnimationFrame(_roTimer);
     _roTimer = requestAnimationFrame(() => {
       _roTimer = null;
       try {
@@ -304,6 +315,7 @@ function initShell() {
       brightYellow:"#f0a030",brightBlue:"#7a9fe4",brightMagenta:"#c090e0",
       brightCyan:"#20e0d0",brightWhite:"#e8f0f8",
     },
+    allowTransparency: false,
     scrollback: 2000,
   });
 
@@ -359,11 +371,11 @@ function initShell() {
     }, 500);
   });
 
-  // Resize observer
+  // Resize observer — debounced
   let _shTimer = null;
   const ro = new ResizeObserver(() => {
     if (!shellFit) return;
-    if (_shTimer) return;
+    if (_shTimer) cancelAnimationFrame(_shTimer);
     _shTimer = requestAnimationFrame(() => {
       _shTimer = null;
       try {
