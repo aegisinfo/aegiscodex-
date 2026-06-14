@@ -61,27 +61,43 @@ function tryWebGL(t) {
   }
 }
 
-// Spårar om användaren är vid botten — scrolla bara auto-scroll när det stämmer.
-function makeBottomTracker(t) {
-  let atBottom = true;
-  t.onScroll(() => {
-    const buf = t.buffer.active;
-    atBottom = buf.viewportY >= buf.length - t.rows - 2;
-  });
-  return () => atBottom;
-}
-
 // Batch writes till en per animation frame — eliminerar per-chunk reflow lag.
-function makeBatchedWriter(t, isAtBottom) {
+// xterm.js 5.x processar write() via setTimeout(0), skilt från RAF-cykeln. Det betyder att
+// en browser-paint kan ske INNAN write-callbacken anropas, vilket ger ett synligt jitter-frame
+// när många rader läggs till på en gång (t.ex. under ollama-tänkfasen).
+// Fix: persistent `following`-boolean (hanteras av onScroll, inte per-frame check) +
+// "double-tap" RAF efter write-callbacken för att fånga sent-render-fallet.
+function makeBatchedWriter(t) {
   let buf = "", raf = null, destroyed = false;
+  let following = true, ignoreScroll = false;
+
+  t.onScroll(() => {
+    if (ignoreScroll) return;
+    const active = t.buffer.active;
+    following = active.viewportY >= active.length - t.rows - 1;
+  });
+
+  function snap() {
+    if (destroyed) return;
+    ignoreScroll = true;
+    t.scrollToBottom();
+    ignoreScroll = false;
+  }
+
   return data => {
     if (destroyed || !t || !t.element) return;
     buf += data;
     if (!raf) raf = requestAnimationFrame(() => {
       const chunk = buf; buf = ""; raf = null;
       try {
-        t.write(chunk);
-        if (!isAtBottom || isAtBottom()) t.scrollToBottom();
+        if (following) {
+          t.write(chunk, () => {
+            snap();
+            requestAnimationFrame(() => { if (following) snap(); });
+          });
+        } else {
+          t.write(chunk);
+        }
       } catch (_) { destroyed = true; }
     });
   };
@@ -163,7 +179,7 @@ function initTerminal() {
   term.onData(data => AEGIS.ptyWrite(data));
 
   // PTY output → terminal (batched per animation frame to handle fast streaming)
-  AEGIS.onPtyData(makeBatchedWriter(term, makeBottomTracker(term)));
+  AEGIS.onPtyData(makeBatchedWriter(term));
 
   // PTY exit
   AEGIS.onPtyExit(code => {
@@ -367,7 +383,7 @@ function initShell() {
   shellTerm.onData(data => AEGIS.shellWrite(data));
 
   // PTY utdata → terminal
-  AEGIS.onShellData(makeBatchedWriter(shellTerm, makeBottomTracker(shellTerm)));
+  AEGIS.onShellData(makeBatchedWriter(shellTerm));
 
   // När shell:et dör: auto-återskapa efter 500 ms
   let _restartTimer = null;

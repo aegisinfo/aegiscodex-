@@ -14,7 +14,6 @@
     "appId": "org.aegiscloud.aegiscode",
     "productName": "AEGIS Code",
     "asar": true,
-    "asarIntegrity": true,
     "asarUnpack": [
       "node_modules/node-pty/**"
     ],

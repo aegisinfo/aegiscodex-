@@ -4,12 +4,11 @@
  * Shows fuzzy-matched command suggestions when user types "/..."
  */
 
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { getCommandCompletions } from '../../../slash-commands/index.js';
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import type { CommandSuggestion } from '../../../slash-commands/types.js';
 
 interface CommandSuggestionsProps {
   /** The current input value */
@@ -21,8 +20,6 @@ interface CommandSuggestionsProps {
   /** Whether suggestions are visible */
   visible: boolean;
 }
-
-const MAX_SUGGESTIONS = 8;
 
 export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
   input,
@@ -45,13 +42,17 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
   const suggestions = useMemo(() => {
     if (!visible || !input.startsWith('/')) return [];
 
-    // Only suggest based on what's typed after / up to cursor
     const partial = input.slice(0, cursorPosition);
     const results = getCommandCompletions(partial);
+    const isListing = partial.trim() === '/';
 
-    // Sort by matchScore descending
-    results.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
-    return results.slice(0, MAX_SUGGESTIONS);
+    if (isListing) {
+      // Alphabetical when showing all commands
+      results.sort((a, b) => a.command.localeCompare(b.command));
+    } else {
+      results.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+    }
+    return results;
   }, [input, cursorPosition, visible]);
 
   // Clamp selected index
@@ -112,20 +113,11 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
       <Text dimColor>Commands ({suggestions.length}):</Text>
       {suggestions.map((s, i) => {
         const isSelected = i === clampedIndex;
-        const scoreColor =
-          (s.matchScore ?? 0) >= 90
-            ? theme.colors.success
-            : (s.matchScore ?? 0) >= 60
-              ? theme.colors.warning
-              : theme.colors.text.muted;
-
         return (
           <Box key={s.command} flexDirection="row">
             <Text>
               {isSelected ? (
-                <Text color={theme.colors.primary} bold>
-                  {'>'}
-                </Text>
+                <Text color={theme.colors.primary} bold>{'>'}</Text>
               ) : (
                 <Text> </Text>
               )}{' '}
@@ -133,7 +125,6 @@ export const CommandSuggestions: React.FC<CommandSuggestionsProps> = ({
                 {s.command}
               </Text>
               <Text color={theme.colors.text.muted}> — {s.description}</Text>
-              <Text color={scoreColor}> ({s.matchScore ?? 0})</Text>
             </Text>
           </Box>
         );

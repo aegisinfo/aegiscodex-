@@ -272,16 +272,6 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <Box flexDirection="column">
-        {/* 命令建议下拉框 - 在输入框上方显示 */}
-        {showSuggestions && (
-          <CommandSuggestions
-            input={input}
-            cursorPosition={cursorPosition}
-            onSelectSuggestion={handleSelectSuggestion}
-            visible={showSuggestions}
-          />
-        )}
-
         {/* Thinking indicator — always occupies 1 row to prevent layout shift/flicker */}
         <Box paddingX={1} marginBottom={0} height={1}>
           {thinkingLabel ? (
@@ -296,7 +286,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
             </>
           ) : <Text> </Text>}
         </Box>
-        
+
         {/* 输入框 */}
         <Box
           flexDirection="row"
@@ -333,6 +323,16 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
             />
           </Box>
         </Box>
+
+        {/* Command suggestions — below the input bar */}
+        {showSuggestions && (
+          <CommandSuggestions
+            input={input}
+            cursorPosition={cursorPosition}
+            onSelectSuggestion={handleSelectSuggestion}
+            visible={showSuggestions}
+          />
+        )}
       </Box>
     );
   },

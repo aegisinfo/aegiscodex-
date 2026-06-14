@@ -199,7 +199,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     });
   }, [pageSize]);
 
-  // Keyboard scrolling
+  // Keyboard scrolling + ESC interrupt
   useInput((_input, key) => {
     if (key.upArrow && key.ctrl) { scrollUp(1); return; }
     if (key.downArrow && key.ctrl) { scrollDown(1); return; }
@@ -209,6 +209,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     if (key.end) {
       const msgs = getState().session.messages;
       setScrollOffset(Math.max(0, msgs.length - pageSize));
+      return;
+    }
+    if (key.escape && getState().session.isThinking) {
+      commandActions().abort();
+      sessionActions().setThinking(false);
     }
   });
 

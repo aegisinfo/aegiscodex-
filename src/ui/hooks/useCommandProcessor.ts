@@ -83,6 +83,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
           sessionId: getState().session.sessionId,
           messages: getMessagesRef.current(),
           contextManager: contextManagerRef.current,
+          chatService: agentRef.current?.getChatService(),
           modelName: modelRef.current,
           onContentDelta,
           onThinkingDelta: streamingMsgId
