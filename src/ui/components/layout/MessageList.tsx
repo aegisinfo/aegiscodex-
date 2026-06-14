@@ -94,8 +94,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         const updatedLastLen = lastContentLenRef.current[streamingMsg.id] || { content: 0, thinking: 0 };
         const deltaContent = buffer.content.length - updatedLastLen.content;
         const deltaThinking = buffer.thinking.length - updatedLastLen.thinking;
+        const thinkingJustStarted = updatedLastLen.thinking === 0 && buffer.thinking.length > 0;
 
-        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= THINKING_THRESHOLD) {
+        if (deltaContent >= CONTENT_THRESHOLD || deltaThinking >= THINKING_THRESHOLD || thinkingJustStarted) {
           lastContentLenRef.current[streamingMsg.id] = {
             content: buffer.content.length,
             thinking: buffer.thinking.length,
