@@ -12,7 +12,7 @@
   --text:#c8d8e8;--text2:#6a8aaa;--text3:#2e4055;
   --teal:#00c8b4;--purple:#5a7fd4;--green:#1ab87a;
   --red:#e04444;--amber:#e89020;
-  --sidebar:52px;
+  --sidebar:200px;
   --lattice:
     repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(0,180,200,.04) 28px,rgba(0,180,200,.04) 29px),
     repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(0,180,200,.04) 28px,rgba(0,180,200,.04) 29px);
@@ -20,44 +20,42 @@
 
 html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;overflow:hidden}
 
-.workspace{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:32px 1fr;height:100vh;background:var(--bg);background-image:var(--lattice)}
+.workspace{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:40px 1fr;height:100vh;background:var(--bg);background-image:var(--lattice)}
 
 /* Titlebar */
-.titlebar{grid-column:1/-1;display:flex;align-items:center;padding:0 10px 0 6px;gap:8px;background:linear-gradient(180deg,#0f1824 0%,#080c12 100%);border-bottom:1px solid var(--border);-webkit-app-region:drag;user-select:none;height:32px}
-.titlebar-logo{font-size:13px;font-weight:800;background:linear-gradient(135deg,#00c8b4,#5a7fd4,#00c8b4);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite;letter-spacing:.04em;flex-shrink:0}
+.titlebar{grid-column:1/-1;display:flex;align-items:center;padding:0 16px;gap:10px;background:linear-gradient(180deg,#0f1824 0%,#080c12 100%);border-bottom:1px solid var(--border);-webkit-app-region:drag;user-select:none}
+.titlebar-logo{font-size:15px;font-weight:800;background:linear-gradient(135deg,#00c8b4,#5a7fd4,#00c8b4);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite;letter-spacing:.04em}
 @keyframes shimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+.titlebar-sub{font-size:11px;color:var(--text3);letter-spacing:.05em}
 .titlebar-spacer{flex:1}
-.titlebar-status{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;-webkit-app-region:no-drag}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);transition:background .3s;flex-shrink:0}
-.status-dot.on{background:var(--green);box-shadow:0 0 5px var(--green)}
+.titlebar-status{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);transition:background .3s}
+.status-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
 /* Terminal controls in titlebar */
-.titlebar-controls{display:none;align-items:center;gap:4px;-webkit-app-region:no-drag;margin-left:6px}
+.titlebar-controls{display:none;align-items:center;gap:6px;-webkit-app-region:no-drag;margin-left:8px}
 .titlebar-controls.visible{display:flex}
-.tb-btn{font-size:10px;padding:2px 7px;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;transition:all .12s;font-family:inherit;line-height:1.4}
-.tb-btn:hover{border-color:var(--teal);color:var(--teal)}
-.tb-sep{color:var(--text3);opacity:.3;font-size:10px}
-.terminal-model-tb{font-size:10px;color:var(--text3)}
+.tb-btn{font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;font-family:inherit}
+.tb-btn:hover{background:rgba(0,200,180,.1);color:var(--teal);border-color:var(--teal)}
+.tb-sep{color:var(--text3);margin:0 2px}
+.terminal-model-tb{margin-left:auto;font-size:11px;color:var(--text3)}
 
-/* Sidebar — icon-only with tooltip labels */
-.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:6px 0;overflow:visible;z-index:10}
-.nav-section{display:none}
-.nav-item{position:relative;display:flex;align-items:center;justify-content:center;padding:9px 0;cursor:pointer;color:var(--text3);font-size:17px;border-left:2px solid transparent;transition:all .15s;user-select:none}
-.nav-item:hover{color:var(--text);background:rgba(0,200,180,.06)}
-.nav-item.active{color:var(--teal);border-left-color:var(--teal);background:rgba(0,200,180,.07)}
-/* tooltip */
-.nav-item::after{content:attr(data-label);position:absolute;left:calc(var(--sidebar) + 6px);top:50%;transform:translateY(-50%);background:#0f1824;color:var(--text);font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s;z-index:100}
-.nav-item:hover::after{opacity:1}
-.nav-icon{font-size:16px;line-height:1}
+/* Sidebar */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:8px 0;overflow:hidden}
+.nav-section{padding:12px 12px 4px;font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--text3);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;color:var(--text2);font-size:12px;border-left:2px solid transparent;transition:all .15s;user-select:none;white-space:nowrap;overflow:hidden}
+.nav-item:hover{background:rgba(0,200,180,.05);color:var(--text)}
+.nav-item.active{color:var(--teal);border-left-color:var(--teal);background:rgba(0,200,180,.06)}
+.nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
 .nav-spacer{flex:1}
-.nav-version{display:none}
-.nav-badge{position:absolute;top:5px;right:6px;font-size:9px;color:var(--teal);font-family:monospace;line-height:1}
+.nav-version{padding:8px 14px;font-size:10px;color:var(--text3)}
+.nav-badge{margin-left:auto;font-size:10px;color:var(--text3);font-family:monospace}
 
 /* Content */
 .content{overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
 
 /* Panels */
-.panel{display:none;flex-direction:column;height:100%;overflow:hidden}
-.panel.active{display:flex}
+.panel{display:none;flex-direction:column;overflow:hidden}
+.panel.active{display:flex;flex:1}
 
 /* ── Terminal panel ── */
 #tab-terminal{background:#000;position:relative}
@@ -71,7 +69,7 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .terminal-model{margin-left:auto;font-size:11px;color:var(--text3)}
 
 /* ── Settings panel ── */
-#tab-settings{overflow:hidden;display:flex;flex-direction:column}
+#tab-settings{}
 .settings-body{flex:1;min-height:0;overflow-y:auto;padding:20px 24px}
 .settings-section{margin-bottom:28px}
 .settings-section h3{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)}
@@ -185,12 +183,13 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 
   <!-- Titlebar -->
   <div class="titlebar">
-    <span class="titlebar-logo">AEGIS</span>
+    <span class="titlebar-logo">AEGIS CODE</span>
+    <span class="titlebar-sub">/ desktop</span>
     <div class="titlebar-controls" id="terminal-controls">
       <span class="tb-sep">·</span>
-      <button class="tb-btn" onclick="restartPty()" title="New session">↺ new</button>
-      <button class="tb-btn" onclick="resumePty()" title="Resume">⟳ resume</button>
-      <button class="tb-btn" onclick="killPty()" title="Kill">✕</button>
+      <button class="tb-btn" onclick="restartPty()">↺ New session</button>
+      <button class="tb-btn" onclick="resumePty()">⟳ Resume</button>
+      <button class="tb-btn" onclick="killPty()">✕ Kill</button>
       <span class="terminal-model-tb" id="terminal-model"></span>
     </div>
     <div class="titlebar-spacer"></div>
@@ -200,25 +199,28 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
     </div>
   </div>
 
-  <!-- Sidebar — icon only, tooltips on hover -->
+  <!-- Sidebar -->
   <nav class="sidebar">
-    <div class="nav-item active" data-tab="terminal" data-label="Terminal" onclick="switchTab('terminal')">
-      <span class="nav-icon">⌨</span>
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item active" data-tab="terminal" onclick="switchTab('terminal')">
+      <span class="nav-icon">⌨</span> Terminal
     </div>
-    <div class="nav-item" data-tab="history" data-label="History" onclick="switchTab('history')">
-      <span class="nav-icon">◷</span>
+    <div class="nav-item" data-tab="history" onclick="switchTab('history')">
+      <span class="nav-icon">◷</span> History
     </div>
-    <div class="nav-item" data-tab="memory" data-label="Memory" onclick="switchTab('memory')">
-      <span class="nav-icon">⬡</span>
+    <div class="nav-item" data-tab="memory" onclick="switchTab('memory')">
+      <span class="nav-icon">⬡</span> Memory
       <span class="nav-badge" id="memory-badge"></span>
     </div>
-    <div class="nav-item" data-tab="cloud" data-label="Cloud" onclick="switchTab('cloud')">
-      <span class="nav-icon">☁</span>
+    <div class="nav-section" style="margin-top:8px">Account</div>
+    <div class="nav-item" data-tab="cloud" onclick="switchTab('cloud')">
+      <span class="nav-icon">⬡</span> Cloud
     </div>
-    <div class="nav-item" data-tab="settings" data-label="Settings" onclick="switchTab('settings')">
-      <span class="nav-icon">⚙</span>
+    <div class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+      <span class="nav-icon">⚙</span> Settings
     </div>
     <div class="nav-spacer"></div>
+    <div class="nav-version" id="nav-version"></div>
   </nav>
 
   <!-- Content -->
