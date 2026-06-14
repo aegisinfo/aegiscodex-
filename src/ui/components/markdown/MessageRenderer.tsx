@@ -145,10 +145,12 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     // User messages: full-width background bar (Claude Code style)
     if (role === 'user') {
+      const innerWidth = Math.max(0, terminalWidth - 2) // -2 for paddingX
+      const padded = (content || ' ').padEnd(innerWidth)
       return (
         <Box marginBottom={1}>
-          <Box backgroundColor="#1e1e1e" paddingX={1} width={terminalWidth}>
-            <Text color="white">{content || ' '}</Text>
+          <Box backgroundColor="#1e1e1e" paddingX={1}>
+            <Text color="white">{padded}</Text>
           </Box>
         </Box>
       )
