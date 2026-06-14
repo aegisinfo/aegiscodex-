@@ -1,5 +1,5 @@
 "use strict";
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("AEGIS", {
   getEnv:       ()        => ipcRenderer.invoke("get-env"),
@@ -30,4 +30,6 @@ contextBridge.exposeInMainWorld("AEGIS", {
   clearMemory:     ()      => ipcRenderer.invoke("clear-memory"),
   getMemoryStatus: ()      => ipcRenderer.invoke("get-memory-status"),
   activateMemory:  (token) => ipcRenderer.invoke("activate-memory", token),
+
+  getFilePath: (file) => webUtils.getPathForFile(file),
 });

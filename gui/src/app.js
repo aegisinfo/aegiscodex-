@@ -119,49 +119,49 @@ function initTerminal() {
 // ── Drag-and-drop files into either terminal ───────────────────────────────────
 function initDragDrop() {
   const overlay = document.getElementById("drag-overlay");
-  const half    = { top: document.getElementById("drag-overlay-top"), bottom: document.getElementById("drag-overlay-bottom") };
-  if (!overlay || !half.top || !half.bottom) return;
+  const ovTop   = document.getElementById("drag-overlay-top");
+  const ovBot   = document.getElementById("drag-overlay-bottom");
+  if (!overlay || !ovTop || !ovBot) return;
 
-  let dragDepth = 0;
+  function hide() {
+    overlay.classList.remove("active");
+    ovTop.classList.remove("over");
+    ovBot.classList.remove("over");
+  }
 
-  // Show overlay when files enter the window
+  // Show overlay when any file enters the window
   document.addEventListener("dragenter", e => {
     if (!e.dataTransfer?.types?.includes("Files")) return;
-    dragDepth++;
     overlay.classList.add("active");
     e.preventDefault();
   });
 
-  document.addEventListener("dragleave", () => {
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) {
-      overlay.classList.remove("active");
-      half.top.classList.remove("over");
-      half.bottom.classList.remove("over");
+  // Hide when drag leaves the window entirely (relatedTarget is null)
+  document.addEventListener("dragleave", e => {
+    if (e.relatedTarget == null) hide();
+  });
+
+  document.addEventListener("dragover", e => {
+    if (e.dataTransfer?.types?.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
     }
   });
 
-  document.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  // Highlight the hovered half
+  ovTop.addEventListener("dragenter", () => { ovTop.classList.add("over"); ovBot.classList.remove("over"); });
+  ovBot.addEventListener("dragenter", () => { ovBot.classList.add("over"); ovTop.classList.remove("over"); });
 
-  // Highlight whichever half the cursor is over
-  for (const [key, el] of Object.entries(half)) {
-    el.addEventListener("dragenter", () => {
-      half.top.classList.toggle("over", key === "top");
-      half.bottom.classList.toggle("over", key === "bottom");
-    });
-  }
-
-  // Drop — write paths to the appropriate PTY
-  half.top.addEventListener("drop", e => handleDrop(e, d => AEGIS.ptyWrite(d)));
-  half.bottom.addEventListener("drop", e => handleDrop(e, d => AEGIS.shellWrite(d)));
+  // Drop — use webUtils.getPathForFile (Electron 32+; File.path was removed)
+  ovTop.addEventListener("drop", e => handleDrop(e, d => AEGIS.ptyWrite(d)));
+  ovBot.addEventListener("drop", e => handleDrop(e, d => AEGIS.shellWrite(d)));
 
   function handleDrop(e, write) {
     e.preventDefault();
-    dragDepth = 0;
-    overlay.classList.remove("active");
-    half.top.classList.remove("over");
-    half.bottom.classList.remove("over");
-    const paths = [...e.dataTransfer.files].map(f => f.path).filter(Boolean);
+    hide();
+    const paths = [...e.dataTransfer.files]
+      .map(f => AEGIS.getFilePath(f))
+      .filter(Boolean);
     if (paths.length) write(paths.join(" ") + " ");
   }
 }
