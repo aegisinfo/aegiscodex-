@@ -1,0 +1,28 @@
+{
+  "name": "aegiscode-gui",
+  "version": "1.0.0",
+  "description": "AEGIS Code — Desktop GUI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:linux": "electron-builder --linux AppImage",
+    "build:win":   "electron-builder --win nsis",
+    "build:mac":   "electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "org.aegiscloud.aegiscode",
+    "productName": "AEGIS Code",
+    "asar": true,
+    "asarUnpack": ["node_modules/node-pty/**"],
+    "linux":  { "target": "AppImage", "category": "Development" },
+    "win":    { "target": "nsis" },
+    "mac":    { "target": "dmg" }
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
