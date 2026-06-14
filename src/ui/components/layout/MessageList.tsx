@@ -65,11 +65,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
     let rafId: ReturnType<typeof requestAnimationFrame> | null = null;
     let lastRafTime = 0;
 
-    // Start the RAF loop. No-op if already running.
-    const scheduleRaf = () => {
-      if (rafId === null) rafId = requestAnimationFrame(flushTick);
-    };
-
     const flushTick = (now: number) => {
       if (now - lastRafTime < RAF_INTERVAL_MS) {
         rafId = requestAnimationFrame(flushTick);
@@ -108,17 +103,11 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      // Keep ticking only while there is active streaming or queued work.
-      // When idle, stop — the store subscription restarts the loop as needed.
-      if (streamingMsg || pendingMessagesRef.current) {
-        rafId = requestAnimationFrame(flushTick);
-      } else {
-        rafId = null;
-      }
+      // Always keep ticking — no restart latency when streaming begins.
+      rafId = requestAnimationFrame(flushTick);
     };
 
-    // Start idle — store subscription will kick off the loop when work arrives.
-    // (No initial RAF; avoids a 33fps spin on startup before any streaming.)
+    rafId = requestAnimationFrame(flushTick);
 
     const unsub = vanillaStore.subscribe((state) => {
       const newMessages = state.session.messages;
@@ -163,15 +152,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           pendingMessagesRef.current = null;
           setMessages([...newMessages]);
         } else {
-          // Queue for the RAF tick; ensure the loop is running to pick it up.
           pendingMessagesRef.current = [...newMessages];
-          scheduleRaf();
         }
-      }
-
-      // Kick off the RAF loop whenever streaming is active so the buffer drains.
-      if (newMessages[newMessages.length - 1]?.isStreaming) {
-        scheduleRaf();
       }
 
       // showAllThinking is not streaming-related, safe to apply immediately.
