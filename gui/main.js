@@ -10,7 +10,30 @@ if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
 const AEGIS_BIN   = path.join(__dirname, "..", "dist", "main.js");
-const ICON_PATH   = path.join(__dirname, "icon.png");
+
+// ── Platform-aware icon ───────────────────────────────────────────────────────
+const ICONS_DIR = path.join(__dirname, "icons");
+function getIcon() {
+  if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
+  if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
+  return path.join(ICONS_DIR, "icon.png");
+}
+
+// ── Node binary detection ─────────────────────────────────────────────────────
+function findNode() {
+  // Prefer the node that ships alongside electron (nvm / volta / etc.)
+  const candidates = process.platform === "win32"
+    ? ["node.exe"]
+    : ["node", "/usr/local/bin/node", "/usr/bin/node", `${os.homedir()}/.local/node22/bin/node`];
+
+  for (const c of candidates) {
+    try {
+      require("child_process").execFileSync(c, ["--version"], { stdio: "ignore" });
+      return c;
+    } catch {}
+  }
+  return null;
+}
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); }
@@ -89,13 +112,11 @@ async function activateMemory(apiKey) {
 
   const key = apiKey.trim();
 
-  // Write token file (CLI compatibility)
   try {
     fs.mkdirSync(path.dirname(TOKEN_PATH), { recursive: true });
     fs.writeFileSync(TOKEN_PATH, key);
   } catch {}
 
-  // Best-effort remote verification
   let email     = "stripe-user";
   let plan      = "semantic-memory";
   let expiresAt = null;
@@ -111,7 +132,6 @@ async function activateMemory(apiKey) {
     }
   } catch { /* offline activation */ }
 
-  // Save key as both cloud API key AND memory activation
   try {
     const cfg = loadConfig();
     cfg.aegiscloud = {
@@ -172,6 +192,8 @@ let mainWindow = null;
 let ptyProcess = null;
 
 function createWindow() {
+  const icon = getIcon();
+
   mainWindow = new BrowserWindow({
     width:           1100,
     height:          700,
@@ -179,8 +201,9 @@ function createWindow() {
     minHeight:       520,
     title:           "AEGIS Code",
     backgroundColor: "#04060a",
-    titleBarStyle:   "hiddenInset",
-    icon:            ICON_PATH,
+    // hiddenInset gives the macOS traffic-light overlay; default works on Win/Linux
+    titleBarStyle:   process.platform === "darwin" ? "hiddenInset" : "default",
+    icon,
     webPreferences: {
       nodeIntegration:  false,
       contextIsolation: true,
@@ -211,7 +234,16 @@ function spawnPty(cols, rows, resumeId) {
   }
 
   let pty;
-  try { pty = require("node-pty"); } catch { return false; }
+  try { pty = require("node-pty"); } catch {
+    mainWindow?.webContents.send("pty-data", "\r\nnode-pty not available — run: cd gui && npm install\r\n");
+    return false;
+  }
+
+  const nodeBin = findNode();
+  if (!nodeBin) {
+    mainWindow?.webContents.send("pty-data", "\r\nNode.js not found in PATH.\r\nInstall Node.js >= 22 from https://nodejs.org\r\n");
+    return false;
+  }
 
   const args = ["--no-deprecation", AEGIS_BIN];
   if (resumeId) args.push("--resume", resumeId);
@@ -223,7 +255,7 @@ function spawnPty(cols, rows, resumeId) {
     FORCE_COLOR:"3",
   };
 
-  ptyProcess = pty.spawn("node", args, {
+  ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
     cols: cols || 120,
     rows: rows || 36,
@@ -276,10 +308,13 @@ ipcMain.handle("pty-kill", () => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createWindow();
+  // Linux taskbar icon must be set explicitly
   if (process.platform === "linux") {
-    try { app.setIcon(ICON_PATH); } catch {}
+    try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
   }
 });
 
 app.on("second-instance", () => { mainWindow?.show(); mainWindow?.focus(); });
+// On macOS, keep app alive when all windows are closed (click dock icon to reopen)
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("activate", () => { if (!mainWindow) createWindow(); });
