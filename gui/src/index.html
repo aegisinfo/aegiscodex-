@@ -70,6 +70,14 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .term-bottom-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .term-bottom-cwd{font-size:10px;color:var(--text2);font-family:monospace;margin-left:4px}
 #shell-container{flex:1;overflow:hidden}
+/* Drag-drop overlay */
+.term-split{position:relative}
+#drag-overlay{display:none;position:absolute;inset:0;z-index:50;flex-direction:column;pointer-events:none}
+#drag-overlay.active{display:flex;pointer-events:all}
+#drag-overlay-top,#drag-overlay-bottom{flex:1;border:2px dashed transparent;box-sizing:border-box;transition:border-color .1s,background .1s}
+#drag-overlay-top{border-bottom:none}
+#drag-overlay-bottom{border-top:none}
+#drag-overlay-top.over,#drag-overlay-bottom.over{border-color:var(--teal);background:rgba(0,200,180,.07)}
 
 /* ── Settings panel ── */
 #tab-settings{}
@@ -238,6 +246,10 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
         <button class="btn" style="margin-left:auto;border-color:var(--amber);color:var(--amber);font-size:11px;padding:3px 10px" onclick="switchTab('settings')">Add key in Settings →</button>
       </div>
       <div class="term-split">
+        <div id="drag-overlay">
+          <div id="drag-overlay-top"></div>
+          <div id="drag-overlay-bottom"></div>
+        </div>
         <div class="term-top">
           <div id="xterm-container"></div>
         </div>

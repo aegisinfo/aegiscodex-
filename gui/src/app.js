@@ -118,27 +118,51 @@ function initTerminal() {
 
 // ── Drag-and-drop files into either terminal ───────────────────────────────────
 function initDragDrop() {
-  const targets = [
-    { id: "xterm-container", write: d => AEGIS.ptyWrite(d)   },
-    { id: "shell-container", write: d => AEGIS.shellWrite(d) },
-  ];
-  for (const { id, write } of targets) {
-    const el = document.getElementById(id);
-    if (!el) continue;
-    el.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-      el.style.outline = "2px solid var(--teal)";
+  const overlay = document.getElementById("drag-overlay");
+  const half    = { top: document.getElementById("drag-overlay-top"), bottom: document.getElementById("drag-overlay-bottom") };
+  if (!overlay || !half.top || !half.bottom) return;
+
+  let dragDepth = 0;
+
+  // Show overlay when files enter the window
+  document.addEventListener("dragenter", e => {
+    if (!e.dataTransfer?.types?.includes("Files")) return;
+    dragDepth++;
+    overlay.classList.add("active");
+    e.preventDefault();
+  });
+
+  document.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
+      overlay.classList.remove("active");
+      half.top.classList.remove("over");
+      half.bottom.classList.remove("over");
+    }
+  });
+
+  document.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+
+  // Highlight whichever half the cursor is over
+  for (const [key, el] of Object.entries(half)) {
+    el.addEventListener("dragenter", () => {
+      half.top.classList.toggle("over", key === "top");
+      half.bottom.classList.toggle("over", key === "bottom");
     });
-    el.addEventListener("dragleave", () => { el.style.outline = ""; });
-    el.addEventListener("drop", e => {
-      e.preventDefault();
-      el.style.outline = "";
-      const files = [...e.dataTransfer.files];
-      if (!files.length) return;
-      const paths = files.map(f => f.path).filter(Boolean);
-      if (paths.length) write(paths.join(" ") + " ");
-    });
+  }
+
+  // Drop — write paths to the appropriate PTY
+  half.top.addEventListener("drop", e => handleDrop(e, d => AEGIS.ptyWrite(d)));
+  half.bottom.addEventListener("drop", e => handleDrop(e, d => AEGIS.shellWrite(d)));
+
+  function handleDrop(e, write) {
+    e.preventDefault();
+    dragDepth = 0;
+    overlay.classList.remove("active");
+    half.top.classList.remove("over");
+    half.bottom.classList.remove("over");
+    const paths = [...e.dataTransfer.files].map(f => f.path).filter(Boolean);
+    if (paths.length) write(paths.join(" ") + " ");
   }
 }
 
