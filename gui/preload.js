@@ -1,9 +1,10 @@
 "use strict";
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer, webUtils, clipboard } = require("electron");
 
 contextBridge.exposeInMainWorld("AEGIS", {
   getEnv:       ()        => ipcRenderer.invoke("get-env"),
   saveEnv:      (d)       => ipcRenderer.invoke("save-env", d),
+  getVersion:   ()        => ipcRenderer.invoke("get-version"),
   getConfig:    ()        => ipcRenderer.invoke("get-config"),
   saveConfig:   (d)       => ipcRenderer.invoke("save-config", d),
   getHistory:   ()        => ipcRenderer.invoke("get-history"),
@@ -32,4 +33,7 @@ contextBridge.exposeInMainWorld("AEGIS", {
   activateMemory:  (token) => ipcRenderer.invoke("activate-memory", token),
 
   getFilePath: (file) => webUtils.getPathForFile(file),
+  copyText:    (text) => clipboard.writeText(text),
+
+  onConfigChanged: (cb)     => ipcRenderer.on("config-changed", (_, c) => cb(c)),
 });

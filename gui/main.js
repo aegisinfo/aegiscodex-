@@ -256,28 +256,70 @@ let mainWindow  = null;
 let ptyProcess  = null;
 let shellProcess = null;
 
+function ensureAegisWrapper() {
+  const nodeBin = findNode() || "node";
+  let absNode = nodeBin;
+  try { absNode = require("child_process").execFileSync("which", [nodeBin], { encoding: "utf8" }).trim() || nodeBin; } catch {}
+
+  const aegisBin  = path.join(__dirname, "..", "dist", "main.js");
+  const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${aegisBin}" "$@"\n`;
+
+  // Write to both ~/.local/bin and ~/.aegiscode/bin
+  const dirs = [
+    path.join(os.homedir(), ".local", "bin"),
+    path.join(os.homedir(), ".aegiscode", "bin"),
+  ];
+  for (const dir of dirs) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "aegis-cli"), wrapperSh);
+      fs.chmodSync(path.join(dir, "aegis-cli"), 0o755);
+    } catch (e) { /* skip unwritable dirs */ }
+  }
+}
+
+// ── Shell (lower terminal) ────────────────────────────────────────────────────
+// Startar en normal interaktiv shell i användarens hemkatalog.
+// aegis-cli finns via ~/.local/bin/aegis-cli wrapper.
+
 function spawnShell(cols, rows) {
   if (shellProcess) { shellProcess.kill(); shellProcess = null; }
 
   let pty;
-  try { pty = require("node-pty"); } catch { return false; }
+  try { pty = require("node-pty"); } catch { return null; }
 
-  const shell = process.platform === "win32"
-    ? "cmd.exe"
-    : (process.env.SHELL || "/bin/bash");
+  const isWin    = process.platform === "win32";
+  const shellExe = isWin ? "cmd.exe" : (process.env.SHELL || "/bin/bash");
 
-  shellProcess = pty.spawn(shell, [], {
+  ensureAegisWrapper();
+
+  const env = { ...process.env, TERM: "xterm-256color" };
+
+  // Utöka PATH med wrapper-kataloger
+  const extraPath = [
+    path.join(os.homedir(), ".local", "bin"),
+    path.join(os.homedir(), ".aegiscode", "bin"),
+  ].filter(fs.existsSync).join(":");
+  if (extraPath) env.PATH = `${extraPath}:${env.PATH}`;
+
+  // Kör i hemkatalog (som en vanlig terminal)
+  const home = os.homedir();
+
+  // Explicit -i flag för att säkerställa interaktiv shell
+  const shellArgs = isWin ? [] : ["-i"];
+
+  shellProcess = pty.spawn(shellExe, shellArgs, {
     name: "xterm-256color",
     cols: cols || 120,
     rows: rows || 10,
-    cwd:  os.homedir(),
-    env:  { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", FORCE_COLOR: "3" },
+    cwd:  home,
+    env,
   });
 
   shellProcess.onData(data  => mainWindow?.webContents.send("shell-data", data));
   shellProcess.onExit(() => { mainWindow?.webContents.send("shell-exit"); shellProcess = null; });
 
-  return true;
+  return home;
 }
 
 function createWindow() {
@@ -416,8 +458,8 @@ ipcMain.handle("pty-kill", () => {
 });
 
 ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
-  const ok = spawnShell(cols, rows);
-  return { ok, cwd: os.homedir() };
+  const cwd = spawnShell(cols, rows);
+  return { ok: !!cwd, cwd: cwd || os.homedir() };
 });
 ipcMain.handle("shell-write",  (_, data)           => { if (shellProcess) shellProcess.write(data); });
 ipcMain.handle("shell-resize", (_, { cols, rows }) => { if (shellProcess) shellProcess.resize(cols, rows); });
@@ -447,6 +489,7 @@ app.on("window-all-closed", () => { configWatcher?.close(); });
 app.whenReady().then(() => {
   createWindow();
   watchConfig();
+  ensureAegisWrapper();         // create aegis-cli wrappers for shell terminal
   // Linux taskbar icon must be set explicitly
   if (process.platform === "linux") {
     try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}

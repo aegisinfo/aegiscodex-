@@ -282,16 +282,6 @@ function killPty() {
 }
 
 // ── Shell terminal (bottom pane) ──────────────────────────────────────────────
-function spawnShell() {
-  if (shellTerm) {
-    AEGIS.shellKill();
-    requestAnimationFrame(() => {
-      shellFit.fit();
-      AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
-    });
-  }
-}
-
 function initShell() {
   const container = document.getElementById("shell-container");
   if (!container) return;
@@ -323,14 +313,52 @@ function initShell() {
 
   tryWebGL(shellTerm);
 
-  shellTerm.onData(data => AEGIS.shellWrite(data));
-  AEGIS.onShellData(makeBatchedWriter(shellTerm));
-  AEGIS.onShellExit(() => shellTerm.writeln("\r\n\x1b[2m[shell exited — press Enter to restart]\x1b[0m"));
+  // Ctrl+C = kopiera (om markering), annars SIGINT
+  // Ctrl+Z = döda shell-processen
+  shellTerm.attachCustomKeyEventHandler(e => {
+    if (e.type !== "keydown") return true;
 
-  shellTerm.onKey(({ key }) => {
-    if (key === "\r") spawnShell();
+    // Ctrl+C
+    if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+      if (shellTerm.hasSelection()) {
+        const sel = shellTerm.getSelection();
+        if (sel) { AEGIS.copyText(sel); shellTerm.clearSelection(); }
+        return false; // don't send to shell
+      }
+      return true; // pass through (SIGINT)
+    }
+
+    // Ctrl+Z — döda shell:et (istället för suspend)
+    if (e.ctrlKey && (e.key === "z" || e.key === "Z")) {
+      AEGIS.shellKill();
+      return false;
+    }
+
+    return true;
   });
 
+  // Skicka tangenttryckningar till shell:et
+  shellTerm.onData(data => AEGIS.shellWrite(data));
+
+  // PTY utdata → terminal
+  AEGIS.onShellData(makeBatchedWriter(shellTerm));
+
+  // När shell:et dör: auto-återskapa efter 500 ms
+  let _restartTimer = null;
+  AEGIS.onShellExit(() => {
+    shellTerm.writeln("\r\n\x1b[2m[shell exited — restarting...]\x1b[0m");
+    if (_restartTimer) clearTimeout(_restartTimer);
+    _restartTimer = setTimeout(() => {
+      _restartTimer = null;
+      shellTerm.clear();
+      requestAnimationFrame(() => {
+        shellFit.fit();
+        AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+      });
+    }, 500);
+  });
+
+  // Resize observer
   let _shTimer = null;
   const ro = new ResizeObserver(() => {
     if (!shellFit) return;
@@ -346,9 +374,12 @@ function initShell() {
   });
   ro.observe(container);
 
-  requestAnimationFrame(() => {
+  // Starta shell:et direkt
+  requestAnimationFrame(async () => {
     shellFit.fit();
-    AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+    const res = await AEGIS.shellSpawn({ cols: shellTerm.cols, rows: shellTerm.rows });
+    const cwdEl = document.getElementById("shell-cwd");
+    if (cwdEl && res?.cwd) cwdEl.textContent = res.cwd;
   });
 }
 
@@ -623,11 +654,10 @@ async function saveSettings() {
 }
 
 function loadTerminalModel(cfg) {
-  const model = cfg?.models?.find(m => m.id === cfg?.currentModelId)?.model
-    || cfg?.default?.model
-    || "";
+  const found = cfg?.models?.find(m => m.id === cfg?.currentModelId);
+  const model = found ? (found.model || "") : (cfg?.default?.model || "");
   const el = document.getElementById("terminal-model");
-  if (el && model) el.textContent = model;
+  if (el) el.textContent = model;
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────────
@@ -811,6 +841,17 @@ function escAttr(s) {
   return (s || "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
+// ── Model display update ──────────────────────────────────────────────────────
+function refreshModelDisplay() {
+  AEGIS.getConfig().then(cfg => {
+    const model = cfg?.models?.find(m => m.id === cfg?.currentModelId)?.model
+      || cfg?.default?.model
+      || "";
+    const el = document.getElementById("terminal-model");
+    if (el) el.textContent = model;
+  }).catch(() => {});
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   initTerminal();
@@ -818,6 +859,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();
+  loadTerminalModel(cfg);
 
   // Show setup banner if no provider key configured in .env
   const env = await AEGIS.getEnv();
@@ -829,11 +871,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Show version in sidebar
   const verEl = document.getElementById("nav-version");
-  if (verEl) verEl.textContent = "v1.0.0";
+  AEGIS.getVersion().then(v => { if (verEl) verEl.textContent = "v" + v; }).catch(() => {});
 
   // Load memory badge count
   AEGIS.getMemoryStats().then(stats => {
     const badge = document.getElementById("memory-badge");
     if (badge && stats.total > 0) badge.textContent = stats.total;
   }).catch(() => {});
+
+  // Watch for config changes (e.g. /model command in PTY)
+  AEGIS.onConfigChanged(() => refreshModelDisplay());
 });
