@@ -113,6 +113,33 @@ function initTerminal() {
 
   initShell();
   initResizer();
+  initDragDrop();
+}
+
+// ── Drag-and-drop files into either terminal ───────────────────────────────────
+function initDragDrop() {
+  const targets = [
+    { id: "xterm-container", write: d => AEGIS.ptyWrite(d)   },
+    { id: "shell-container", write: d => AEGIS.shellWrite(d) },
+  ];
+  for (const { id, write } of targets) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      el.style.outline = "2px solid var(--teal)";
+    });
+    el.addEventListener("dragleave", () => { el.style.outline = ""; });
+    el.addEventListener("drop", e => {
+      e.preventDefault();
+      el.style.outline = "";
+      const files = [...e.dataTransfer.files];
+      if (!files.length) return;
+      const paths = files.map(f => f.path).filter(Boolean);
+      if (paths.length) write(paths.join(" ") + " ");
+    });
+  }
 }
 
 // ── PTY control ───────────────────────────────────────────────────────────────
