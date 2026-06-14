@@ -21,8 +21,8 @@ interface CustomTextInputProps {
 
 const PASTE_CONFIG = {
   TIMEOUT_MS: 100,
-  RAPID_INPUT_THRESHOLD_MS: 150,
-  LARGE_INPUT_THRESHOLD: 300,
+  RAPID_INPUT_THRESHOLD_MS: 400,
+  LARGE_INPUT_THRESHOLD: 100,
 };
 
 export const CustomTextInput: React.FC<CustomTextInputProps> = memo(

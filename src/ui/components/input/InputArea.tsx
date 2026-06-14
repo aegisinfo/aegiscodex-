@@ -216,15 +216,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     
 
 
-    // 大段文本粘贴处
-    const handlePaste = useCallback((text: string) => {
-      const lineCount = text.split('\n').length;
-      const charCount = text.length;
-
-      if (charCount > 500 || lineCount > 10) {
-        const preview = text.slice(0, 30).replace(/\n/g, ' ');
-        return { prompt: `[Pasted: ${charCount} chars, ${lineCount} lines] ${preview}...` };
-      }
+    // 大段文本粘贴处 — allow all pastes through, no truncation
+    const handlePaste = useCallback((_text: string) => {
       return {};
     }, []);
 
