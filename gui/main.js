@@ -357,11 +357,15 @@ function spawnPty(cols, rows, resumeId) {
   // Remove empty values — don't override shell-set keys with empty strings
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
+  // Spawn from project root so dotenvConfig({ path: resolve(cwd, '.env') }) in main.tsx
+  // finds the right .env file — same as running aegiscode from its own directory.
+  const aegisRoot = path.join(__dirname, "..");
+
   ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
     cols: cols || 120,
     rows: rows || 36,
-    cwd:  os.homedir(),
+    cwd:  aegisRoot,
     env,
   });
 
