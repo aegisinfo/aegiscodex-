@@ -1,0 +1,52 @@
+name: Build Linux DEB
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build CLI bundle
+        run: npm ci && node esbuild.mjs
+
+      - name: Install GUI deps
+        working-directory: gui
+        run: npm ci
+
+      - name: Build DEB
+        working-directory: gui
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+        run: node build-prod.mjs --linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-gui-deb
+          path: gui/dist/*.deb
+          retention-days: 30
+
+      - name: Deploy to aegis1
+        env:
+          AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
+        run: |
+          DEB=$(ls gui/dist/*.deb | head -1)
+          git clone https://x-access-token:${AEGIS1_TOKEN}@github.com/aegisinfo/aegis1.git aegis1-repo
+          mkdir -p aegis1-repo/static/downloads
+          cp "$DEB" aegis1-repo/static/downloads/aegis-gui.deb
+          cd aegis1-repo
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add static/downloads/aegis-gui.deb
+          git commit -m "deploy: update aegis-gui.deb [skip ci]"
+          git push
