@@ -10,6 +10,7 @@ if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
 const AEGIS_BIN   = path.join(__dirname, "..", "dist", "main.js");
+const ICON_PATH   = path.join(__dirname, "icon.png");
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")); }
@@ -179,6 +180,7 @@ function createWindow() {
     title:           "AEGIS Code",
     backgroundColor: "#04060a",
     titleBarStyle:   "hiddenInset",
+    icon:            ICON_PATH,
     webPreferences: {
       nodeIntegration:  false,
       contextIsolation: true,
@@ -272,7 +274,12 @@ ipcMain.handle("pty-kill", () => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  if (process.platform === "linux") {
+    try { app.setIcon(ICON_PATH); } catch {}
+  }
+});
 
 app.on("second-instance", () => { mainWindow?.show(); mainWindow?.focus(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

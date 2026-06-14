@@ -14,7 +14,7 @@
     "productName": "AEGIS Code",
     "asar": true,
     "asarUnpack": ["node_modules/node-pty/**"],
-    "linux":  { "target": "AppImage", "category": "Development" },
+    "linux":  { "target": "AppImage", "category": "Development", "icon": "icon.png" },
     "win":    { "target": "nsis" },
     "mac":    { "target": "dmg" }
   },
