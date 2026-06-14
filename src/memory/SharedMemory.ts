@@ -668,8 +668,7 @@ export class SharedMemory {
       const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       for (const e of sorted) {
         const prefix = e.summary ? 'SUMMARY:' : e.role === 'user' ? 'User:' : 'AEGIS:';
-        const meta = e.topics?.length ? ` [topics: ${e.topics.join(', ')}]` : '';
-        lines.push(`  ${prefix} ${e.content.slice(0, 200)}${meta}`);
+        lines.push(`  ${prefix} ${e.content.slice(0, 200)}`);
       }
       lines.push('');
     }

@@ -14,7 +14,6 @@ const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: s
 PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
 import { CommandSuggestions } from './CommandSuggestions.js';
-import { PromptSuggestions } from './PromptSuggestions.js';
 
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
@@ -200,7 +199,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     }, []);
     
     const showSuggestions = input.startsWith('/') && input.length > 0 && !isProcessing;
-    const showPromptSuggestions = input.length === 0 && !isProcessing;
+    const showPromptSuggestions = false; // Suggestions disabled
 
     // 选择建议回
     const handleSelectSuggestion = useCallback((newValue: string) => {
@@ -335,11 +334,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           />
         )}
 
-        {/* Prompt suggestions — shown when input is empty */}
-        <PromptSuggestions
-          onSelect={(text) => { handleChange(text); handleChangeCursorPosition(text.length); }}
-          visible={showPromptSuggestions}
-        />
+        {/* Prompt suggestions — disabled */}
       </Box>
     );
   },

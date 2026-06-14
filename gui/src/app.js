@@ -210,6 +210,20 @@ function initTerminal() {
     if (!dot.classList.contains("on")) spawnSession();
   });
 
+  // Ctrl+C = copy if marking/selection, otherwise pass through (SIGINT)
+  term.attachCustomKeyEventHandler(e => {
+    if (e.type !== "keydown") return true;
+    if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+      if (term.hasSelection()) {
+        const sel = term.getSelection();
+        if (sel) { AEGIS.copyText(sel); term.clearSelection(); }
+        return false;
+      }
+      return true;
+    }
+    return true;
+  });
+
   initShell();
   initResizer();
   initDragDrop();

@@ -45,7 +45,7 @@ const messageRendererComparator = (
 ): boolean => {
   if (prev.role !== next.role) return false
   if (prev.isStreaming !== next.isStreaming) return false
-  if (prev.showAllThinking !== next.showAllThinking) return false
+  
   if (prev.terminalWidth !== next.terminalWidth) return false
   if (prev.showPrefix !== next.showPrefix) return false
   // Always compare content — even during streaming, we need to show deltas
@@ -71,17 +71,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     const theme = themeManager.getTheme()
     const roleStyle = themeManager.getRoleStyle(role)
 
-    const [localExpanded, setLocalExpanded] = useState(!!isStreaming)
-
-    useEffect(() => {
-      if (isStreaming) {
-        setLocalExpanded(true)
-      } else if (thinking) {
-        setLocalExpanded(false)
-      }
-    }, [isStreaming, !!thinking])
-
-    const isThinkingExpanded = showAllThinking || localExpanded
+    const isThinkingExpanded = true
 
     // Incremental markdown parse cache — avoids re-parsing stable content
     // during streaming by detecting append-only growth and reusing blocks.
@@ -134,10 +124,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
       return thinkingBlocks.filter((block) => block.type !== 'empty')
     }, [thinkingBlocks])
 
-    const thinkingWordCount = useMemo(() => {
-      if (!thinking) return 0
-      return thinking.trim().split(/\s+/).filter(Boolean).length
-    }, [thinking])
+    
 
     const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0
 
@@ -160,27 +147,43 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
       <Box flexDirection="column" marginBottom={1}>
         {!!thinking && (
           <Box flexDirection="column" marginBottom={1}>
-            {isStreaming ? (
-              /* During streaming: only header, no content blocks — prevents
-                 full-screen Ink redraws on every thinking character (xterm/GNOME issue) */
+            {isStreaming && (thinking?.length ?? 0) > 0 ? (
+              /* During streaming: show header + inline thinking text so user can
+                 see reasoning as it happens */
+              <>
+                <Box marginBottom={0}>
+                  <Text color={theme.colors.text.muted} dimColor>
+                    {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
+                    <ThinkingIcon />
+                    <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
+                  </Text>
+                </Box>
+                <Box flexDirection="column" marginLeft={prefixOffset} marginTop={0}>
+                  {filteredThinkingBlocks.map((block, index) => (
+                    <Box key={index}>
+                      <Text color={theme.colors.text.muted} dimColor italic>
+                        {block.content}
+                      </Text>
+                    </Box>
+                  ))}
+                </Box>
+              </>
+            ) : isStreaming ? (
+              /* First thinking chars: just show header until content arrives */
               <Box marginBottom={0}>
                 <Text color={theme.colors.text.muted} dimColor>
                   {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
                   <ThinkingIcon />
                   <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
-                  {thinkingWordCount > 0 && <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>}
                 </Text>
               </Box>
-            ) : isThinkingExpanded ? (
+            ) : (
               <>
                 <Box marginBottom={0}>
                   <Text color={theme.colors.text.muted} dimColor>
                     {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
                     <Text color={theme.colors.primary}>{'□ '}</Text>
                     <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
-                    {thinkingWordCount > 0 && (
-                      <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
-                    )}
                   </Text>
                 </Box>
                 <Box
@@ -199,14 +202,6 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
                   ))}
                 </Box>
               </>
-            ) : (
-              <Box marginLeft={prefixOffset}>
-                <Text color={theme.colors.primary}>{'□ '}</Text>
-                <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
-                {thinkingWordCount > 0 && (
-                  <Text color={theme.colors.text.muted} dimColor> · {thinkingWordCount}w</Text>
-                )}
-              </Box>
             )}
           </Box>
         )}
