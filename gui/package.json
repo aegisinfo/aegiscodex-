@@ -25,8 +25,9 @@
       "node_modules/@homebridge/node-pty-prebuilt-multiarch/**"
     ],
     "extraResources": [
-      { "from": "../dist/main.js", "to": "dist/main.js" },
-      { "from": "icons",           "to": "icons"         }
+      { "from": "../dist/main.js",          "to": "dist/main.js"          },
+      { "from": "../node_modules/sql.js",   "to": "dist/node_modules/sql.js" },
+      { "from": "icons",                    "to": "icons"                 }
     ],
     "files": [
       "**/*",
