@@ -776,7 +776,7 @@ async function loadSettings() {
         <h3>AI Provider Keys</h3>
         <div class="section-hint">Saved to ~/.aegiscode/.env — shared with the CLI</div>
         ${providerRows}
-        <div id="ollama-install-area"></div>
+        <div id="ollama-hint" style="display:none;font-size:10px;margin:4px 0 8px 4px;line-height:1.4"></div>
       </div>
 
       <div class="settings-section">
@@ -836,6 +836,14 @@ async function loadSettings() {
 // ── Ollama auto-install (Settings) ───────────────────────────────────────────
 let _ollamaProgressRegistered = false;
 
+function _ollamaHint(msg, color) {
+  const el = document.getElementById("ollama-hint");
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = color || "var(--text3, #6a8aaa)";
+  el.style.display = msg ? "block" : "none";
+}
+
 async function checkOllamaStatus() {
   const dot = document.getElementById("dot-ollama");
   if (!dot) return;
@@ -849,6 +857,7 @@ async function checkOllamaStatus() {
 
   if (running) {
     dot.classList.add("set");
+    _ollamaHint("Ollama is running on localhost:11434", "var(--green, #1ab87a)");
     return;
   }
 
@@ -859,6 +868,12 @@ async function checkOllamaStatus() {
   btn.textContent = available ? "Start" : "Install";
   btn.onclick = () => installOllamaFlow(available);
   row.insertBefore(btn, dot);
+
+  _ollamaHint(
+    available
+      ? "Ollama is installed but not running — click Start to launch the server"
+      : "Ollama not found — click Install to set it up automatically"
+  );
 }
 
 async function installOllamaFlow(alreadyInstalled) {
@@ -866,35 +881,25 @@ async function installOllamaFlow(alreadyInstalled) {
   const btn = document.getElementById("ollama-action-btn");
   if (btn) btn.remove();
 
-  const prog = document.createElement("div");
-  prog.id = "ollama-progress";
-  prog.style.cssText = "font-size:10px;color:var(--text2);margin-left:8px;max-width:220px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex-shrink:0";
-  prog.textContent = alreadyInstalled ? "Starting server…" : "Downloading…";
-  if (dot) dot.closest(".api-row").insertBefore(prog, dot);
+  _ollamaHint(alreadyInstalled ? "Starting Ollama server…" : "Installing Ollama — this may take a minute…");
 
   if (!_ollamaProgressRegistered) {
     _ollamaProgressRegistered = true;
-    AEGIS.onOllamaInstallProgress(msg => {
-      const el = document.getElementById("ollama-progress");
-      if (el) el.textContent = msg;
-    });
+    AEGIS.onOllamaInstallProgress(msg => { _ollamaHint(msg); });
   }
 
   const result = await AEGIS.ollamaInstall();
 
   if (result.success) {
-    prog.textContent = "✓ Ready";
-    prog.style.color = "var(--green, #1ab87a)";
     const urlInput = document.getElementById("key-ollama");
     if (urlInput && !urlInput.value.trim()) {
       urlInput.value = "http://localhost:11434";
       setApiDot("ollama", "http://localhost:11434");
     }
     if (dot) dot.classList.add("set");
-    setTimeout(() => { prog.remove(); }, 3000);
+    _ollamaHint("Ollama is running on localhost:11434 — click Save settings", "var(--green, #1ab87a)");
   } else {
-    prog.style.color = "var(--red, #e04444)";
-    prog.textContent = "Failed — run: curl -fsSL https://ollama.com/install.sh | sh";
+    _ollamaHint("Installation failed — run: curl -fsSL https://ollama.com/install.sh | sh", "var(--red, #e04444)");
   }
 }
 
