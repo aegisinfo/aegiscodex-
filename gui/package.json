@@ -34,7 +34,13 @@
     "linux": {
       "target": "deb",
       "category": "Development",
-      "icon": "icons/icon.png"
+      "icon": "icons/icon.png",
+      "desktop": {
+        "Name": "AEGIS Code",
+        "Comment": "AI coding assistant",
+        "Categories": "Development;IDE;",
+        "StartupWMClass": "aegis-code"
+      }
     },
     "win": {
       "target": "msi",

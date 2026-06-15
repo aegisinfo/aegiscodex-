@@ -30,14 +30,43 @@ function getIcon() {
 
 // ── Node binary detection ─────────────────────────────────────────────────────
 function findNode() {
-  // Prefer the node that ships alongside electron (nvm / volta / etc.)
+  const { execFileSync } = require("child_process");
+  const home = os.homedir();
+
+  // Collect nvm-managed node binaries (latest first)
+  const nvmNodes = [];
+  try {
+    const nvmDir = process.env.NVM_DIR || path.join(home, ".nvm");
+    const versDir = path.join(nvmDir, "versions", "node");
+    if (fs.existsSync(versDir)) {
+      fs.readdirSync(versDir)
+        .sort().reverse()
+        .forEach(v => nvmNodes.push(path.join(versDir, v, "bin", "node")));
+    }
+  } catch {}
+
   const candidates = process.platform === "win32"
     ? ["node.exe"]
-    : ["node", "/usr/local/bin/node", "/usr/bin/node", `${os.homedir()}/.local/node22/bin/node`];
+    : [
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+        path.join(home, ".local", "node22", "bin", "node"),
+        path.join(home, ".local", "bin", "node"),
+        path.join(home, ".volta", "bin", "node"),
+        ...nvmNodes,
+        "node",  // last — works if PATH includes it, but may not in desktop session
+      ];
 
   for (const c of candidates) {
     try {
-      require("child_process").execFileSync(c, ["--version"], { stdio: "ignore" });
+      execFileSync(c, ["--version"], { stdio: "ignore" });
+      // Resolve relative name to absolute path via `which`
+      if (!path.isAbsolute(c)) {
+        try {
+          const abs = execFileSync("which", [c], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim();
+          if (abs) return abs;
+        } catch {}
+      }
       return c;
     } catch {}
   }
