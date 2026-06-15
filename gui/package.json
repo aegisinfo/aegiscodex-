@@ -28,9 +28,10 @@
       "!build-prod.mjs"
     ],
     "extraResources": [
-      { "from": "../dist",                       "to": "dist" },
-      { "from": "../node_modules/sql.js",        "to": "dist/node_modules/sql.js" },
-      { "from": "icons",                         "to": "icons" }
+      { "from": "../dist",                             "to": "dist" },
+      { "from": "../node_modules/sql.js",              "to": "dist/node_modules/sql.js" },
+      { "from": "../node_modules/@xenova/transformers", "to": "dist/node_modules/@xenova/transformers" },
+      { "from": "icons",                               "to": "icons" }
     ],
     "linux": {
       "target": "deb",
