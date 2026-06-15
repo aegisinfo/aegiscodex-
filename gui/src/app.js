@@ -407,6 +407,9 @@ function initKittyMode() {
   initResizer();
   initDragDrop();
 
+  // Show kitty errors in the placeholder panel
+  AEGIS.onKittyError(msg => _setKittyPlaceholder(`⚠ ${msg}`));
+
   // Auto-launch Kitty immediately
   launchKitty();
 }

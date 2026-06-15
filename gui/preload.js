@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld("AEGIS", {
   kittySpawn:              (opts) => ipcRenderer.invoke("kitty-spawn", opts || {}),
   kittyInstall:            ()    => ipcRenderer.invoke("kitty-install"),
   onKittyInstallProgress:  (cb)  => ipcRenderer.on("kitty-install-progress", (_, d) => cb(d)),
+  onKittyError:            (cb)  => ipcRenderer.on("kitty-error", (_, d) => cb(d)),
 
   ollamaAvailable:         ()    => ipcRenderer.invoke("ollama-available"),
   ollamaRunning:           ()    => ipcRenderer.invoke("ollama-running"),

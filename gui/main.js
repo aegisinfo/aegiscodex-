@@ -366,15 +366,16 @@ function spawnKitty(resumeId) {
   if (process.platform === "linux" && !env.DISPLAY) env.DISPLAY = process.env.DISPLAY || ":0";
 
   const { execFile } = require("child_process");
-  const child = execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true });
+  const child = execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true, stdio: "ignore" });
+  child.unref();
 
   child.on("error", (err) => {
-    mainWindow?.webContents.send("pty-data", `\r\n\x1b[31mKitty failed to launch: ${err.message}\x1b[0m\r\n`);
+    mainWindow?.webContents.send("kitty-error", `Kitty failed to launch: ${err.message}`);
   });
   child.on("exit", (code, sig) => {
     if (code !== 0 || sig) {
       const reason = sig ? `signal ${sig}` : `exit code ${code}`;
-      mainWindow?.webContents.send("pty-data", `\r\n\x1b[31mKitty terminated early (${reason})\x1b[0m\r\n`);
+      mainWindow?.webContents.send("kitty-error", `Kitty terminated early (${reason})`);
     }
   });
 }
