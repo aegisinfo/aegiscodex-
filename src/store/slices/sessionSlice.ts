@@ -26,6 +26,11 @@ import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, drainBuffe
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+// Mutable buffer for in-progress tool inputs.
+// updateToolCallInput accumulates here without touching the store;
+// setToolCallInput flushes the final value in a single set() call.
+const _toolInputBuffer = new Map<string, string>(); // toolCallId → partial JSON
+
 const initialSessionState = {
   sessionId: generateId(),
   messages: [] as SessionMessage[],
@@ -236,27 +241,14 @@ export const createSessionSlice: StateCreator<
       }));
     },
 
-    updateToolCallInput: (messageId: string, toolCallId: string, partialJson: string) => {
-      set((state) => ({
-        session: {
-          ...state.session,
-          messages: state.session.messages.map(msg =>
-            msg.id === messageId && msg.contentBlocks
-              ? {
-                  ...msg,
-                  contentBlocks: msg.contentBlocks.map(block =>
-                    block.type === 'tool_use' && block.id === toolCallId
-                      ? { ...block, input: block.input + partialJson } as ContentBlock
-                      : block
-                  ),
-                }
-              : msg
-          ),
-        },
-      }));
+    updateToolCallInput: (_messageId: string, toolCallId: string, partialJson: string) => {
+      // Accumulate in mutable buffer only — no store update per character.
+      // setToolCallInput flushes the final value in a single set() call.
+      _toolInputBuffer.set(toolCallId, (_toolInputBuffer.get(toolCallId) ?? '') + partialJson);
     },
 
     setToolCallInput: (messageId: string, toolCallId: string, fullInput: string) => {
+      _toolInputBuffer.delete(toolCallId);
       set((state) => ({
         session: {
           ...state.session,

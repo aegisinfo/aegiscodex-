@@ -440,7 +440,7 @@ interface BlockRendererProps {
   theme: ReturnType<typeof themeManager.getTheme>
 }
 
-const BlockRenderer: React.FC<BlockRendererProps> = ({
+const BlockRenderer: React.FC<BlockRendererProps> = React.memo(({
   block,
   isFirst,
   roleStyle,
@@ -504,9 +504,14 @@ const BlockRenderer: React.FC<BlockRendererProps> = ({
       </Box>
     </Box>
   )
-}
+}, (prev, next) =>
+  prev.block === next.block &&
+  prev.isFirst === next.isFirst &&
+  prev.terminalWidth === next.terminalWidth &&
+  prev.theme === next.theme
+)
 
-// ===== 
+// =====
 
 interface ThemedProps {
   theme: ReturnType<typeof themeManager.getTheme>

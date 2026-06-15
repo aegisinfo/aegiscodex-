@@ -11,20 +11,18 @@ import { execSync } from "child_process";
 
 const OBFUSCATE_OPTS = {
   compact: true,
-  controlFlowFlattening: true,
-  controlFlowFlatteningThreshold: 0.5,
-  deadCodeInjection: false,          // keep bundle small
+  controlFlowFlattening: false,
+  deadCodeInjection: false,
   stringArray: true,
-  stringArrayEncoding: ["rc4"],
-  stringArrayThreshold: 0.85,
+  stringArrayEncoding: ["base64"],
+  stringArrayThreshold: 0.2,
   stringArrayRotate: true,
   stringArrayShuffle: true,
-  splitStrings: true,
-  splitStringsChunkLength: 8,
+  splitStrings: false,
   identifierNamesGenerator: "mangled",
-  renameGlobals: false,              // don't break electron globals
-  selfDefending: true,               // detects tampering at runtime
-  disableConsoleOutput: false,       // keep console for electron logs
+  renameGlobals: false,
+  selfDefending: false,
+  disableConsoleOutput: false,
   sourceMap: false,
 };
 
@@ -57,6 +55,11 @@ const extraArgs = process.argv.slice(3).join(" ");
 console.log(`\n[build-prod] Building for ${platform}\n`);
 
 try {
+  // Pre-compile node-pty for Electron before electron-builder runs
+  // (electron-builder's internal rebuild hangs trying to download homebridge prebuilts)
+  console.log("⚙ Compiling node-pty for Electron…");
+  execSync("npx --yes @electron/rebuild@latest -f -w @homebridge/node-pty-prebuilt-multiarch", { stdio: "inherit" });
+
   obfuscate();
   execSync(`npx electron-builder ${platform} ${extraArgs}`.trim(), { stdio: "inherit" });
 } finally {

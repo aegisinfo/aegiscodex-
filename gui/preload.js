@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld("AEGIS", {
   openExternal: (url)     => ipcRenderer.invoke("open-external", url),
 
   ptySpawn:  (opts)       => ipcRenderer.invoke("pty-spawn", opts),
-  ptyWrite:  (data)       => ipcRenderer.invoke("pty-write", data),
+  ptyWrite:  (data)       => ipcRenderer.send("pty-write", data),
   ptyResize: (opts)       => ipcRenderer.invoke("pty-resize", opts),
   ptyKill:   ()           => ipcRenderer.invoke("pty-kill"),
 
@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld("AEGIS", {
   onPtyExit: (cb)         => ipcRenderer.on("pty-exit",   (_, c) => cb(c)),
 
   shellSpawn:  (opts)     => ipcRenderer.invoke("shell-spawn",  opts),
-  shellWrite:  (data)     => ipcRenderer.invoke("shell-write",  data),
+  shellWrite:  (data)     => ipcRenderer.send("shell-write",  data),
   shellResize: (opts)     => ipcRenderer.invoke("shell-resize", opts),
   shellKill:   ()         => ipcRenderer.invoke("shell-kill"),
   onShellData: (cb)       => ipcRenderer.on("shell-data", (_, d) => cb(d)),

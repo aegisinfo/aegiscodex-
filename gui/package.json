@@ -19,6 +19,8 @@
     "appId": "org.aegiscloud.aegiscode",
     "productName": "AEGIS Code",
     "asar": true,
+    "npmRebuild": false,
+
     "asarUnpack": [
       "node_modules/@homebridge/node-pty-prebuilt-multiarch/**"
     ],
