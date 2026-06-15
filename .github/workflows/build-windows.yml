@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build Windows MSI
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-exe:
+  build-msi:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,10 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
+        shell: powershell
+
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs
 
@@ -26,7 +30,7 @@ jobs:
         working-directory: gui
         run: npm ci
 
-      - name: Build EXE
+      - name: Build MSI
         working-directory: gui
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
