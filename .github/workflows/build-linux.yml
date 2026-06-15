@@ -28,6 +28,10 @@ jobs:
         working-directory: gui
         run: npm ci --ignore-scripts
 
+      - name: Compile node-pty for Electron
+        working-directory: gui
+        run: npx --yes @electron/rebuild@latest -f -w @homebridge/node-pty-prebuilt-multiarch
+
       - name: Build DEB
         working-directory: gui
         env:
