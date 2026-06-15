@@ -9,7 +9,14 @@ else
     ln -sf '/opt/AEGIS Code/aegiscode-gui' '/usr/bin/aegiscode-gui'
 fi
 
-ln -sf '/opt/AEGIS Code/aegiscode-gui' '/usr/local/bin/ags'
+cat > '/usr/local/bin/ags' << 'WRAPPER'
+#!/bin/sh
+rm -f "$HOME/.config/aegiscode-gui/SingletonLock" \
+      "$HOME/.config/aegiscode-gui/SingletonCookie" \
+      "$HOME/.config/aegiscode-gui/SingletonSocket" 2>/dev/null
+exec "/opt/AEGIS Code/aegiscode-gui" "$@"
+WRAPPER
+chmod +x '/usr/local/bin/ags'
 
 if ! { [[ -L /proc/self/ns/user ]] && unshare --user true; }; then
     chmod 4755 '/opt/AEGIS Code/chrome-sandbox' || true
