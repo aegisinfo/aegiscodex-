@@ -53,11 +53,12 @@ function restore() {
 }
 
 const platform = process.argv[2] || "--linux";
+const extraArgs = process.argv.slice(3).join(" ");
 console.log(`\n[build-prod] Building for ${platform}\n`);
 
 try {
   obfuscate();
-  execSync(`npx electron-builder ${platform}`, { stdio: "inherit" });
+  execSync(`npx electron-builder ${platform} ${extraArgs}`.trim(), { stdio: "inherit" });
 } finally {
   restore();
 }
