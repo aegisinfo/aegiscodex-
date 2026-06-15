@@ -18,11 +18,17 @@ exec "/opt/AEGIS Code/aegiscode-gui" "$@"
 WRAPPER
 chmod +x '/usr/local/bin/ags'
 
-# Patch desktop Exec to clear stale Electron singleton locks before launch
-DESKTOP=/usr/share/applications/aegiscode-gui.desktop
-if [ -f "$DESKTOP" ]; then
-    sed -i 's|^Exec=.*|Exec=/bin/sh -c '"'"'rm -f "$HOME/.config/aegiscode-gui/SingletonLock" "$HOME/.config/aegiscode-gui/SingletonCookie" "$HOME/.config/aegiscode-gui/SingletonSocket" 2>/dev/null; exec "/opt/AEGIS Code/aegiscode-gui"'"'"'|' "$DESKTOP"
-fi
+# Write desktop entry with SingletonLock cleanup in Exec
+cat > /usr/share/applications/aegiscode-gui.desktop << 'DESKTOP_EOF'
+[Desktop Entry]
+Name=AEGIS Code
+Exec=/bin/sh -c 'rm -f "$HOME/.config/aegiscode-gui/SingletonLock" "$HOME/.config/aegiscode-gui/SingletonCookie" "$HOME/.config/aegiscode-gui/SingletonSocket" 2>/dev/null; exec "/opt/AEGIS Code/aegiscode-gui"'
+Terminal=false
+Type=Application
+Icon=aegiscode-gui
+Categories=Development;
+StartupWMClass=AEGIS Code
+DESKTOP_EOF
 
 if ! { [[ -L /proc/self/ns/user ]] && unshare --user true; }; then
     chmod 4755 '/opt/AEGIS Code/chrome-sandbox' || true
