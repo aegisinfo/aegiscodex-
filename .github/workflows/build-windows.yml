@@ -19,12 +19,6 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Set VSINSTALLDIR
-        shell: powershell
-        run: |
-          $path = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ($path) { "VSINSTALLDIR=$path\" | Out-File -FilePath $env:GITHUB_ENV -Append }
-
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs
 
@@ -32,10 +26,16 @@ jobs:
         working-directory: gui
         run: npm ci
 
+      - name: Upgrade node-gyp
+        working-directory: gui
+        shell: bash
+        run: npm install node-gyp@latest
+
       - name: Build EXE
         working-directory: gui
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
+          VSINSTALLDIR: 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\'
         run: node build-prod.mjs --win
 
       - name: Upload artifact
