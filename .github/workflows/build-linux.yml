@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write  # needed for softprops/action-gh-release
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -54,17 +54,13 @@ jobs:
           prerelease: true
           files: gui/dist/*.deb
 
-      - name: Deploy to aegis1
+      - name: Deploy to Cloudflare R2
         env:
-          AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+          CF_BUCKET: ${{ secrets.CF_R2_BUCKET }}
         run: |
           DEB=$(ls gui/dist/*.deb | head -1)
-          git clone https://x-access-token:${AEGIS1_TOKEN}@github.com/aegisinfo/aegis1.git aegis1-repo
-          mkdir -p aegis1-repo/static/downloads
-          cp "$DEB" aegis1-repo/static/downloads/aegis-gui.deb
-          cd aegis1-repo
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-          git add static/downloads/aegis-gui.deb
-          git commit -m "deploy: update aegis-gui.deb [skip ci]"
-          git push
+          npx --yes wrangler r2 object put "${CF_BUCKET}/aegis-gui.deb" \
+            --file "$DEB" \
+            --content-type "application/octet-stream"
