@@ -20,9 +20,11 @@
     "productName": "AEGIS Code",
     "asar": true,
     "asarUnpack": [
-      "node_modules/@homebridge/node-pty-prebuilt-multiarch/**",
-      "dist/**",
-      "icons/**"
+      "node_modules/@homebridge/node-pty-prebuilt-multiarch/**"
+    ],
+    "extraResources": [
+      { "from": "../dist/main.js", "to": "dist/main.js" },
+      { "from": "icons",           "to": "icons"         }
     ],
     "files": [
       "**/*",

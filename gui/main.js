@@ -10,18 +10,18 @@ if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
 
-// In packaged .deb/.dmg/.exe, __dirname is inside app.asar which is a virtual
-// filesystem — external processes (node, Kitty) can't open paths inside it.
-// dist/main.js is added to asarUnpack so it lands at app.asar.unpacked/dist/main.js.
-const _appDir   = __dirname.includes("app.asar")
-  ? __dirname.replace(/app\.asar([/\\])/, "app.asar.unpacked$1")
-  : __dirname;
-const AEGIS_BIN = path.join(_appDir, "..", "dist", "main.js");
-const AEGIS_ROOT = path.join(_appDir, "..");
+// In packaged builds, external processes (node, Kitty) can't exec files inside
+// app.asar. CLI bundle and icons are placed in resources/ via extraResources.
+// In dev mode, they live at their normal source locations.
+const AEGIS_BIN  = app.isPackaged
+  ? path.join(process.resourcesPath, "dist", "main.js")
+  : path.join(__dirname, "..", "dist", "main.js");
+const AEGIS_ROOT = app.isPackaged ? os.homedir() : path.join(__dirname, "..");
 
 // ── Platform-aware icon ───────────────────────────────────────────────────────
-// Icons must be real files on disk (not inside asar) — added to asarUnpack in package.json
-const ICONS_DIR = path.join(_appDir, "icons");
+const ICONS_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, "icons")
+  : path.join(__dirname, "icons");
 function getIcon() {
   if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
   if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
