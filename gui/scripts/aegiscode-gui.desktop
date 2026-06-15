@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=AEGIS Code
-Exec=/opt/AEGIS Code/aegiscode-gui
+Exec=/bin/sh -c 'rm -f "$HOME/.config/aegiscode-gui/SingletonLock" "$HOME/.config/aegiscode-gui/SingletonCookie" "$HOME/.config/aegiscode-gui/SingletonSocket" 2>/dev/null; exec "/opt/AEGIS Code/aegiscode-gui"'
 Terminal=false
 Type=Application
 Icon=aegiscode-gui
