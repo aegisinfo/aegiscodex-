@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 function stageExternalModules() {
   const src = join(__dirname, "..", "node_modules");
   const dst = join(__dirname, "staged-external", "node_modules");
-  for (const pkg of ["sql.js", "@xenova/transformers"]) {
+  for (const pkg of ["sql.js", "@xenova/transformers", "@huggingface/jinja"]) {
     const from = join(src, pkg);
     const to   = join(dst, pkg);
     if (existsSync(from)) {
