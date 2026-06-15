@@ -64,8 +64,7 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
-    "javascript-obfuscator": "^5.4.3"
+    "electron-builder": "^25.0.0"
   },
   "overrides": {
     "node-gyp": "^10.0.0"
