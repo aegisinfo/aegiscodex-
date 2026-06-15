@@ -9,6 +9,7 @@ else
     ln -sf '/opt/AEGIS Code/aegiscode-gui' '/usr/bin/aegiscode-gui'
 fi
 
+rm -f '/usr/local/bin/ags'
 cat > '/usr/local/bin/ags' << 'WRAPPER'
 #!/bin/sh
 rm -f "$HOME/.config/aegiscode-gui/SingletonLock" \

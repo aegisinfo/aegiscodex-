@@ -34,7 +34,6 @@ import { InputArea } from './input/InputArea.js';
 import { ChatStatusBar } from './layout/ChatStatusBar.js';
 import { WelcomeMessage } from './layout/WelcomeMessage.js';
 import { MessageList } from './layout/MessageList.js';
-import { calcPageSize } from './layout/MessageList.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
 import { SetupWizard } from './dialog/SetupWizard.js';
@@ -148,8 +147,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   // ==================== Local State ====================
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const pageSize = calcPageSize(terminalHeight);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -187,31 +185,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     },
   });
 
-  // ==================== Scroll Helpers ====================
-  const scrollUp = useCallback((amount: number) => {
-    setScrollOffset(prev => Math.max(0, prev - amount));
-  }, []);
-
-  const scrollDown = useCallback((amount: number) => {
-    setScrollOffset(prev => {
-      const msgs = getState().session.messages;
-      const maxOffset = Math.max(0, msgs.length - pageSize);
-      return Math.min(maxOffset, prev + amount);
-    });
-  }, [pageSize]);
-
-  // Keyboard scrolling + ESC interrupt
+  // ESC interrupt (scrolling handled by MessageList internally)
   useInput((_input, key) => {
-    if (key.upArrow && key.ctrl) { scrollUp(1); return; }
-    if (key.downArrow && key.ctrl) { scrollDown(1); return; }
-    if (key.pageUp) { scrollUp(pageSize); return; }
-    if (key.pageDown) { scrollDown(pageSize); return; }
-    if (key.home) { setScrollOffset(0); return; }
-    if (key.end) {
-      const msgs = getState().session.messages;
-      setScrollOffset(Math.max(0, msgs.length - pageSize));
-      return;
-    }
     if (key.escape && getState().session.isThinking) {
       commandActions().abort();
       sessionActions().setThinking(false);
@@ -314,6 +289,11 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     }
   }, [initialMessage, handleSubmit, isInitializing]);
 
+  // ==================== Scroll State Notification ====================
+  const handleScrolledUpChange = useCallback((scrolledUp: boolean) => {
+    setIsScrolledUp(scrolledUp);
+  }, []);
+
   // ==================== Render ====================
 
   if (isInitializing) {
@@ -341,10 +321,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
-  const isScrolledUp = (() => {
-    return scrollOffset < Math.max(0, messages.length - pageSize);
-  })();
-
   return (
     <Box flexDirection="column" width="100%">
       <WelcomeMessage terminalWidth={terminalWidth - 2} />
@@ -367,8 +343,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
               <MessageList
                 terminalWidth={terminalWidth - 2}
                 terminalHeight={terminalHeight}
-                scrollOffset={scrollOffset}
-                onScroll={setScrollOffset}
+                onScrolledUpChange={handleScrolledUpChange}
               />
             </ErrorBoundary>
           )}
