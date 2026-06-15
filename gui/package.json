@@ -49,7 +49,9 @@
         "StartupWMClass": "AEGIS Code"
       }
     },
-    "deb": {},
+    "deb": {
+      "afterInstall": "scripts/after-install.sh"
+    },
     "win": {
       "target": "msi",
       "icon": "icons/icon.ico"
