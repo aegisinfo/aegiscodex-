@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -42,6 +45,14 @@ jobs:
           name: aegis-gui-deb
           path: gui/dist/*.deb
           retention-days: 30
+
+      - name: Publish to GitHub Release (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          prerelease: true
+          files: gui/dist/*.deb
 
       - name: Deploy to aegis1
         env:
