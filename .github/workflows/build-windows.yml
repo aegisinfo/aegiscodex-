@@ -53,7 +53,7 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
           CF_BUCKET: ${{ secrets.CF_R2_BUCKET }}
         run: |
           MSI=$(ls gui/dist/*.msi | head -1)
