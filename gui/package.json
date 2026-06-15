@@ -42,7 +42,6 @@
       "icon": "icons/linux",
       "desktop": {
         "Name": "AEGIS Code",
-        "Exec": "/bin/sh -c 'rm -f \"$HOME/.config/aegiscode-gui/SingletonLock\" \"$HOME/.config/aegiscode-gui/SingletonCookie\" \"$HOME/.config/aegiscode-gui/SingletonSocket\" 2>/dev/null; exec \"/opt/AEGIS Code/aegiscode-gui\"'",
         "Terminal": "false",
         "Type": "Application",
         "Icon": "aegiscode-gui",
