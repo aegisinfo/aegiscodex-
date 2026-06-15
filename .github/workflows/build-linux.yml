@@ -2,7 +2,7 @@ name: Build Linux DEB
 
 on:
   push:
-    branches: [main]
+    branches: [main, stable-plus]
   workflow_dispatch:
 
 permissions:
