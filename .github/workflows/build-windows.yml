@@ -23,17 +23,12 @@ jobs:
         working-directory: gui
         run: npm ci --ignore-scripts
 
-      - name: Download node-pty Electron prebuild
+      - name: Compile node-pty for Electron
         working-directory: gui
         shell: bash
-        run: |
-          ELECTRON_VER=$(node -p "require('./node_modules/electron/package.json').version")
-          echo "Electron $ELECTRON_VER"
-          cd node_modules/@homebridge/node-pty-prebuilt-multiarch
-          npm_config_runtime=electron \
-          npm_config_target=$ELECTRON_VER \
-          npm_config_disturl=https://electronjs.org/headers \
-            npx prebuild-install
+        env:
+          GYP_MSVS_VERSION: '2022'
+        run: npx --yes @electron/rebuild@latest -f -w @homebridge/node-pty-prebuilt-multiarch
 
       - name: Build MSI
         working-directory: gui
