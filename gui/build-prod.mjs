@@ -4,9 +4,9 @@
  * 1. Stages external modules (sql.js, @xenova/transformers)
  * 2. Runs electron-builder with chosen platform flag
  */
-import { mkdirSync, cpSync, existsSync, readdirSync, symlinkSync } from "fs";
+import { mkdirSync, cpSync, existsSync, readdirSync, symlinkSync, copyFileSync } from "fs";
 import { execSync } from "child_process";
-import { join, dirname } from "path";
+import { join, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,21 +30,22 @@ const platform = process.argv[2] || "--linux";
 const extraArgs = process.argv.slice(3).join(" ");
 console.log(`\n[build-prod] Building for ${platform}\n`);
 
-function patchNodePtyPrebuilds() {
-  const prebuildDir = join(__dirname, "node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds");
-  if (!existsSync(prebuildDir)) return;
-  for (const arch of readdirSync(prebuildDir)) {
-    const archDir = join(prebuildDir, arch);
-    for (const file of readdirSync(archDir)) {
-      if (file.startsWith("node.abi") && file.endsWith(".node")) {
-        const electronFile = file.replace("node.", "electron.");
-        const target = join(archDir, electronFile);
-        if (!existsSync(target)) symlinkSync(file, target);
-      }
-    }
-  }
+function buildNodePtyForElectron() {
+  const ptyDir = join(__dirname, "node_modules/@homebridge/node-pty-prebuilt-multiarch");
+  const nodedir = resolve(process.env.HOME, ".electron-gyp/33.4.11");
+  const built   = join(ptyDir, "build/Release/pty.node");
+  const dest    = join(ptyDir, "prebuilds/linux-x64/electron.abi130.node");
+
+  if (existsSync(dest)) { console.log("  ✓ electron.abi130.node already exists"); return; }
+  if (!existsSync(nodedir)) { console.warn("  ⚠ electron headers not cached — skip node-pty rebuild"); return; }
+
+  console.log("  • compiling node-pty for Electron 33 (ABI 130)…");
+  execSync(`node-gyp rebuild --target=33.4.11 --arch=x64 --nodedir="${nodedir}"`,
+    { cwd: ptyDir, stdio: "inherit" });
+  copyFileSync(built, dest);
+  console.log("  ✓ electron.abi130.node placed in prebuilds");
 }
 
 stageExternalModules();
-patchNodePtyPrebuilds();
+buildNodePtyForElectron();
 execSync(`npx electron-builder ${platform} ${extraArgs}`.trim(), { stdio: "inherit" });
