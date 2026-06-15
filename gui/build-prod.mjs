@@ -6,8 +6,27 @@
  * 3. Restores originals regardless of build outcome
  */
 import JavaScriptObfuscator from "javascript-obfuscator";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "fs";
 import { execSync } from "child_process";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function stageExternalModules() {
+  const src = join(__dirname, "..", "node_modules");
+  const dst = join(__dirname, "staged-external", "node_modules");
+  for (const pkg of ["sql.js", "@xenova/transformers"]) {
+    const from = join(src, pkg);
+    const to   = join(dst, pkg);
+    if (existsSync(from)) {
+      mkdirSync(dirname(to), { recursive: true });
+      cpSync(from, to, { recursive: true });
+    } else {
+      console.warn(`⚠ staged-external: ${pkg} not found in ${src}`);
+    }
+  }
+}
 
 const OBFUSCATE_OPTS = {
   compact: true,
@@ -57,6 +76,7 @@ const extraArgs = process.argv.slice(3).join(" ");
 console.log(`\n[build-prod] Building for ${platform}\n`);
 
 try {
+  stageExternalModules();
   obfuscate();
   execSync(`npx electron-builder ${platform} ${extraArgs}`.trim(), { stdio: "inherit" });
 } finally {
