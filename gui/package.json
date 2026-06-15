@@ -30,7 +30,7 @@
     "linux": {
       "target": "deb",
       "category": "Development",
-      "icon": "icons/icon.png"
+      "icon": "icons/linux"
     },
     "deb": {
       "afterInstall": "scripts/after-install.sh"
