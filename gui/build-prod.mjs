@@ -56,5 +56,5 @@ function buildNodePtyForElectron() {
 }
 
 stageExternalModules();
-buildNodePtyForElectron();
+if (process.platform === "linux") buildNodePtyForElectron();
 execSync(`npx electron-builder ${platform} ${extraArgs}`.trim(), { stdio: "inherit" });
