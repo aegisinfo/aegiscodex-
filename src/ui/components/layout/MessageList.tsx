@@ -161,13 +161,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         // so they land in one React render and don't cause a visible position jump.
         const visibleCount = calcVisibleCount(terminalHeightRef.current);
         const maxOffset = Math.max(0, newMessages.length - visibleCount);
-        if (scrollOffsetRef.current >= maxOffset - 1) {
+        if (scrollOffsetRef.current >= maxOffset) {
           pendingScrollRef.current = maxOffset;
         }
       } else if (newMessages[newMessages.length - 1]?.isStreaming) {
         const visibleCount = calcVisibleCount(terminalHeightRef.current);
         const maxOffset = Math.max(0, newMessages.length - visibleCount);
-        if (scrollOffsetRef.current >= maxOffset - 1) {
+        if (scrollOffsetRef.current >= maxOffset) {
           pendingScrollRef.current = maxOffset;
         }
       } else {
