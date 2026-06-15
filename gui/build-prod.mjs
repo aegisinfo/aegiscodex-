@@ -31,16 +31,25 @@ const extraArgs = process.argv.slice(3).join(" ");
 console.log(`\n[build-prod] Building for ${platform}\n`);
 
 function buildNodePtyForElectron() {
-  const ptyDir = join(__dirname, "node_modules/@homebridge/node-pty-prebuilt-multiarch");
-  const nodedir = resolve(process.env.HOME, ".electron-gyp/33.4.11");
-  const built   = join(ptyDir, "build/Release/pty.node");
-  const dest    = join(ptyDir, "prebuilds/linux-x64/electron.abi130.node");
+  const ptyDir    = join(__dirname, "node_modules/@homebridge/node-pty-prebuilt-multiarch");
+  const nodeGyp   = join(__dirname, "node_modules/.bin/node-gyp");
+  const nodedir   = resolve(process.env.HOME, ".electron-gyp/33.4.11");
+  const built     = join(ptyDir, "build/Release/pty.node");
+  const dest      = join(ptyDir, "prebuilds/linux-x64/electron.abi130.node");
 
   if (existsSync(dest)) { console.log("  ✓ electron.abi130.node already exists"); return; }
-  if (!existsSync(nodedir)) { console.warn("  ⚠ electron headers not cached — skip node-pty rebuild"); return; }
+
+  // Download electron headers if not cached
+  if (!existsSync(nodedir)) {
+    console.log("  • downloading Electron 33 headers…");
+    execSync(
+      `"${nodeGyp}" install --target=33.4.11 --arch=x64 --dist-url=https://electronjs.org/headers`,
+      { stdio: "inherit" }
+    );
+  }
 
   console.log("  • compiling node-pty for Electron 33 (ABI 130)…");
-  execSync(`node-gyp rebuild --target=33.4.11 --arch=x64 --nodedir="${nodedir}"`,
+  execSync(`"${nodeGyp}" rebuild --target=33.4.11 --arch=x64 --nodedir="${nodedir}"`,
     { cwd: ptyDir, stdio: "inherit" });
   copyFileSync(built, dest);
   console.log("  ✓ electron.abi130.node placed in prebuilds");
