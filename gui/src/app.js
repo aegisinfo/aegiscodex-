@@ -1255,8 +1255,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     initKittyInstall();
   } else {
     // Fall back to built-in xterm.js terminal
-    _kittyMode = true;
-    document.getElementById("terminal-controls")?.classList.add("visible");
     initTerminal();
     initShell();
     initResizer();
