@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld("AEGIS", {
   kittyInstall:            ()    => ipcRenderer.invoke("kitty-install"),
   onKittyInstallProgress:  (cb)  => ipcRenderer.on("kitty-install-progress", (_, d) => cb(d)),
 
+  ollamaAvailable:         ()    => ipcRenderer.invoke("ollama-available"),
+  ollamaRunning:           ()    => ipcRenderer.invoke("ollama-running"),
+  ollamaInstall:           ()    => ipcRenderer.invoke("ollama-install"),
+  onOllamaInstallProgress: (cb)  => ipcRenderer.on("ollama-install-progress", (_, d) => cb(d)),
+
   getFilePath: (file) => webUtils.getPathForFile(file),
   copyText:    (text) => clipboard.writeText(text),
 

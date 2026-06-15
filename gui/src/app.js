@@ -776,6 +776,7 @@ async function loadSettings() {
         <h3>AI Provider Keys</h3>
         <div class="section-hint">Saved to ~/.aegiscode/.env — shared with the CLI</div>
         ${providerRows}
+        <div id="ollama-install-area"></div>
       </div>
 
       <div class="settings-section">
@@ -828,6 +829,73 @@ async function loadSettings() {
       <span class="save-note" id="save-note" style="display:none">✓ Saved</span>
     </div>
   `;
+
+  checkOllamaStatus();
+}
+
+// ── Ollama auto-install (Settings) ───────────────────────────────────────────
+let _ollamaProgressRegistered = false;
+
+async function checkOllamaStatus() {
+  const dot = document.getElementById("dot-ollama");
+  if (!dot) return;
+  const row = dot.closest(".api-row");
+  if (!row) return;
+
+  const [available, running] = await Promise.all([
+    AEGIS.ollamaAvailable().catch(() => false),
+    AEGIS.ollamaRunning().catch(() => false),
+  ]);
+
+  if (running) {
+    dot.classList.add("set");
+    return;
+  }
+
+  const btn = document.createElement("button");
+  btn.id = "ollama-action-btn";
+  btn.className = "btn";
+  btn.style.cssText = "margin-left:6px;font-size:10px;padding:3px 10px";
+  btn.textContent = available ? "Start" : "Install";
+  btn.onclick = () => installOllamaFlow(available);
+  row.insertBefore(btn, dot);
+}
+
+async function installOllamaFlow(alreadyInstalled) {
+  const dot = document.getElementById("dot-ollama");
+  const btn = document.getElementById("ollama-action-btn");
+  if (btn) btn.remove();
+
+  const prog = document.createElement("div");
+  prog.id = "ollama-progress";
+  prog.style.cssText = "font-size:10px;color:var(--text2);margin-left:8px;max-width:220px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex-shrink:0";
+  prog.textContent = alreadyInstalled ? "Starting server…" : "Downloading…";
+  if (dot) dot.closest(".api-row").insertBefore(prog, dot);
+
+  if (!_ollamaProgressRegistered) {
+    _ollamaProgressRegistered = true;
+    AEGIS.onOllamaInstallProgress(msg => {
+      const el = document.getElementById("ollama-progress");
+      if (el) el.textContent = msg;
+    });
+  }
+
+  const result = await AEGIS.ollamaInstall();
+
+  if (result.success) {
+    prog.textContent = "✓ Ready";
+    prog.style.color = "var(--green, #1ab87a)";
+    const urlInput = document.getElementById("key-ollama");
+    if (urlInput && !urlInput.value.trim()) {
+      urlInput.value = "http://localhost:11434";
+      setApiDot("ollama", "http://localhost:11434");
+    }
+    if (dot) dot.classList.add("set");
+    setTimeout(() => { prog.remove(); }, 3000);
+  } else {
+    prog.style.color = "var(--red, #e04444)";
+    prog.textContent = "Failed — run: curl -fsSL https://ollama.com/install.sh | sh";
+  }
 }
 
 function _showSaveNote(msg, isError) {
