@@ -19,9 +19,21 @@ jobs:
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs
 
-      - name: Install GUI deps
+      - name: Install GUI deps (skip native postinstall)
         working-directory: gui
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Download node-pty Electron prebuild
+        working-directory: gui
+        shell: bash
+        run: |
+          ELECTRON_VER=$(node -p "require('./node_modules/electron/package.json').version")
+          echo "Electron $ELECTRON_VER"
+          cd node_modules/@homebridge/node-pty-prebuilt-multiarch
+          npm_config_runtime=electron \
+          npm_config_target=$ELECTRON_VER \
+          npm_config_disturl=https://electronjs.org/headers \
+            npx prebuild-install
 
       - name: Build MSI
         working-directory: gui
