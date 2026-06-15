@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=AEGIS Code
+Exec=/opt/AEGIS Code/aegiscode-gui
+Terminal=false
+Type=Application
+Icon=aegiscode-gui
+Categories=Development;
+StartupWMClass=AEGIS Code

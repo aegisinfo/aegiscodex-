@@ -96,6 +96,9 @@ function loadEnv() {
   return merged;
 }
 
+// ── Memory subscription ────────────────────────────────────────────────────────
+const TOKEN_PATH = path.join(os.homedir(), ".aegiscode", "memory.token");
+
 function saveEnv(data) {
   // Read existing file to preserve any non-provider keys
   const existing = parseEnvFile(ENV_PATH);
@@ -160,7 +163,6 @@ function clearMemory() {
 }
 
 // ── Memory subscription ────────────────────────────────────────────────────────
-const TOKEN_PATH = path.join(os.homedir(), ".aegiscode", "memory.token");
 const STRIPE_URL = "https://buy.stripe.com/14A4gB4J53vxcaV74S9R601";
 const VERIFY_URL = "https://aegiscloud.org/api/verify-token";
 

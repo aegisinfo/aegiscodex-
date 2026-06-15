@@ -31,12 +31,15 @@
       { "from": "../dist",                                          "to": "dist" },
       { "from": "staged-external/node_modules/sql.js",              "to": "dist/node_modules/sql.js" },
       { "from": "staged-external/node_modules/@xenova/transformers", "to": "dist/node_modules/@xenova/transformers" },
-      { "from": "icons",                                            "to": "icons" }
+      { "from": "icons/icon.png",                                    "to": "icons/icon.png" },
+      { "from": "icons/icon.ico",                                    "to": "icons/icon.ico" },
+      { "from": "icons/icon.icns",                                   "to": "icons/icon.icns" }
     ],
     "linux": {
       "target": "deb",
       "category": "Development",
-      "icon": "icons/linux"
+      "icon": "icons/linux",
+      "desktop": "scripts/aegiscode-gui.desktop"
     },
     "deb": {
       "afterInstall": "scripts/after-install.sh"
