@@ -32,9 +32,11 @@ jobs:
           cd release && npm ci --omit=dev
           cd .. && zip -r aegiscode.zip release/
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: aegiscode
           path: aegiscode.zip
+          retention-days: 7
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
