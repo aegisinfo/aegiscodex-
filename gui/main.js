@@ -607,6 +607,63 @@ ipcMain.handle("kitty-install",  async (event)     => {
   catch (e) { return { success: false, error: e.message }; }
 });
 
+// ── Ollama support ────────────────────────────────────────────────────────────
+function isOllamaBinaryAvailable() {
+  const { execFileSync } = require("child_process");
+  try { execFileSync("which", ["ollama"], { stdio: "ignore" }); return true; } catch {}
+  try { execFileSync("ollama", ["--version"], { stdio: "ignore" }); return true; } catch {}
+  for (const p of ["/usr/local/bin/ollama", "/usr/bin/ollama", path.join(os.homedir(), ".local", "bin", "ollama")]) {
+    if (fs.existsSync(p)) return true;
+  }
+  return false;
+}
+
+async function isOllamaRunning() {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2000);
+    const res = await fetch("http://localhost:11434/api/tags", { signal: ctrl.signal });
+    clearTimeout(t);
+    return res.ok;
+  } catch { return false; }
+}
+
+async function installOllama(sender) {
+  const { exec } = require("child_process");
+  const send = (msg) => { try { sender.send("ollama-install-progress", String(msg).trim()); } catch {} };
+
+  if (isOllamaBinaryAvailable()) {
+    send("Starting Ollama server…");
+    return { success: true, alreadyInstalled: true };
+  }
+
+  return new Promise((resolve) => {
+    let cmd;
+    if (process.platform === "win32") {
+      send("Installing Ollama via winget…");
+      cmd = "winget install --id Ollama.Ollama --silent --accept-package-agreements --accept-source-agreements";
+    } else {
+      send("Downloading Ollama…");
+      cmd = "curl -fsSL https://ollama.com/install.sh | sh";
+    }
+    const child = exec(cmd, { env: { ...process.env, HOME: os.homedir() } });
+    child.stdout?.on("data", d => send(d));
+    child.stderr?.on("data", d => send(d));
+    child.on("close", (code) => {
+      if (code === 0 || isOllamaBinaryAvailable()) { send("Ollama installed."); resolve({ success: true }); }
+      else { send(`Install failed (exit ${code}).`); resolve({ success: false, error: `Exit ${code}` }); }
+    });
+    child.on("error", (e) => { send(`Error: ${e.message}`); resolve({ success: false, error: e.message }); });
+  });
+}
+
+ipcMain.handle("ollama-available", ()         => isOllamaBinaryAvailable());
+ipcMain.handle("ollama-running",   ()         => isOllamaRunning());
+ipcMain.handle("ollama-install",   async (ev) => {
+  try { return await installOllama(ev.sender); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
 ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
   const cwd = spawnShell(cols, rows);
   return { ok: !!cwd, cwd: cwd || os.homedir() };

@@ -748,7 +748,7 @@ async function loadSettings() {
     { id: "deepseek",  label: "DeepSeek",            envKey: "DEEPSEEK_API_KEY",  ph: "sk-…",                  type: "password" },
     { id: "groq",      label: "Groq",                envKey: "GROQ_API_KEY",      ph: "gsk_…",                 type: "password" },
     { id: "gemini",    label: "Google Gemini",        envKey: "GEMINI_API_KEY",    ph: "AIza…",                 type: "password" },
-    { id: "ollama",    label: "Ollama",               envKey: "OLLAMA_BASE_URL",   ph: "http://localhost:11434", type: "text" },
+    { id: "ollama",    label: "Ollama",               envKey: "OLLAMA_BASE_URL",   ph: "http://localhost:11434", type: "text", ollama: true },
   ];
 
   const providerRows = PROVIDERS.map(p => {
@@ -757,6 +757,8 @@ async function loadSettings() {
     const eye  = p.type === "password"
       ? `<button class="api-row-toggle" onclick="toggleKeyVis('${p.id}')">${set ? "show" : "show"}</button>`
       : `<div style="width:52px"></div>`;
+    const extra = p.ollama ? `
+      <div id="ollama-hint" style="display:none;font-size:10px;margin:4px 0 8px 4px;line-height:1.4"></div>` : "";
     return `
       <div class="api-row">
         <div class="api-row-info">
@@ -767,7 +769,7 @@ async function loadSettings() {
                placeholder="${p.ph}" autocomplete="off" value="${val}">
         ${eye}
         <div class="api-dot${set ? " set" : ""}" id="dot-${p.id}"></div>
-      </div>`;
+      </div>${extra}`;
   }).join("");
 
   document.getElementById("settings-content").innerHTML = `
@@ -828,6 +830,79 @@ async function loadSettings() {
       <span class="save-note" id="save-note" style="display:none">✓ Saved</span>
     </div>
   `;
+
+  checkOllamaStatus();
+}
+
+// ── Ollama auto-install (Settings) ───────────────────────────────────────────
+let _ollamaProgressRegistered = false;
+
+function _ollamaHint(msg, color) {
+  const el = document.getElementById("ollama-hint");
+  if (!el) return;
+  el.textContent    = msg;
+  el.style.color    = color || "var(--text3, #6a8aaa)";
+  el.style.display  = msg ? "block" : "none";
+}
+
+async function checkOllamaStatus() {
+  const dot = document.getElementById("dot-ollama");
+  if (!dot) return;
+
+  const [available, running] = await Promise.all([
+    AEGIS.ollamaAvailable().catch(() => false),
+    AEGIS.ollamaRunning().catch(() => false),
+  ]);
+
+  if (running) {
+    dot.classList.add("set");
+    _ollamaHint("Ollama is running on localhost:11434", "var(--green, #1ab87a)");
+    return;
+  }
+
+  const row = dot.closest(".api-row");
+  if (!row) return;
+
+  const btn = document.createElement("button");
+  btn.id        = "ollama-action-btn";
+  btn.className = "btn";
+  btn.style.cssText = "margin-left:6px;font-size:10px;padding:3px 10px";
+  btn.textContent   = available ? "Start" : "Install Ollama?";
+  btn.onclick = () => installOllamaFlow(available);
+  row.insertBefore(btn, dot);
+
+  _ollamaHint(
+    available
+      ? "Ollama is installed but not running — click Start to launch the server"
+      : "Ollama not found — click \"Install Ollama?\" to set it up automatically"
+  );
+}
+
+async function installOllamaFlow(alreadyInstalled) {
+  const btn = document.getElementById("ollama-action-btn");
+  if (btn) btn.remove();
+
+  _ollamaHint(alreadyInstalled ? "Starting Ollama server…" : "Installing Ollama — this may take a minute…");
+
+  if (!_ollamaProgressRegistered) {
+    _ollamaProgressRegistered = true;
+    AEGIS.onOllamaInstallProgress(msg => _ollamaHint(msg));
+  }
+
+  const result = await AEGIS.ollamaInstall();
+
+  if (result.success) {
+    const urlInput = document.getElementById("key-ollama");
+    if (urlInput && !urlInput.value.trim()) {
+      urlInput.value = "http://localhost:11434";
+      setApiDot("ollama", "http://localhost:11434");
+    }
+    const dot = document.getElementById("dot-ollama");
+    if (dot) dot.classList.add("set");
+    _ollamaHint("Ollama is running on localhost:11434 — click Save settings", "var(--green, #1ab87a)");
+  } else {
+    _ollamaHint("Installation failed — run: curl -fsSL https://ollama.com/install.sh | sh", "var(--red, #e04444)");
+  }
 }
 
 function _showSaveNote(msg, isError) {
