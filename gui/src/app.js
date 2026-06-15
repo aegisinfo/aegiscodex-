@@ -1250,10 +1250,19 @@ async function welcomeActivate() {
 document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("terminal-controls")?.classList.add("visible");
 
-  initTerminal();
-  initShell();
-  initResizer();
-  initDragDrop();
+  // Kitty is the preferred terminal — ask before installing
+  const kittyAvailable = await AEGIS.kittyAvailable().catch(() => false);
+  if (kittyAvailable) {
+    initKittyMode();
+  } else if (confirm("Kitty terminal is not installed.\n\nAEGIS Code works best with Kitty for full terminal features.\n\nDownload & install Kitty now?")) {
+    initKittyInstall();
+  } else {
+    // Fall back to built-in xterm.js terminal
+    initTerminal();
+    initShell();
+    initResizer();
+    initDragDrop();
+  }
 
   // Load config for sidebar version + model display
   const cfg = await AEGIS.getConfig();
