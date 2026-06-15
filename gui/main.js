@@ -9,10 +9,19 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
-const AEGIS_BIN   = path.join(__dirname, "..", "dist", "main.js");
+
+// In packaged .deb/.dmg/.exe, __dirname is inside app.asar which is a virtual
+// filesystem — external processes (node, Kitty) can't open paths inside it.
+// dist/main.js is added to asarUnpack so it lands at app.asar.unpacked/dist/main.js.
+const _appDir   = __dirname.includes("app.asar")
+  ? __dirname.replace(/app\.asar([/\\])/, "app.asar.unpacked$1")
+  : __dirname;
+const AEGIS_BIN = path.join(_appDir, "..", "dist", "main.js");
+const AEGIS_ROOT = path.join(_appDir, "..");
 
 // ── Platform-aware icon ───────────────────────────────────────────────────────
-const ICONS_DIR = path.join(__dirname, "icons");
+// Icons must be real files on disk (not inside asar) — added to asarUnpack in package.json
+const ICONS_DIR = path.join(_appDir, "icons");
 function getIcon() {
   if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
   if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
@@ -349,8 +358,7 @@ function spawnKitty(resumeId) {
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
   const { execFile } = require("child_process");
-  const aegisRoot = path.join(__dirname, "..");
-  execFile(kittyBin, ["--", nodeBin, ...args], { cwd: aegisRoot, env, detached: true });
+  execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true });
 }
 
 // ── Ollama support ────────────────────────────────────────────────────────────
@@ -433,8 +441,7 @@ function ensureAegisWrapper() {
   let absNode = nodeBin;
   try { absNode = require("child_process").execFileSync("which", [nodeBin], { encoding: "utf8" }).trim() || nodeBin; } catch {}
 
-  const aegisBin  = path.join(__dirname, "..", "dist", "main.js");
-  const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${aegisBin}" "$@"\n`;
+  const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${AEGIS_BIN}" "$@"\n`;
 
   // Write to both ~/.local/bin and ~/.aegiscode/bin
   const dirs = [
@@ -572,15 +579,11 @@ function spawnPty(cols, rows, resumeId) {
   // Remove empty values — don't override shell-set keys with empty strings
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
-  // Spawn from project root so dotenvConfig({ path: resolve(cwd, '.env') }) in main.tsx
-  // finds the right .env file — same as running aegiscode from its own directory.
-  const aegisRoot = path.join(__dirname, "..");
-
   ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
     cols: cols || 120,
     rows: rows || 36,
-    cwd:  aegisRoot,
+    cwd:  AEGIS_ROOT,
     env,
   });
 
@@ -698,9 +701,8 @@ app.whenReady().then(() => {
   createWindow();
   watchConfig();
   ensureAegisWrapper();         // create aegis-cli wrappers for shell terminal
-  // Linux taskbar icon must be set explicitly
   if (process.platform === "linux") {
-    try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
+    try { mainWindow?.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
   }
 });
 
