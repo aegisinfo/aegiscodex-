@@ -9,19 +9,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
-
-// In packaged builds, external processes (node, Kitty) can't exec files inside
-// app.asar. CLI bundle and icons are placed in resources/ via extraResources.
-// In dev mode, they live at their normal source locations.
-const AEGIS_BIN  = app.isPackaged
-  ? path.join(process.resourcesPath, "dist", "main.js")
-  : path.join(__dirname, "..", "dist", "main.js");
-const AEGIS_ROOT = app.isPackaged ? os.homedir() : path.join(__dirname, "..");
+const AEGIS_BIN   = path.join(__dirname, "..", "dist", "main.js");
 
 // ── Platform-aware icon ───────────────────────────────────────────────────────
-const ICONS_DIR = app.isPackaged
-  ? path.join(process.resourcesPath, "icons")
-  : path.join(__dirname, "icons");
+const ICONS_DIR = path.join(__dirname, "icons");
 function getIcon() {
   if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
   if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
@@ -30,43 +21,14 @@ function getIcon() {
 
 // ── Node binary detection ─────────────────────────────────────────────────────
 function findNode() {
-  const { execFileSync } = require("child_process");
-  const home = os.homedir();
-
-  // Collect nvm-managed node binaries (latest first)
-  const nvmNodes = [];
-  try {
-    const nvmDir = process.env.NVM_DIR || path.join(home, ".nvm");
-    const versDir = path.join(nvmDir, "versions", "node");
-    if (fs.existsSync(versDir)) {
-      fs.readdirSync(versDir)
-        .sort().reverse()
-        .forEach(v => nvmNodes.push(path.join(versDir, v, "bin", "node")));
-    }
-  } catch {}
-
+  // Prefer the node that ships alongside electron (nvm / volta / etc.)
   const candidates = process.platform === "win32"
     ? ["node.exe"]
-    : [
-        "/usr/local/bin/node",
-        "/usr/bin/node",
-        path.join(home, ".local", "node22", "bin", "node"),
-        path.join(home, ".local", "bin", "node"),
-        path.join(home, ".volta", "bin", "node"),
-        ...nvmNodes,
-        "node",  // last — works if PATH includes it, but may not in desktop session
-      ];
+    : ["node", "/usr/local/bin/node", "/usr/bin/node", `${os.homedir()}/.local/node22/bin/node`];
 
   for (const c of candidates) {
     try {
-      execFileSync(c, ["--version"], { stdio: "ignore" });
-      // Resolve relative name to absolute path via `which`
-      if (!path.isAbsolute(c)) {
-        try {
-          const abs = execFileSync("which", [c], { encoding: "utf8", stdio: ["ignore","pipe","ignore"] }).trim();
-          if (abs) return abs;
-        } catch {}
-      }
+      require("child_process").execFileSync(c, ["--version"], { stdio: "ignore" });
       return c;
     } catch {}
   }
@@ -371,16 +333,8 @@ async function installKitty(sender) {
 }
 
 function spawnKitty(resumeId) {
-  const kittyBin = findKittyBin();
-  if (!kittyBin) {
-    mainWindow?.webContents.send("pty-data", "\r\n\x1b[31mKitty not found — install it or use built-in terminal.\x1b[0m\r\n");
-    return;
-  }
-  const nodeBin = findNode();
-  if (!nodeBin) {
-    mainWindow?.webContents.send("pty-data", "\r\n\x1b[31mNode.js not found — install Node.js >= 22.\x1b[0m\r\n");
-    return;
-  }
+  const kittyBin = findKittyBin() || "kitty";
+  const nodeBin = findNode() || "node";
   const args = ["--no-deprecation", AEGIS_BIN];
   if (resumeId) args.push("--resume", resumeId);
 
@@ -392,87 +346,12 @@ function spawnKitty(resumeId) {
     COLORTERM: "truecolor",
     FORCE_COLOR: "3",
   };
-  // Electron-sandbox kan rensa DISPLAY på Linux — återställ den
-  if (process.platform === "linux" && !env.DISPLAY) {
-    env.DISPLAY = process.env.DISPLAY || ":0";
-  }
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
   const { execFile } = require("child_process");
-  const child = execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true });
-
-  child.on("error", (err) => {
-    const msg = `\r\n\x1b[31mKitty failed to launch: ${err.message}\x1b[0m\r\n`;
-    mainWindow?.webContents.send("pty-data", msg);
-  });
-
-  // If kitty exits immediately (segfault, missing lib), log it
-  child.on("exit", (code, sig) => {
-    if (code !== 0 || sig) {
-      const reason = sig ? `signal ${sig}` : `exit code ${code}`;
-      const msg = `\r\n\x1b[31mKitty terminated early (${reason})\x1b[0m\r\n`;
-      mainWindow?.webContents.send("pty-data", msg);
-    }
-  });
+  const aegisRoot = path.join(__dirname, "..");
+  execFile(kittyBin, ["--", nodeBin, ...args], { cwd: aegisRoot, env, detached: true });
 }
-
-// ── Ollama support ────────────────────────────────────────────────────────────
-function isOllamaBinaryAvailable() {
-  const { execFileSync } = require("child_process");
-  try { execFileSync("which", ["ollama"], { stdio: "ignore" }); return true; } catch {}
-  try { execFileSync("ollama", ["--version"], { stdio: "ignore" }); return true; } catch {}
-  for (const p of ["/usr/local/bin/ollama", "/usr/bin/ollama", path.join(os.homedir(), ".local", "bin", "ollama")]) {
-    if (fs.existsSync(p)) return true;
-  }
-  return false;
-}
-
-async function isOllamaRunning() {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2000);
-    const res = await fetch("http://localhost:11434/api/tags", { signal: ctrl.signal });
-    clearTimeout(t);
-    return res.ok;
-  } catch { return false; }
-}
-
-async function installOllama(sender) {
-  const send = (msg) => { try { sender.send("ollama-install-progress", String(msg).trim()); } catch {} };
-
-  if (isOllamaBinaryAvailable()) {
-    send("Ollama already installed — starting server…");
-    return { success: true, alreadyInstalled: true };
-  }
-
-  return new Promise((resolve) => {
-    let cmd;
-    if (process.platform === "win32") {
-      send("Installing Ollama via winget…");
-      cmd = "winget install --id Ollama.Ollama --silent --accept-package-agreements --accept-source-agreements";
-    } else {
-      send("Downloading Ollama…");
-      cmd = "curl -fsSL https://ollama.com/install.sh | sh";
-    }
-
-    const { exec } = require("child_process");
-    const child = exec(cmd, { env: { ...process.env, HOME: os.homedir() } });
-    child.stdout?.on("data", d => send(d));
-    child.stderr?.on("data", d => send(d));
-    child.on("close", (code) => {
-      if (code === 0 || isOllamaBinaryAvailable()) { send("Ollama installed."); resolve({ success: true }); }
-      else { send(`Install failed (exit ${code}).`); resolve({ success: false, error: `Exit ${code}` }); }
-    });
-    child.on("error", (e) => { send(`Error: ${e.message}`); resolve({ success: false, error: e.message }); });
-  });
-}
-
-ipcMain.handle("ollama-available", ()          => isOllamaBinaryAvailable());
-ipcMain.handle("ollama-running",   ()          => isOllamaRunning());
-ipcMain.handle("ollama-install",   async (ev) => {
-  try { return await installOllama(ev.sender); }
-  catch (e) { return { success: false, error: e.message }; }
-});
 
 // ── Cloud sync status ──────────────────────────────────────────────────────────
 function getCloudConfig() {
@@ -496,7 +375,8 @@ function ensureAegisWrapper() {
   let absNode = nodeBin;
   try { absNode = require("child_process").execFileSync("which", [nodeBin], { encoding: "utf8" }).trim() || nodeBin; } catch {}
 
-  const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${AEGIS_BIN}" "$@"\n`;
+  const aegisBin  = path.join(__dirname, "..", "dist", "main.js");
+  const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${aegisBin}" "$@"\n`;
 
   // Write to both ~/.local/bin and ~/.aegiscode/bin
   const dirs = [
@@ -634,11 +514,15 @@ function spawnPty(cols, rows, resumeId) {
   // Remove empty values — don't override shell-set keys with empty strings
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
+  // Spawn from project root so dotenvConfig({ path: resolve(cwd, '.env') }) in main.tsx
+  // finds the right .env file — same as running aegiscode from its own directory.
+  const aegisRoot = path.join(__dirname, "..");
+
   ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
     cols: cols || 120,
     rows: rows || 36,
-    cwd:  AEGIS_ROOT,
+    cwd:  aegisRoot,
     env,
   });
 
@@ -703,7 +587,7 @@ ipcMain.handle("pty-spawn", (_, { cols, rows, resumeId }) => {
   return spawnPty(cols, rows, resumeId);
 });
 
-ipcMain.on("pty-write", (_, data) => {
+ipcMain.handle("pty-write", (_, data) => {
   if (ptyProcess) ptyProcess.write(data);
 });
 
@@ -717,14 +601,7 @@ ipcMain.handle("pty-kill", () => {
 });
 
 ipcMain.handle("kitty-available", ()               => isKittyAvailable());
-ipcMain.handle("kitty-spawn",    (_, opts = {})    => {
-  try {
-    spawnKitty(opts.resumeId);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-});
+ipcMain.handle("kitty-spawn",    (_, opts = {})    => { spawnKitty(opts.resumeId); return true; });
 ipcMain.handle("kitty-install",  async (event)     => {
   try { const bin = await installKitty(event.sender); return { success: true, bin }; }
   catch (e) { return { success: false, error: e.message }; }
@@ -734,7 +611,7 @@ ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
   const cwd = spawnShell(cols, rows);
   return { ok: !!cwd, cwd: cwd || os.homedir() };
 });
-ipcMain.on("shell-write",  (_, data)               => { if (shellProcess) shellProcess.write(data); });
+ipcMain.handle("shell-write",  (_, data)           => { if (shellProcess) shellProcess.write(data); });
 ipcMain.handle("shell-resize", (_, { cols, rows }) => { if (shellProcess) shellProcess.resize(cols, rows); });
 ipcMain.handle("shell-kill",   ()                  => { shellProcess?.kill(); shellProcess = null; });
 
@@ -763,8 +640,9 @@ app.whenReady().then(() => {
   createWindow();
   watchConfig();
   ensureAegisWrapper();         // create aegis-cli wrappers for shell terminal
+  // Linux taskbar icon must be set explicitly
   if (process.platform === "linux") {
-    try { mainWindow?.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
+    try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
   }
 });
 

@@ -351,14 +351,7 @@ function _setKittyPlaceholder(msg) {
 async function launchKitty(resumeId) {
   const rid = resumeId || lastResumeId || undefined;
   if (rid) lastResumeId = rid;
-  const result = await AEGIS.kittySpawn({ resumeId: rid });
-  if (result?.ok === false) {
-    _setKittyPlaceholder("✗ " + (result.error || "Failed to launch Kitty"));
-    setPtyStatus(false, "error");
-    const fb = document.getElementById("kitty-fallback-btn");
-    if (fb) fb.style.display = "inline-block";
-    return;
-  }
+  await AEGIS.kittySpawn({ resumeId: rid });
   _setKittyPlaceholder("Kitty window launched — working in Kitty");
   setPtyStatus(true, "kitty");
 }
@@ -369,12 +362,7 @@ function resumeKitty() {
 
 async function newKittySession() {
   lastResumeId = null;
-  const result = await AEGIS.kittySpawn({});
-  if (result?.ok === false) {
-    _setKittyPlaceholder("✗ " + (result.error || "Failed to launch Kitty"));
-    setPtyStatus(false, "error");
-    return;
-  }
+  await AEGIS.kittySpawn({});
   _setKittyPlaceholder("New Kitty session launched");
   setPtyStatus(true, "kitty");
 }
@@ -394,15 +382,10 @@ function initKittyMode() {
         <div style="font-size:48px;margin-bottom:12px;opacity:.25">⬡</div>
         <div style="font-size:14px;font-weight:700;color:#00c8b4;margin-bottom:6px;letter-spacing:.04em">KITTY TERMINAL</div>
         <div id="kitty-status-msg" style="font-size:11px;color:#2e4055;margin-bottom:20px">starting aegiscode in Kitty…</div>
-        <button id="kitty-relaunch-btn" onclick="launchKitty()" style="padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s"
+        <button onclick="launchKitty()" style="padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s"
           onmouseover="this.style.borderColor='#00c8b4';this.style.color='#00c8b4'"
           onmouseout="this.style.borderColor='#1c2333';this.style.color='#6a8aaa'">
           ↺ Relaunch in Kitty
-        </button>
-        <button id="kitty-fallback-btn" onclick="switchToXterm()" style="display:none;padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;margin-left:8px;transition:all .15s"
-          onmouseover="this.style.borderColor='#e04444';this.style.color='#e04444'"
-          onmouseout="this.style.borderColor='#1c2333';this.style.color='#6a8aaa'">
-          ⚡ Use built-in terminal
         </button>
       </div>
     `;
@@ -426,24 +409,6 @@ function initKittyMode() {
 
   // Auto-launch Kitty immediately
   launchKitty();
-}
-
-function switchToXterm() {
-  _kittyMode = false;
-  const c = document.getElementById("xterm-container");
-  if (c) { c.innerHTML = ""; c.removeAttribute("style"); }
-  // Restore terminal controls for xterm mode
-  const controls = document.getElementById("terminal-controls");
-  if (controls) {
-    controls.innerHTML = `
-      <span class="tb-sep">·</span>
-      <button class="tb-btn" onclick="restartPty()">↺ New session</button>
-      <button class="tb-btn" onclick="resumePty()">⟳ Resume</button>
-      <button class="tb-btn kill" onclick="killPty()">⏹ Kill</button>
-      <span class="terminal-model-tb" id="terminal-model"></span>
-    `;
-  }
-  initTerminal();
 }
 
 function initKittyInstall() {
@@ -811,46 +776,6 @@ async function loadSettings() {
         <h3>AI Provider Keys</h3>
         <div class="section-hint">Saved to ~/.aegiscode/.env — shared with the CLI</div>
         ${providerRows}
-        <div id="ollama-hint" style="display:none;font-size:10px;margin:4px 0 8px 4px;line-height:1.4"></div>
-      </div>
-
-      <div class="settings-section">
-        <h3>Custom Models</h3>
-        <div class="section-hint">Add any OpenAI-compatible or Anthropic API endpoint</div>
-        <div id="custom-models-list"></div>
-        <button class="btn" style="margin-top:8px" onclick="toggleAddModelForm()">+ Add model</button>
-        <div id="custom-model-form" style="display:none;margin-top:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Name</div>
-              <input id="cm-name" class="api-row-input" style="width:100%" placeholder="Qwen 1.5 7B" autocomplete="off">
-            </div>
-            <div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Model ID</div>
-              <input id="cm-model" class="api-row-input" style="width:100%" placeholder="qwen1.5-7b-chat" autocomplete="off">
-            </div>
-            <div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Base URL</div>
-              <input id="cm-url" class="api-row-input" style="width:100%" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" autocomplete="off">
-            </div>
-            <div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">API Key</div>
-              <input id="cm-key" class="api-row-input" style="width:100%" type="password" placeholder="sk-…" autocomplete="off">
-            </div>
-          </div>
-          <div style="margin-bottom:8px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Provider</div>
-            <select id="cm-provider" style="background:var(--bg);color:var(--text1);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;font-family:inherit">
-              <option value="openai-compatible">OpenAI-compatible</option>
-              <option value="anthropic">Anthropic</option>
-            </select>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-primary" onclick="addCustomModel()">Add</button>
-            <button class="btn" onclick="toggleAddModelForm()">Cancel</button>
-            <span id="cm-err" style="font-size:10px;color:var(--red);display:none"></span>
-          </div>
-        </div>
       </div>
 
       <div class="settings-section">
@@ -903,159 +828,6 @@ async function loadSettings() {
       <span class="save-note" id="save-note" style="display:none">✓ Saved</span>
     </div>
   `;
-
-  renderCustomModels();
-  checkOllamaStatus();
-}
-
-// ── Custom Models (Settings) ──────────────────────────────────────────────────
-const DEFAULT_MODEL_IDS = new Set([
-  'claude-fable-5','claude-sonnet-4','claude-opus-4','claude-haiku-4',
-  'deepseek-chat','deepseek-reasoner','groq-llama','groq-deepseek',
-  'openai-gpt-5.5','openai-gpt-4o','openai-o3',
-  'gemini-2.5-pro','gemini-2.5-flash','ollama-local',
-]);
-
-function renderCustomModels() {
-  const cfg = __cache._cfg || {};
-  const models = (cfg.models || []).filter(m => m.id && !DEFAULT_MODEL_IDS.has(m.id));
-  const el = document.getElementById("custom-models-list");
-  if (!el) return;
-
-  if (!models.length) {
-    el.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:4px 0">No custom models yet.</div>`;
-    return;
-  }
-
-  el.innerHTML = models.map(m => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(m.name || m.model || m.id)}</div>
-        <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(m.model || '')} · ${escHtml(m.baseURL || '')}</div>
-      </div>
-      <span style="font-size:10px;color:var(--text3);flex-shrink:0">${m.provider === 'anthropic' ? 'Anthropic' : 'OpenAI-compat'}</span>
-      <button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red);border-color:var(--red)" onclick="removeCustomModel('${escAttr(m.id)}')">✕</button>
-    </div>
-  `).join("");
-}
-
-function toggleAddModelForm() {
-  const form = document.getElementById("custom-model-form");
-  if (!form) return;
-  const visible = form.style.display !== "none";
-  form.style.display = visible ? "none" : "block";
-  if (!visible) document.getElementById("cm-name")?.focus();
-}
-
-async function addCustomModel() {
-  const name     = document.getElementById("cm-name")?.value.trim();
-  const model    = document.getElementById("cm-model")?.value.trim();
-  const baseURL  = document.getElementById("cm-url")?.value.trim();
-  const apiKey   = document.getElementById("cm-key")?.value.trim();
-  const provider = document.getElementById("cm-provider")?.value || "openai-compatible";
-  const errEl    = document.getElementById("cm-err");
-
-  if (!name || !model || !baseURL) {
-    if (errEl) { errEl.textContent = "Name, Model ID and Base URL are required."; errEl.style.display = "inline"; }
-    return;
-  }
-  if (errEl) errEl.style.display = "none";
-
-  const cfg = __cache._cfg || await AEGIS.getConfig();
-  const models = cfg.models ? [...cfg.models] : [];
-
-  const id = "custom-" + Date.now().toString(36);
-  models.push({ id, name, provider, model, baseURL, apiKey: apiKey || undefined });
-  cfg.models = models;
-
-  await AEGIS.saveConfig(cfg);
-  __cache._cfg = cfg;
-
-  // Clear form
-  ["cm-name","cm-model","cm-url","cm-key"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = "";
-  });
-  toggleAddModelForm();
-  renderCustomModels();
-}
-
-async function removeCustomModel(id) {
-  const cfg = __cache._cfg || await AEGIS.getConfig();
-  cfg.models = (cfg.models || []).filter(m => m.id !== id);
-  await AEGIS.saveConfig(cfg);
-  __cache._cfg = cfg;
-  renderCustomModels();
-}
-
-// ── Ollama auto-install (Settings) ───────────────────────────────────────────
-let _ollamaProgressRegistered = false;
-
-function _ollamaHint(msg, color) {
-  const el = document.getElementById("ollama-hint");
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = color || "var(--text3, #6a8aaa)";
-  el.style.display = msg ? "block" : "none";
-}
-
-async function checkOllamaStatus() {
-  const dot = document.getElementById("dot-ollama");
-  if (!dot) return;
-  const row = dot.closest(".api-row");
-  if (!row) return;
-
-  const [available, running] = await Promise.all([
-    AEGIS.ollamaAvailable().catch(() => false),
-    AEGIS.ollamaRunning().catch(() => false),
-  ]);
-
-  if (running) {
-    dot.classList.add("set");
-    _ollamaHint("Ollama is running on localhost:11434", "var(--green, #1ab87a)");
-    return;
-  }
-
-  const btn = document.createElement("button");
-  btn.id = "ollama-action-btn";
-  btn.className = "btn";
-  btn.style.cssText = "margin-left:6px;font-size:10px;padding:3px 10px";
-  btn.textContent = available ? "Start" : "Install";
-  btn.onclick = () => installOllamaFlow(available);
-  row.insertBefore(btn, dot);
-
-  _ollamaHint(
-    available
-      ? "Ollama is installed but not running — click Start to launch the server"
-      : "Ollama not found — click Install to set it up automatically"
-  );
-}
-
-async function installOllamaFlow(alreadyInstalled) {
-  const dot = document.getElementById("dot-ollama");
-  const btn = document.getElementById("ollama-action-btn");
-  if (btn) btn.remove();
-
-  _ollamaHint(alreadyInstalled ? "Starting Ollama server…" : "Installing Ollama — this may take a minute…");
-
-  if (!_ollamaProgressRegistered) {
-    _ollamaProgressRegistered = true;
-    AEGIS.onOllamaInstallProgress(msg => { _ollamaHint(msg); });
-  }
-
-  const result = await AEGIS.ollamaInstall();
-
-  if (result.success) {
-    const urlInput = document.getElementById("key-ollama");
-    if (urlInput && !urlInput.value.trim()) {
-      urlInput.value = "http://localhost:11434";
-      setApiDot("ollama", "http://localhost:11434");
-    }
-    if (dot) dot.classList.add("set");
-    _ollamaHint("Ollama is running on localhost:11434 — click Save settings", "var(--green, #1ab87a)");
-  } else {
-    _ollamaHint("Installation failed — run: curl -fsSL https://ollama.com/install.sh | sh", "var(--red, #e04444)");
-  }
 }
 
 function _showSaveNote(msg, isError) {

@@ -19,15 +19,8 @@
     "appId": "org.aegiscloud.aegiscode",
     "productName": "AEGIS Code",
     "asar": true,
-    "npmRebuild": false,
-
     "asarUnpack": [
       "node_modules/@homebridge/node-pty-prebuilt-multiarch/**"
-    ],
-    "extraResources": [
-      { "from": "../dist/main.js",          "to": "dist/main.js"          },
-      { "from": "../node_modules/sql.js",   "to": "dist/node_modules/sql.js" },
-      { "from": "icons",                    "to": "icons"                 }
     ],
     "files": [
       "**/*",
@@ -37,13 +30,7 @@
     "linux": {
       "target": "deb",
       "category": "Development",
-      "icon": "icons/icon.png",
-      "desktop": {
-        "Name": "AEGIS Code",
-        "Comment": "AI coding assistant",
-        "Categories": "Development;IDE;",
-        "StartupWMClass": "aegis-code"
-      }
+      "icon": "icons/icon.png"
     },
     "win": {
       "target": "msi",
