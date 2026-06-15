@@ -780,6 +780,45 @@ async function loadSettings() {
       </div>
 
       <div class="settings-section">
+        <h3>Custom Models</h3>
+        <div class="section-hint">Add any OpenAI-compatible or Anthropic API endpoint</div>
+        <div id="custom-models-list"></div>
+        <button class="btn" style="margin-top:8px" onclick="toggleAddModelForm()">+ Add model</button>
+        <div id="custom-model-form" style="display:none;margin-top:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Name</div>
+              <input id="cm-name" class="api-row-input" style="width:100%" placeholder="Qwen 1.5 7B" autocomplete="off">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Model ID</div>
+              <input id="cm-model" class="api-row-input" style="width:100%" placeholder="qwen1.5-7b-chat" autocomplete="off">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Base URL</div>
+              <input id="cm-url" class="api-row-input" style="width:100%" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" autocomplete="off">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:4px">API Key</div>
+              <input id="cm-key" class="api-row-input" style="width:100%" type="password" placeholder="sk-…" autocomplete="off">
+            </div>
+          </div>
+          <div style="margin-bottom:8px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Provider</div>
+            <select id="cm-provider" style="background:var(--bg);color:var(--text1);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;font-family:inherit">
+              <option value="openai-compatible">OpenAI-compatible</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary" onclick="addCustomModel()">Add</button>
+            <button class="btn" onclick="toggleAddModelForm()">Cancel</button>
+            <span id="cm-err" style="font-size:10px;color:var(--red);display:none"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <h3>AEGIS Memory</h3>
         <div class="section-hint">Paste your token to activate cross-session memory</div>
         <div class="api-row">
@@ -830,7 +869,88 @@ async function loadSettings() {
     </div>
   `;
 
+  renderCustomModels();
   checkOllamaStatus();
+}
+
+// ── Custom Models (Settings) ──────────────────────────────────────────────────
+const DEFAULT_MODEL_IDS = new Set([
+  'claude-fable-5','claude-sonnet-4','claude-opus-4','claude-haiku-4',
+  'deepseek-chat','deepseek-reasoner','groq-llama','groq-deepseek',
+  'openai-gpt-5.5','openai-gpt-4o','openai-o3',
+  'gemini-2.5-pro','gemini-2.5-flash','ollama-local',
+]);
+
+function renderCustomModels() {
+  const cfg = __cache._cfg || {};
+  const models = (cfg.models || []).filter(m => m.id && !DEFAULT_MODEL_IDS.has(m.id));
+  const el = document.getElementById("custom-models-list");
+  if (!el) return;
+
+  if (!models.length) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:4px 0">No custom models yet.</div>`;
+    return;
+  }
+
+  el.innerHTML = models.map(m => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(m.name || m.model || m.id)}</div>
+        <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(m.model || '')} · ${escHtml(m.baseURL || '')}</div>
+      </div>
+      <span style="font-size:10px;color:var(--text3);flex-shrink:0">${m.provider === 'anthropic' ? 'Anthropic' : 'OpenAI-compat'}</span>
+      <button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red);border-color:var(--red)" onclick="removeCustomModel('${escAttr(m.id)}')">✕</button>
+    </div>
+  `).join("");
+}
+
+function toggleAddModelForm() {
+  const form = document.getElementById("custom-model-form");
+  if (!form) return;
+  const visible = form.style.display !== "none";
+  form.style.display = visible ? "none" : "block";
+  if (!visible) document.getElementById("cm-name")?.focus();
+}
+
+async function addCustomModel() {
+  const name     = document.getElementById("cm-name")?.value.trim();
+  const model    = document.getElementById("cm-model")?.value.trim();
+  const baseURL  = document.getElementById("cm-url")?.value.trim();
+  const apiKey   = document.getElementById("cm-key")?.value.trim();
+  const provider = document.getElementById("cm-provider")?.value || "openai-compatible";
+  const errEl    = document.getElementById("cm-err");
+
+  if (!name || !model || !baseURL) {
+    if (errEl) { errEl.textContent = "Name, Model ID and Base URL are required."; errEl.style.display = "inline"; }
+    return;
+  }
+  if (errEl) errEl.style.display = "none";
+
+  const cfg = __cache._cfg || await AEGIS.getConfig();
+  const models = cfg.models ? [...cfg.models] : [];
+
+  const id = "custom-" + Date.now().toString(36);
+  models.push({ id, name, provider, model, baseURL, apiKey: apiKey || undefined });
+  cfg.models = models;
+
+  await AEGIS.saveConfig(cfg);
+  __cache._cfg = cfg;
+
+  // Clear form
+  ["cm-name","cm-model","cm-url","cm-key"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  toggleAddModelForm();
+  renderCustomModels();
+}
+
+async function removeCustomModel(id) {
+  const cfg = __cache._cfg || await AEGIS.getConfig();
+  cfg.models = (cfg.models || []).filter(m => m.id !== id);
+  await AEGIS.saveConfig(cfg);
+  __cache._cfg = cfg;
+  renderCustomModels();
 }
 
 // ── Ollama auto-install (Settings) ───────────────────────────────────────────
