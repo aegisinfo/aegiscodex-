@@ -371,8 +371,16 @@ async function installKitty(sender) {
 }
 
 function spawnKitty(resumeId) {
-  const kittyBin = findKittyBin() || "kitty";
-  const nodeBin = findNode() || "node";
+  const kittyBin = findKittyBin();
+  if (!kittyBin) {
+    mainWindow?.webContents.send("pty-data", "\r\n\x1b[31mKitty not found — install it or use built-in terminal.\x1b[0m\r\n");
+    return;
+  }
+  const nodeBin = findNode();
+  if (!nodeBin) {
+    mainWindow?.webContents.send("pty-data", "\r\n\x1b[31mNode.js not found — install Node.js >= 22.\x1b[0m\r\n");
+    return;
+  }
   const args = ["--no-deprecation", AEGIS_BIN];
   if (resumeId) args.push("--resume", resumeId);
 
@@ -384,10 +392,28 @@ function spawnKitty(resumeId) {
     COLORTERM: "truecolor",
     FORCE_COLOR: "3",
   };
+  // Electron-sandbox kan rensa DISPLAY på Linux — återställ den
+  if (process.platform === "linux" && !env.DISPLAY) {
+    env.DISPLAY = process.env.DISPLAY || ":0";
+  }
   for (const k of Object.keys(env)) { if (env[k] === "") delete env[k]; }
 
   const { execFile } = require("child_process");
-  execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true });
+  const child = execFile(kittyBin, ["--", nodeBin, ...args], { cwd: AEGIS_ROOT, env, detached: true });
+
+  child.on("error", (err) => {
+    const msg = `\r\n\x1b[31mKitty failed to launch: ${err.message}\x1b[0m\r\n`;
+    mainWindow?.webContents.send("pty-data", msg);
+  });
+
+  // If kitty exits immediately (segfault, missing lib), log it
+  child.on("exit", (code, sig) => {
+    if (code !== 0 || sig) {
+      const reason = sig ? `signal ${sig}` : `exit code ${code}`;
+      const msg = `\r\n\x1b[31mKitty terminated early (${reason})\x1b[0m\r\n`;
+      mainWindow?.webContents.send("pty-data", msg);
+    }
+  });
 }
 
 // ── Ollama support ────────────────────────────────────────────────────────────
@@ -691,7 +717,14 @@ ipcMain.handle("pty-kill", () => {
 });
 
 ipcMain.handle("kitty-available", ()               => isKittyAvailable());
-ipcMain.handle("kitty-spawn",    (_, opts = {})    => { spawnKitty(opts.resumeId); return true; });
+ipcMain.handle("kitty-spawn",    (_, opts = {})    => {
+  try {
+    spawnKitty(opts.resumeId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
 ipcMain.handle("kitty-install",  async (event)     => {
   try { const bin = await installKitty(event.sender); return { success: true, bin }; }
   catch (e) { return { success: false, error: e.message }; }

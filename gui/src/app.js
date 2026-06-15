@@ -351,7 +351,14 @@ function _setKittyPlaceholder(msg) {
 async function launchKitty(resumeId) {
   const rid = resumeId || lastResumeId || undefined;
   if (rid) lastResumeId = rid;
-  await AEGIS.kittySpawn({ resumeId: rid });
+  const result = await AEGIS.kittySpawn({ resumeId: rid });
+  if (result?.ok === false) {
+    _setKittyPlaceholder("✗ " + (result.error || "Failed to launch Kitty"));
+    setPtyStatus(false, "error");
+    const fb = document.getElementById("kitty-fallback-btn");
+    if (fb) fb.style.display = "inline-block";
+    return;
+  }
   _setKittyPlaceholder("Kitty window launched — working in Kitty");
   setPtyStatus(true, "kitty");
 }
@@ -362,7 +369,12 @@ function resumeKitty() {
 
 async function newKittySession() {
   lastResumeId = null;
-  await AEGIS.kittySpawn({});
+  const result = await AEGIS.kittySpawn({});
+  if (result?.ok === false) {
+    _setKittyPlaceholder("✗ " + (result.error || "Failed to launch Kitty"));
+    setPtyStatus(false, "error");
+    return;
+  }
   _setKittyPlaceholder("New Kitty session launched");
   setPtyStatus(true, "kitty");
 }
@@ -382,10 +394,15 @@ function initKittyMode() {
         <div style="font-size:48px;margin-bottom:12px;opacity:.25">⬡</div>
         <div style="font-size:14px;font-weight:700;color:#00c8b4;margin-bottom:6px;letter-spacing:.04em">KITTY TERMINAL</div>
         <div id="kitty-status-msg" style="font-size:11px;color:#2e4055;margin-bottom:20px">starting aegiscode in Kitty…</div>
-        <button onclick="launchKitty()" style="padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s"
+        <button id="kitty-relaunch-btn" onclick="launchKitty()" style="padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s"
           onmouseover="this.style.borderColor='#00c8b4';this.style.color='#00c8b4'"
           onmouseout="this.style.borderColor='#1c2333';this.style.color='#6a8aaa'">
           ↺ Relaunch in Kitty
+        </button>
+        <button id="kitty-fallback-btn" onclick="switchToXterm()" style="display:none;padding:6px 18px;border:1px solid #1c2333;background:transparent;color:#6a8aaa;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;margin-left:8px;transition:all .15s"
+          onmouseover="this.style.borderColor='#e04444';this.style.color='#e04444'"
+          onmouseout="this.style.borderColor='#1c2333';this.style.color='#6a8aaa'">
+          ⚡ Use built-in terminal
         </button>
       </div>
     `;
@@ -409,6 +426,24 @@ function initKittyMode() {
 
   // Auto-launch Kitty immediately
   launchKitty();
+}
+
+function switchToXterm() {
+  _kittyMode = false;
+  const c = document.getElementById("xterm-container");
+  if (c) { c.innerHTML = ""; c.removeAttribute("style"); }
+  // Restore terminal controls for xterm mode
+  const controls = document.getElementById("terminal-controls");
+  if (controls) {
+    controls.innerHTML = `
+      <span class="tb-sep">·</span>
+      <button class="tb-btn" onclick="restartPty()">↺ New session</button>
+      <button class="tb-btn" onclick="resumePty()">⟳ Resume</button>
+      <button class="tb-btn kill" onclick="killPty()">⏹ Kill</button>
+      <span class="terminal-model-tb" id="terminal-model"></span>
+    `;
+  }
+  initTerminal();
 }
 
 function initKittyInstall() {
