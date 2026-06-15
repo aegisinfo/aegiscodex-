@@ -26,8 +26,8 @@ jobs:
         working-directory: gui
         run: npm ci
 
-      - name: Upgrade node-gyp
-        working-directory: gui
+      - name: Upgrade node-gyp in @electron/rebuild
+        working-directory: gui/node_modules/@electron/rebuild
         shell: bash
         run: npm install node-gyp@latest
 
