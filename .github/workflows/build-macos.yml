@@ -23,9 +23,13 @@ jobs:
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs
 
-      - name: Install GUI deps
+      - name: Install GUI deps (skip native postinstall)
         working-directory: gui
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Compile node-pty for Electron
+        working-directory: gui
+        run: npx --yes @electron/rebuild@latest -f -w @homebridge/node-pty-prebuilt-multiarch
 
       - name: Build DMG
         working-directory: gui
