@@ -182,6 +182,34 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 .mem-activate-msg{font-size:12px;margin-top:10px;min-height:18px}
 .mem-activate-ok{color:var(--green)}
 .mem-activate-err{color:var(--red)}
+
+/* ── Welcome overlay ── */
+#welcome-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.92);backdrop-filter:blur(6px);opacity:1;transition:opacity .3s}
+#welcome-overlay.fade-out{opacity:0;pointer-events:none}
+.welcome-card{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:40px 48px;max-width:420px;width:90%;text-align:center;position:relative;box-shadow:0 0 60px rgba(0,200,180,.06),0 20px 60px rgba(0,0,0,.5)}
+.welcome-glyph{font-size:52px;font-weight:900;background:linear-gradient(135deg,#00c8b4,#5a7fd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:6px;filter:drop-shadow(0 0 16px rgba(0,200,180,.4))}
+.welcome-title{font-size:20px;font-weight:800;color:var(--text);letter-spacing:.02em;margin-bottom:8px}
+.welcome-tagline{font-size:13px;color:var(--text2);margin-bottom:22px;line-height:1.6}
+.welcome-features{list-style:none;text-align:left;margin-bottom:24px;display:flex;flex-direction:column;gap:7px}
+.welcome-features li{font-size:12px;color:var(--text2);display:flex;align-items:baseline;gap:8px}
+.welcome-features li::before{content:"·";color:var(--teal);font-size:16px;line-height:1;flex-shrink:0}
+.welcome-price-row{margin-bottom:6px}
+.welcome-price{font-size:30px;font-weight:900;color:var(--teal)}
+.welcome-price span{font-size:14px;font-weight:400;color:var(--text2)}
+.welcome-price-note{font-size:11px;color:var(--text3);margin-bottom:22px}
+.welcome-stripe-btn{width:100%;padding:13px;border-radius:7px;border:1px solid var(--teal);background:rgba(0,200,180,.13);color:var(--teal);font-size:14px;font-weight:700;cursor:pointer;transition:all .18s;font-family:inherit;letter-spacing:.02em;margin-bottom:20px}
+.welcome-stripe-btn:hover{background:rgba(0,200,180,.24);box-shadow:0 0 20px rgba(0,200,180,.2)}
+.welcome-divider{height:1px;background:var(--border);margin-bottom:18px}
+.welcome-key-label{font-size:11px;color:var(--text2);text-align:left;margin-bottom:8px}
+.welcome-key-row{display:flex;gap:8px;margin-bottom:8px}
+.welcome-key-input{flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.welcome-key-input:focus{border-color:var(--teal)}
+.welcome-key-input::placeholder{color:var(--text3);font-family:inherit}
+.welcome-key-btn{padding:8px 14px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.welcome-key-btn:hover{border-color:var(--teal);color:var(--teal)}
+.welcome-key-msg{font-size:12px;min-height:16px;margin-bottom:10px}
+.welcome-skip{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px;text-decoration:underline;text-underline-offset:3px}
+.welcome-skip:hover{color:var(--text2)}
 </style>
 
 <!-- xterm.js local — 0 CDN latency -->
@@ -296,5 +324,32 @@ html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe
 </div><!-- .workspace -->
 
 <script defer src="app.js"></script>
+
+<!-- Welcome overlay — shown on first launch if memory not activated -->
+<div id="welcome-overlay" style="display:none">
+  <div class="welcome-card">
+    <div class="welcome-glyph">Æ</div>
+    <div class="welcome-title">AEGIS Memory</div>
+    <div class="welcome-tagline">Never forget your code again.</div>
+    <ul class="welcome-features">
+      <li>Remembers context, decisions and patterns across all sessions</li>
+      <li>Semantic search over your full conversation history</li>
+      <li>Works with every model — Claude, GPT-4, Ollama</li>
+    </ul>
+    <div class="welcome-price-row">
+      <span class="welcome-price">$2<span>/month</span></span>
+    </div>
+    <div class="welcome-price-note">Billed via Stripe · cancel anytime</div>
+    <button class="welcome-stripe-btn" onclick="welcomeOpenStripe()">Unlock Memory ↗</button>
+    <div class="welcome-divider"></div>
+    <div class="welcome-key-label">Already have an API key?</div>
+    <div class="welcome-key-row">
+      <input class="welcome-key-input" id="welcome-key-input" placeholder="Paste API key…" autocomplete="off">
+      <button class="welcome-key-btn" onclick="welcomeActivate()">Activate</button>
+    </div>
+    <div class="welcome-key-msg" id="welcome-key-msg"></div>
+    <button class="welcome-skip" onclick="dismissWelcome()">Skip for now</button>
+  </div>
+</div>
 </body>
 </html>

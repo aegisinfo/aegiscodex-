@@ -1119,6 +1119,56 @@ function refreshModelDisplay() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+// ── Welcome overlay ──────────────────────────────────────────────────────────
+const WELCOME_DISMISSED_KEY = "aegis_welcome_dismissed";
+
+async function maybeShowWelcome() {
+  if (localStorage.getItem(WELCOME_DISMISSED_KEY)) return;
+  const status = await AEGIS.getMemoryStatus().catch(() => ({ subscribed: false }));
+  if (status.subscribed) return;
+
+  const el = document.getElementById("welcome-overlay");
+  if (!el) return;
+  el.style.display = "flex";
+
+  document.getElementById("welcome-key-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") welcomeActivate();
+  });
+}
+
+function dismissWelcome() {
+  localStorage.setItem(WELCOME_DISMISSED_KEY, "1");
+  const el = document.getElementById("welcome-overlay");
+  if (!el) return;
+  el.classList.add("fade-out");
+  setTimeout(() => { el.style.display = "none"; el.classList.remove("fade-out"); }, 300);
+}
+
+async function welcomeOpenStripe() {
+  const status = await AEGIS.getMemoryStatus().catch(() => ({}));
+  AEGIS.openExternal(status.stripeUrl || "https://buy.stripe.com/14A4gB4J53vxcaV74S9R601");
+}
+
+async function welcomeActivate() {
+  const input = document.getElementById("welcome-key-input");
+  const msgEl = document.getElementById("welcome-key-msg");
+  const token = (input?.value || "").trim();
+  if (!token) return;
+
+  msgEl.style.color = "var(--text2)";
+  msgEl.textContent = "Activating…";
+
+  const result = await AEGIS.activateMemory(token);
+  if (result.ok) {
+    msgEl.style.color = "var(--green)";
+    msgEl.textContent = `✓ Memory unlocked${result.email ? " · " + result.email : ""}`;
+    setTimeout(() => dismissWelcome(), 1400);
+  } else {
+    msgEl.style.color = "var(--red)";
+    msgEl.textContent = result.error || "Activation failed";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("terminal-controls")?.classList.add("visible");
 
@@ -1154,4 +1204,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Watch for config changes (e.g. /model command in PTY)
   AEGIS.onConfigChanged(() => refreshModelDisplay());
+
+  // Show welcome screen on first launch if memory not activated
+  maybeShowWelcome();
 });
