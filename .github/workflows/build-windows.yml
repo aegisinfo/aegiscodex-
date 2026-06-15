@@ -35,8 +35,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aegis-gui-exe
-          path: gui/dist/*.exe
+          name: aegis-gui-msi
+          path: gui/dist/*.msi
           retention-days: 30
 
       - name: Deploy to aegis1
@@ -44,13 +44,13 @@ jobs:
         env:
           AEGIS1_TOKEN: ${{ secrets.AEGIS1_TOKEN }}
         run: |
-          EXE=$(ls gui/dist/*.exe | grep -v unpacked | head -1)
+          MSI=$(ls gui/dist/*.msi | head -1)
           git clone https://x-access-token:${AEGIS1_TOKEN}@github.com/aegisinfo/aegis1.git aegis1-repo
           mkdir -p aegis1-repo/static/downloads
-          cp "$EXE" aegis1-repo/static/downloads/aegis-gui-setup.exe
+          cp "$MSI" aegis1-repo/static/downloads/aegis-gui-setup.msi
           cd aegis1-repo
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git add static/downloads/aegis-gui-setup.exe
-          git commit -m "deploy: update aegis-gui-setup.exe [skip ci]"
+          git add static/downloads/aegis-gui-setup.msi
+          git commit -m "deploy: update aegis-gui-setup.msi [skip ci]"
           git push

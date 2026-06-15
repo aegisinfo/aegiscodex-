@@ -33,7 +33,7 @@
       "icon": "icons/icon.png"
     },
     "win": {
-      "target": "nsis",
+      "target": "msi",
       "icon": "icons/icon.ico"
     },
     "mac": {
