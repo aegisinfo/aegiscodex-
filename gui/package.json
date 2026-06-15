@@ -11,16 +11,16 @@
   "scripts": {
     "start": "electron .",
     "build:linux": "node build-prod.mjs --linux",
-    "build:win":   "node build-prod.mjs --win",
-    "build:mac":   "node build-prod.mjs --mac",
-    "build:all":   "node build-prod.mjs --linux --win --mac"
+    "build:win": "node build-prod.mjs --win",
+    "build:mac": "node build-prod.mjs --mac",
+    "build:all": "node build-prod.mjs --linux --win --mac"
   },
   "build": {
     "appId": "org.aegiscloud.aegiscode",
     "productName": "AEGIS Code",
     "asar": true,
     "asarUnpack": [
-      "node_modules/node-pty/**"
+      "node_modules/node-pty-prebuilt-multiarch/**"
     ],
     "files": [
       "**/*",
@@ -43,7 +43,7 @@
     }
   },
   "dependencies": {
-    "node-pty": "^1.0.0",
+    "node-pty-prebuilt-multiarch": "^0.10.1-pre.5",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
     "xterm-addon-unicode11": "^0.6.0",

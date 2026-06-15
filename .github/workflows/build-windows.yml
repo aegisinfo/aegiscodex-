@@ -8,20 +8,13 @@ env:
 
 jobs:
   build-msi:
-    runs-on: windows-2019
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Install WiX Toolset
-        run: choco install wixtoolset -y --no-progress
-        shell: powershell
 
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs

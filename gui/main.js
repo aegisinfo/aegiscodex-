@@ -400,7 +400,7 @@ function spawnShell(cols, rows) {
   if (shellProcess) { shellProcess.kill(); shellProcess = null; }
 
   let pty;
-  try { pty = require("node-pty"); } catch { return null; }
+  try { pty = require("node-pty-prebuilt-multiarch"); } catch { return null; }
 
   const isWin    = process.platform === "win32";
   const shellExe = isWin ? "cmd.exe" : (process.env.SHELL || "/bin/bash");
@@ -488,7 +488,7 @@ function spawnPty(cols, rows, resumeId) {
   }
 
   let pty;
-  try { pty = require("node-pty"); } catch {
+  try { pty = require("node-pty-prebuilt-multiarch"); } catch {
     mainWindow?.webContents.send("pty-data", "\r\nnode-pty not available — run: cd gui && npm install\r\n");
     return false;
   }
