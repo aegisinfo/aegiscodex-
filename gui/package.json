@@ -31,6 +31,7 @@
       { "from": "../dist",                                          "to": "dist" },
       { "from": "staged-external/node_modules/sql.js",              "to": "dist/node_modules/sql.js" },
       { "from": "staged-external/node_modules/@xenova/transformers", "to": "dist/node_modules/@xenova/transformers" },
+      { "from": "staged-external/node_modules/@huggingface/jinja",  "to": "dist/node_modules/@huggingface/jinja" },
       { "from": "icons/icon.png",                                    "to": "icons/icon.png" },
       { "from": "icons/icon.ico",                                    "to": "icons/icon.ico" },
       { "from": "icons/icon.icns",                                   "to": "icons/icon.icns" }
