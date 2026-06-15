@@ -11,7 +11,6 @@ import * as path from 'path';
 import * as os   from 'os';
 import { v4 as uuid } from 'uuid';
 import initSqlJs, { Database as SqlJsDb } from 'sql.js';
-import { pipeline } from '@xenova/transformers';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const MEMORY_DIR       = path.join(os.homedir(), '.aegiscode', 'memory');
@@ -234,6 +233,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
 
   // 2. Fallback to Xenova transformers (local)
   try {
+    const { pipeline } = await import('@xenova/transformers');
     const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     embedPipeline = async (texts: string[]) => {
       const results = await Promise.all(
