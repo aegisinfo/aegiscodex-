@@ -59,4 +59,5 @@ jobs:
           MSI=$(ls gui/dist/*.msi | head -1)
           npx --yes wrangler r2 object put "${CF_BUCKET}/aegis-gui-setup.msi" \
             --file "$MSI" \
-            --content-type "application/octet-stream"
+            --content-type "application/octet-stream" \
+            --remote

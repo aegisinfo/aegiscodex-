@@ -59,4 +59,5 @@ jobs:
           DMG=$(ls gui/dist/*.dmg | head -1)
           npx --yes wrangler r2 object put "${CF_BUCKET}/aegis-gui.dmg" \
             --file "$DMG" \
-            --content-type "application/octet-stream"
+            --content-type "application/octet-stream" \
+            --remote

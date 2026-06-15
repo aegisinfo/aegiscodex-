@@ -63,4 +63,5 @@ jobs:
           DEB=$(ls gui/dist/*.deb | head -1)
           npx --yes wrangler r2 object put "${CF_BUCKET}/aegis-gui.deb" \
             --file "$DEB" \
-            --content-type "application/octet-stream"
+            --content-type "application/octet-stream" \
+            --remote
