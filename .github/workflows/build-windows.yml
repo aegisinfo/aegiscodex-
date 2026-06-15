@@ -16,12 +16,19 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Configure node-gyp
+        run: npm config set msvs_version 2022
+        shell: bash
+
       - name: Build CLI bundle
         run: npm ci && node esbuild.mjs
 
       - name: Install GUI deps
         working-directory: gui
-        run: npm ci
+        run: npm ci --msvs_version=2022
 
       - name: Build EXE
         working-directory: gui
