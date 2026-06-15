@@ -411,6 +411,67 @@ function initKittyMode() {
   launchKitty();
 }
 
+function initKittyInstall() {
+  _kittyMode = true;
+
+  const container = document.getElementById("xterm-container");
+  if (container) {
+    container.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center";
+    container.innerHTML = `
+      <div style="text-align:center;color:#2e4055;user-select:none">
+        <div style="font-size:48px;margin-bottom:12px;opacity:.25">⬡</div>
+        <div style="font-size:14px;font-weight:700;color:#00c8b4;margin-bottom:6px;letter-spacing:.04em">KITTY TERMINAL</div>
+        <div id="kitty-status-msg" style="font-size:11px;color:#2e4055;margin-bottom:8px">Installing Kitty…</div>
+        <div id="kitty-install-log" style="font-size:10px;color:#1c2333;max-width:420px;height:16px;overflow:hidden;text-align:left;font-family:monospace;white-space:nowrap;text-overflow:ellipsis"></div>
+      </div>
+    `;
+  }
+
+  const controls = document.getElementById("terminal-controls");
+  if (controls) {
+    controls.innerHTML = `
+      <span class="tb-sep">·</span>
+      <span style="font-size:11px;color:#6a8aaa;padding:0 8px">Installing Kitty…</span>
+      <span class="terminal-model-tb" id="terminal-model"></span>
+    `;
+  }
+
+  AEGIS.onKittyInstallProgress(msg => {
+    const log = document.getElementById("kitty-install-log");
+    if (log) log.textContent = msg;
+  });
+
+  initShell();
+  initResizer();
+  initDragDrop();
+
+  AEGIS.kittyInstall().then(result => {
+    if (result.success) {
+      _setKittyPlaceholder("Kitty installed — launching aegiscode…");
+      const ctrl = document.getElementById("terminal-controls");
+      if (ctrl) {
+        ctrl.innerHTML = `
+          <span class="tb-sep">·</span>
+          <button class="tb-btn" onclick="newKittySession()">↺ New session</button>
+          <button class="tb-btn" onclick="resumeKitty()">⟳ Resume</button>
+          <span class="terminal-model-tb" id="terminal-model"></span>
+        `;
+      }
+      launchKitty();
+    } else {
+      _kittyMode = false;
+      const c = document.getElementById("xterm-container");
+      if (c) { c.innerHTML = ""; c.removeAttribute("style"); }
+      initTerminal();
+    }
+  }).catch(() => {
+    _kittyMode = false;
+    const c = document.getElementById("xterm-container");
+    if (c) { c.innerHTML = ""; c.removeAttribute("style"); }
+    initTerminal();
+  });
+}
+
 // ── Shell terminal (bottom pane) ──────────────────────────────────────────────
 function initShell() {
   const container = document.getElementById("shell-container");
@@ -1061,12 +1122,12 @@ function refreshModelDisplay() {
 document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("terminal-controls")?.classList.add("visible");
 
-  // Kitty is the preferred terminal — use it if available, else fall back to xterm.js
+  // Kitty is the preferred terminal — install it if not found, fall back to xterm.js only on install failure
   const kittyAvailable = await AEGIS.kittyAvailable().catch(() => false);
   if (kittyAvailable) {
     initKittyMode();
   } else {
-    initTerminal();
+    initKittyInstall();
   }
 
   // Load config for sidebar version + model display

@@ -286,14 +286,54 @@ function loadHistory() {
 }
 
 // ── Kitty terminal support ─────────────────────────────────────────────────────
-function isKittyAvailable() {
+function findKittyBin() {
+  const fs = require("fs");
+  const { execFileSync } = require("child_process");
   try {
-    require("child_process").execFileSync("which", ["kitty"], { stdio: "ignore" });
-    return true;
-  } catch { return false; }
+    const bin = execFileSync("which", ["kitty"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    if (bin) return bin;
+  } catch {}
+  // Official installer drops kitty here on Linux + macOS
+  const localKitty = path.join(os.homedir(), ".local", "kitty.app", "bin", "kitty");
+  if (fs.existsSync(localKitty)) return localKitty;
+  if (process.platform === "win32") {
+    const winKitty = path.join(os.homedir(), "AppData", "Local", "Programs", "kitty", "kitty.exe");
+    if (fs.existsSync(winKitty)) return winKitty;
+  }
+  return null;
+}
+
+function isKittyAvailable() {
+  return !!findKittyBin();
+}
+
+async function installKitty(sender) {
+  const { exec } = require("child_process");
+  const send = (msg) => { try { sender.send("kitty-install-progress", String(msg).trim()); } catch {} };
+
+  return new Promise((resolve, reject) => {
+    let cmd;
+    if (process.platform === "win32") {
+      send("Installing Kitty via winget…");
+      cmd = "winget install --id kovidgoyal.kitty --silent --accept-package-agreements --accept-source-agreements";
+    } else {
+      send("Downloading Kitty…");
+      cmd = "curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n";
+    }
+    const child = exec(cmd, { env: { ...process.env, HOME: os.homedir() } });
+    child.stdout?.on("data", d => send(d));
+    child.stderr?.on("data", d => send(d));
+    child.on("close", () => {
+      const bin = findKittyBin();
+      if (bin) resolve(bin);
+      else reject(new Error("Kitty not found after install"));
+    });
+    child.on("error", reject);
+  });
 }
 
 function spawnKitty(resumeId) {
+  const kittyBin = findKittyBin() || "kitty";
   const nodeBin = findNode() || "node";
   const args = ["--no-deprecation", AEGIS_BIN];
   if (resumeId) args.push("--resume", resumeId);
@@ -310,7 +350,7 @@ function spawnKitty(resumeId) {
 
   const { execFile } = require("child_process");
   const aegisRoot = path.join(__dirname, "..");
-  execFile("kitty", ["--", nodeBin, ...args], { cwd: aegisRoot, env, detached: true });
+  execFile(kittyBin, ["--", nodeBin, ...args], { cwd: aegisRoot, env, detached: true });
 }
 
 // ── Cloud sync status ──────────────────────────────────────────────────────────
@@ -562,6 +602,10 @@ ipcMain.handle("pty-kill", () => {
 
 ipcMain.handle("kitty-available", ()               => isKittyAvailable());
 ipcMain.handle("kitty-spawn",    (_, opts = {})    => { spawnKitty(opts.resumeId); return true; });
+ipcMain.handle("kitty-install",  async (event)     => {
+  try { const bin = await installKitty(event.sender); return { success: true, bin }; }
+  catch (e) { return { success: false, error: e.message }; }
+});
 
 ipcMain.handle("shell-spawn",  (_, { cols, rows }) => {
   const cwd = spawnShell(cols, rows);
