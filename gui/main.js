@@ -9,10 +9,16 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) { app.quit(); process.exit(0); }
 
 const CONFIG_PATH = path.join(os.homedir(), ".aegiscode", "config.json");
-const AEGIS_BIN   = path.join(__dirname, "..", "dist", "main.js");
+
+const AEGIS_BIN  = app.isPackaged
+  ? path.join(process.resourcesPath, "dist", "main.js")
+  : path.join(__dirname, "..", "dist", "main.js");
+const AEGIS_ROOT = app.isPackaged ? os.homedir() : path.join(__dirname, "..");
 
 // ── Platform-aware icon ───────────────────────────────────────────────────────
-const ICONS_DIR = path.join(__dirname, "icons");
+const ICONS_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, "icons")
+  : path.join(__dirname, "icons");
 function getIcon() {
   if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
   if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
@@ -73,7 +79,7 @@ function parseEnvFile(filePath) {
 
 function loadEnv() {
   const storedPath  = ENV_PATH;
-  const projectPath = path.join(__dirname, "..", ".env");
+  const projectPath = app.isPackaged ? null : path.join(__dirname, "..", ".env");
 
   const stored  = parseEnvFile(storedPath);
   const project = parseEnvFile(projectPath);
@@ -393,7 +399,7 @@ function ensureAegisWrapper() {
   let absNode = nodeBin;
   try { absNode = require("child_process").execFileSync("which", [nodeBin], { encoding: "utf8" }).trim() || nodeBin; } catch {}
 
-  const aegisBin  = path.join(__dirname, "..", "dist", "main.js");
+  const aegisBin  = AEGIS_BIN;
   const wrapperSh = `#!/bin/sh\nexec "${absNode}" --no-deprecation "${aegisBin}" "$@"\n`;
 
   // Write to both ~/.local/bin and ~/.aegiscode/bin
@@ -534,7 +540,7 @@ function spawnPty(cols, rows, resumeId) {
 
   // Spawn from project root so dotenvConfig({ path: resolve(cwd, '.env') }) in main.tsx
   // finds the right .env file — same as running aegiscode from its own directory.
-  const aegisRoot = path.join(__dirname, "..");
+  const aegisRoot = AEGIS_ROOT;
 
   ptyProcess = pty.spawn(nodeBin, args, {
     name: "xterm-256color",
