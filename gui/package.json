@@ -1,0 +1,83 @@
+{
+  "name": "aegiscode-gui",
+  "version": "1.0.0",
+  "description": "AEGIS Code — Desktop GUI",
+  "author": {
+    "name": "Niklas Borneklint",
+    "email": "nborneklint@gmail.com"
+  },
+  "homepage": "https://aegiscloud.org/aegiscode",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:linux": "node build-prod.mjs --linux",
+    "build:win": "node build-prod.mjs --win",
+    "build:mac": "node build-prod.mjs --mac",
+    "build:all": "node build-prod.mjs --linux --win --mac"
+  },
+  "build": {
+    "appId": "org.aegiscloud.aegiscode",
+    "productName": "AEGIS Code",
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/@homebridge/node-pty-prebuilt-multiarch/**"
+    ],
+    "files": [
+      "**/*",
+      "!node_modules/electron-builder/**",
+      "!build-prod.mjs"
+    ],
+    "extraResources": [
+      { "from": "../dist",                                          "to": "dist" },
+      { "from": "staged-external/node_modules/sql.js",              "to": "dist/node_modules/sql.js" },
+      { "from": "staged-external/node_modules/@xenova/transformers", "to": "dist/node_modules/@xenova/transformers" },
+      { "from": "staged-external/node_modules/@huggingface/jinja",  "to": "dist/node_modules/@huggingface/jinja" },
+      { "from": "icons/icon.ico",                                    "to": "icons/icon.ico" },
+      { "from": "icons/icon.icns",                                   "to": "icons/icon.icns" }
+    ],
+    "linux": {
+      "target": "deb",
+      "category": "Development",
+      "icon": "icons/linux",
+      "extraResources": [{ "from": "bin/node", "to": "bin/node" }],
+      "desktop": {
+        "Name": "AEGIS Code",
+        "Terminal": "false",
+        "Type": "Application",
+        "Icon": "aegiscode-gui",
+        "Categories": "Development;",
+        "StartupWMClass": "AEGIS Code"
+      }
+    },
+    "deb": {
+      "afterInstall": "scripts/after-install.sh"
+    },
+    "win": {
+      "target": "msi",
+      "icon": "icons/icon.ico",
+      "extraResources": [{ "from": "bin/node.exe", "to": "bin/node.exe" }]
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icons/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "extraResources": [{ "from": "bin/node", "to": "bin/node" }]
+    }
+  },
+  "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-unicode11": "^0.6.0",
+    "xterm-addon-web-links": "^0.9.0",
+    "xterm-addon-webgl": "^0.16.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "overrides": {
+    "node-gyp": "^10.0.0"
+  }
+}
