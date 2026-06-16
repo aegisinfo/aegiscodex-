@@ -23,15 +23,7 @@ Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq
 
 > Requires **Node.js >= 22**. Install via [nvm](https://github.com/nvm-sh/nvm): `nvm install 22`
 
-> **Important:** Use [Kitty](https://sw.kovidgoyal.net/kitty/) (recommended) or a modern terminal emulator (Ghostty, WezTerm, Alacritty, iTerm2, Windows Terminal) for the best experience. Older terminals may have rendering issues with scrolling and alternate-screen mode.
-
-**From npm:**
-
-```bash
-npm install -g aegis-cli
-```
-
-**From source (recommended — no sudo needed):**
+> **Important:** Use [Kitty](https://sw.kovidgoyal.net/kitty/) (recommended) or a modern terminal emulator (Ghostty, WezTerm, Alacritty, iTerm2, Windows Terminal) for the best experience. Older terminals may have rendering issues.
 
 ```bash
 git clone https://github.com/aegisinfo/aegiscode
@@ -39,23 +31,24 @@ cd aegiscode
 bash install.sh
 ```
 
-`install.sh` builds the project and creates an `aegis` wrapper in `~/.local/bin` — no global npm permissions required.
+`install.sh` builds the project and creates an `aegis` wrapper in `~/.local/bin` — no sudo needed.
 
 ---
 
 ## Desktop GUI
 
-aegiscode ships with an Electron desktop app — same AI, same memory, with a native window.
+aegiscode also ships as a native Electron desktop app — same AI engine, same memory, with a split-pane terminal + shell.
 
-**Install:**
+**Download (Linux / macOS / Windows):**
+
+→ **[aegiscloud.org/aegiscode#download](https://aegiscloud.org/aegiscode#download)**
 
 ```bash
-git clone https://github.com/aegisinfo/aegiscode
-cd aegiscode
-bash gui/install.sh
+# Linux
+wget https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/aegiscode-gui.deb
+sudo dpkg -i aegiscode-gui.deb
+ags
 ```
-
-`gui/install.sh` installs dependencies and creates an `ags` launcher in `~/.local/bin`.
 
 **Launch:**
 
