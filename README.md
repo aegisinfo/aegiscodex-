@@ -47,13 +47,12 @@ aegiscode also ships as a native Electron desktop app — same AI engine, same m
 # Linux
 wget https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/aegiscode-gui.deb
 sudo dpkg -i aegiscode-gui.deb
-ags
 ```
 
 **Launch:**
 
 ```bash
-ags
+aegis
 ```
 
 **Tabs:**
