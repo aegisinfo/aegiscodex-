@@ -76,6 +76,9 @@ import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis
     console.log('✓ Obfuscated: dist/main.js');
   }
 
+  // Ensure Node.js treats dist/main.js as ESM regardless of system package.json
+  writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }));
+
   const mode = dev ? 'dev (with sourcemaps)' : publish ? 'production (minified + obfuscated)' : 'production (minified)';
   const size = dev ? '' : ' — run `node dist/main.js` to verify';
   console.log(`✓ Build complete: dist/main.js (${mode})${size}`);
