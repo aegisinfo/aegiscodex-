@@ -22,7 +22,7 @@ const ICONS_DIR = app.isPackaged
 function getIcon() {
   if (process.platform === "darwin") return path.join(ICONS_DIR, "icon.icns");
   if (process.platform === "win32")  return path.join(ICONS_DIR, "icon.ico");
-  return path.join(ICONS_DIR, "icon.png");
+  return null;
 }
 
 // ── Node binary detection ─────────────────────────────────────────────────────
@@ -727,10 +727,6 @@ app.whenReady().then(() => {
   createWindow();
   watchConfig();
   ensureAegisWrapper();         // create aegis-cli wrappers for shell terminal
-  // Linux taskbar icon must be set explicitly
-  if (process.platform === "linux") {
-    try { app.setIcon(path.join(ICONS_DIR, "icon.png")); } catch {}
-  }
 });
 
 app.on("second-instance", () => { mainWindow?.show(); mainWindow?.focus(); });
