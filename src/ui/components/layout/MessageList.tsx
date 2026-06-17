@@ -127,6 +127,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   onScrolledUpChangeRef.current = onScrolledUpChange;
   const onRenderLatencyRef = useRef(onRenderLatency);
   onRenderLatencyRef.current = onRenderLatency;
+  const scrollLineOffsetRef = useRef(scrollLineOffset);
+  scrollLineOffsetRef.current = scrollLineOffset;
+  const maxLineOffsetRef = useRef(0);
 
   // ==================== Computed values ====================
   const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
@@ -157,6 +160,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 
   const totalLines = lineOffsets[lineOffsets.length - 1] || 0;
   const maxLineOffset = Math.max(0, totalLines - viewportLines);
+  maxLineOffsetRef.current = maxLineOffset;
   const clampedLineOffset = Math.min(scrollLineOffset, maxLineOffset);
   const isAtBottom = clampedLineOffset >= maxLineOffset;
 
@@ -346,13 +350,19 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       }
 
       if (messagesChanged) {
-        // Auto-scroll to bottom when a new user message or streaming message appears
+        // Auto-scroll to bottom when new content arrives.
+        // Scrolls when:
+        //  - The last new message is a user message (just submitted)
+        //  - The last new message is streaming (just started streaming)
+        //  - The user was already at the bottom (so they follow the conversation)
         const prevLen = prevMessages.length;
         const newLen = newMessages.length;
         if (newLen > prevLen) {
           const lastNew = newMessages[newLen - 1];
-          if (lastNew?.role === 'user' || lastNew?.isStreaming) {
-            // User message or streaming start → jump to bottom
+          // Read from refs — these are updated every render, unlike the closure-captured consts
+          const wasAtBottom = scrollLineOffsetRef.current >= maxLineOffsetRef.current;
+          if (lastNew?.role === 'user' || lastNew?.isStreaming || wasAtBottom) {
+            // Jump to bottom of the updated content
             const msgs = newMessages.filter(m => !m.isStreaming);
             const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
             const lines = capped.map(m => estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks));
