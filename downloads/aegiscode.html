@@ -114,32 +114,32 @@ footer .links a:hover{color:var(--teal)}
 
 <div class="container">
 
-  <!-- DeepSeek demo -->
+  <!-- DeepSeek cost demo -->
   <div class="section">
-    <h3>⚡ DeepSeek on ÆGIS — sub-second responses</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Live terminal recording. DeepSeek V3 via /model deepseek — no spinner, no wait.</p>
+    <h3>💰 DeepSeek: ~78% cheaper than Claude</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Run <code style="background:rgba(0,200,180,.15);padding:1px 6px;border-radius:3px;font-size:12px">/tokens</code> to see your actual spend vs benchmark. DeepSeek at $0.14/MTok in, $0.28/MTok out.</p>
     <div class="demo-terminal" id="demo">
-      <div class="demo-bar"><span class="demo-dot" style="background:#e04444"></span><span class="demo-dot" style="background:#e89020"></span><span class="demo-dot" style="background:#1ab87a"></span><span class="demo-title">aegis — deepseek @ 2.3x speed</span></div>
+      <div class="demo-bar"><span class="demo-dot" style="background:#e04444"></span><span class="demo-dot" style="background:#e89020"></span><span class="demo-dot" style="background:#1ab87a"></span><span class="demo-title">aegis — /tokens output</span></div>
       <div class="demo-body" id="demo-body">
         <div class="demo-line"><span class="prompt" style="color:var(--green)">~ $</span> <span class="hl">aegis</span>  <span class="dim"># ← that's it</span></div>
         <div class="demo-line dim">╭──────────────────────────────────────╮</div>
-        <div class="demo-line dim">│  Æ  ÆGIS v0.6.24               │</div>
         <div class="demo-line dim">│  Model: <span class="hl" style="font-weight:700">deepseek</span> · Session: <span class="hl">live</span>  │</div>
-        <div class="demo-line dim">│  Launch: <span style="color:var(--green)">0.3s</span> · type <span class="hl" style="color:var(--teal)">/model</span> to switch │</div>
+        <div class="demo-line dim">│  <span class="hl" style="color:var(--teal)">/tokens</span> for cost · run 50 sessions for $1  │</div>
         <div class="demo-line dim">╰──────────────────────────────────────╯</div>
-        <div class="demo-line" id="dl1"><span class="prompt">›</span> explain closures in 10 words</div>
-        <div class="demo-line" id="dr1" style="display:none"><span class="hl">⟫</span> <span class="response">Function remembers scope where it was created.</span></div>
-        <div class="demo-line" id="dl2" style="display:none"><span class="prompt">›</span> what is the answer to life</div>
-        <div class="demo-line" id="dr2" style="display:none"><span class="hl">⟫</span> <span class="response">42</span></div>
-        <div class="demo-line" id="dl3" style="display:none"><span class="prompt">›</span> write a fibonacci one-liner</div>
-        <div class="demo-line" id="dr3" style="display:none"><span class="hl">⟫</span> <span class="response">const fib=n=>n<2?n:fib(n-1)+fib(n-2)</span></div>
-        <div class="demo-line" id="dl4" style="display:none"><span class="prompt">›</span> /model claude</div>
-        <div class="demo-line" id="dr4" style="display:none"><span class="hl">⟫</span> Switched to <span class="response">claude-sonnet-4</span>  <span class="dim">(0.1s)</span></div>
-        <div class="demo-line" id="dl5" style="display:none"><span class="prompt">›</span> /model deepseek <span class="dim" style="margin-left:6px"># back — no reload needed</span></div>
-        <div class="demo-line" id="dr5" style="display:none"><span class="hl">⟫</span> Switched to <span class="response">deepseek-v3</span>  <span class="dim">(0.08s)</span></div>
+        <div class="demo-line" id="dl1"><span class="prompt">›</span> <span class="hl">/tokens</span></div>
+        <div class="demo-line" id="dr1" style="display:none"><span class="hl">⟫</span> ◆ token usage</div>
+        <div class="demo-line" id="dl2" style="display:none">  context  ████████████████████████░░  86% · 172.3k / 200k</div>
+        <div class="demo-line" id="dr2" style="display:none">  in       ████████████████████░░░░░░  124.6k</div>
+        <div class="demo-line" id="dl3" style="display:none">  out      ████████████████░░░░░░░░░░  98.2k</div>
+        <div class="demo-line" id="dr3" style="display:none">  total                              222.8k</div>
+        <div class="demo-line" id="dl4" style="display:none">  cost                                ~$0.00007  ·  deepseek</div>
+        <div class="demo-line" id="dr4" style="display:none">  ──────────────────────────────────────────────</div>
+        <div class="demo-line" id="dl5" style="display:none">  cost/turn          ~$0.0000035</div>
+        <div class="demo-line" id="dr5" style="display:none">  vs claude-sonnet-4.6  ~$0.00032</div>
+        <div class="demo-line" id="dr6" style="display:none">  vs benchmark        <span class="hl" style="font-weight:700">0.22×  (78% cheaper)</span>  ← DeepSeek</div>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">DeepSeek V3, GPT-4o, Claude Sonnet — <a href="https://github.com/aegisinfo/aegiscode">zero-config model switching</a> · actual speed, not simulated</p>
+    <p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Pricing: DeepSeek $0.14/$0.28 · Claude Sonnet $3/$15 per MTok — <a href="https://github.com/aegisinfo/aegiscode">actual API cost, not markup</a></p>
   </div>
 
   <!-- Quick install -->
