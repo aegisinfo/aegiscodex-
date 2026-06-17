@@ -250,7 +250,7 @@ async function main(): Promise<void> {
             const { runLogin } = await import('./auth/login.js');
             try {
               await runLogin();
-              console.log('\n\x1b[32m✓ Logged in.\x1b[0m Starting aegiscode...\n');
+              console.log('\n\x1b[32m✓ Logged in.\x1b[0m Starting ÆGIS...\n');
               // Re-initialize config with the newly saved credentials
               await configManager.initialize(process.cwd());
             } catch (err) {
@@ -270,7 +270,7 @@ async function main(): Promise<void> {
           const R = '\x1b[0m';
           const D = '\x1b[2m';
           process.stderr.write(
-            `\n${P}◆ aegiscode — No API key configured${R}\n\n` +
+            `\n${P}◆ ÆGIS — No API key configured${R}\n\n` +
             `  Run ${P}aegis login${R} to authenticate via browser, or:\n\n` +
             `  ${D}• Add an API key interactively:  aegis --init${R}\n` +
             `  ${D}• Set an environment variable:   export OPENAI_API_KEY=sk-...${R}\n` +

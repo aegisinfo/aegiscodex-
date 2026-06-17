@@ -95,7 +95,7 @@ Only use plain \`\`\`language when the code is a standalone snippet not tied to 
 Respond in the same language the user writes in.
 `;
 
-export const LOCAL_SYSTEM_PROMPT = `You are aegiscode, a CLI coding assistant running on a local model via Ollama. Help the user with software engineering tasks.
+export const LOCAL_SYSTEM_PROMPT = `You are ÆGIS, a CLI coding assistant running on a local model via Ollama. Help the user with software engineering tasks.
 
 # Response style
 - Be concise. Most answers fit in 1–4 lines. Only write more when generating code or debugging in depth.

@@ -187,7 +187,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
     <Box flexDirection="column" padding={1}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold color={primary}>◆ aegiscode — Setup</Text>
+        <Text bold color={primary}>◆ ÆGIS — Setup</Text>
       </Box>
       <Box marginBottom={1}>
         <Text color={muted}>

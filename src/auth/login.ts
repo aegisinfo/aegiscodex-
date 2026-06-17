@@ -67,7 +67,7 @@ const SUCCESS_HTML = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>aegiscode</title>
+  <title>ÆGIS</title>
   <style>
     body { font-family: monospace; background: #0d1117; color: #00e5c0;
            display: flex; align-items: center; justify-content: center;
@@ -87,7 +87,7 @@ const SUCCESS_HTML = `<!DOCTYPE html>
 
 const ERROR_HTML = (msg: string) => `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>aegiscode</title>
+<head><meta charset="utf-8"><title>ÆGIS</title>
 <style>body{font-family:monospace;background:#0d1117;color:#ff5555;
             display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style>
 </head>
@@ -152,7 +152,7 @@ export async function runLogin(): Promise<{ token: string }> {
 
       // ── Print prompt ───────────────────────────────────────────────────────
       process.stdout.write(
-        `\n${C.primary}◆ aegiscode — Login with Google${C.reset}\n\n` +
+        `\n${C.primary}◆ ÆGIS — Login with Google${C.reset}\n\n` +
         `  Opening browser...\n\n` +
         `  ${C.muted}${loginUrl}${C.reset}\n\n` +
         `  ${C.muted}Paste this URL manually if the browser doesn't open.${C.reset}\n\n` +
@@ -205,7 +205,7 @@ export async function runLoginPassword(): Promise<void> {
       process.stdin.on('data', onData);
     });
 
-  process.stdout.write(`\n${C.primary}◆ aegiscode — Login${C.reset}\n\n`);
+  process.stdout.write(`\n${C.primary}◆ ÆGIS — Login${C.reset}\n\n`);
 
   const username = await ask('  Username: ');
   if (!username) throw new Error('Username cannot be empty');
