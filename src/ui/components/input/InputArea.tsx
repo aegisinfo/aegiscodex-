@@ -89,6 +89,9 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
 
+    const [pasteNotification, setPasteNotification] = useState<string | null>(null);
+    const pasteNotifRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
     const [thinkingSeconds, setThinkingSeconds] = useState(0);
     const [streamingTokens, setStreamingTokens] = useState(0);
     const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -216,9 +219,18 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     
 
 
-    // 大段文本粘贴处 — allow all pastes through, no truncation
-    const handlePaste = useCallback((_text: string) => {
-      return {};
+    // Paste — mimic Claude Code: show paste size notification
+    // Trimming is handled in CustomTextInput.tsx's handlePasteStable
+    const handlePaste = useCallback((text: string) => {
+      const lines = text.split('\n').length;
+      const chars = text.length;
+      
+      if (lines > 1 || chars > 200) {
+        const msg = lines > 1 ? `pasted ${lines} lines (${chars} chars)` : `pasted ${chars} chars`;
+        setPasteNotification(msg);
+        if (pasteNotifRef.current) clearTimeout(pasteNotifRef.current);
+        pasteNotifRef.current = setTimeout(() => setPasteNotification(null), 2000);
+      }
     }, []);
 
     // 提交处
@@ -265,6 +277,14 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <Box flexDirection="column">
+        {/* Paste notification — Claude Code style: minimal, brief */}
+        {pasteNotification && (
+          <Box paddingX={0} marginBottom={0}>
+            <Text color={theme.colors.text.muted} dimColor>
+              {pasteNotification}
+            </Text>
+          </Box>
+        )}
         {/* Thinking indicator — Claude Code style: minimal */}
         <Box paddingX={0} marginBottom={0}>
           {thinkingLabel ? (

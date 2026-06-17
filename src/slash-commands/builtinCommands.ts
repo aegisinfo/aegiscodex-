@@ -1270,11 +1270,10 @@ export const copyCommand: SlashCommand = {
       try {
         await copyToClipboard(plainText);
         const lines = plainText.split('\n').length;
-        const preview = plainText.slice(0, 60);
         return {
           success: true,
           type: 'success',
-          message: `copied assistant reply (${lines}L) · ${preview}${preview.length >= 60 ? '...' : ''}`,
+          message: `Copied ${lines} lines from assistant reply`,
         };
       } catch (err) {
         return {
@@ -1362,16 +1361,15 @@ export const copyCommand: SlashCommand = {
       };
     }
 
-    // Build confirmation
+    // Build confirmation — Claude Code style
     const lines = target.content.split('\n').length;
     const label = target.filePath || target.language || 'code';
-    const preview = target.content.split('\n')[0].slice(0, 50);
-    const hint = codeBlocks.length > 1 ? ` · ${codeBlocks.length} blocks, /copy list` : '';
+    const hint = codeBlocks.length > 1 ? ` · ${codeBlocks.length} blocks total` : '';
 
     return {
       success: true,
       type: 'success',
-      message: `copied ${label} (${lines}L) · ${preview}${preview.length >= 50 ? '...' : ''}${hint}`,
+      message: `Copied ${lines} lines from ${label}${hint}`,
     };
   },
 };

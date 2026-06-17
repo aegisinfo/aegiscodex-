@@ -96,6 +96,9 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = memo(
     const handlePasteStable = useCallback((text: string) => {
       const val = valueRef.current;
       const pos = cursorPositionRef.current;
+      // Claude Code behavior: trim trailing whitespace from pasted text
+      const cleanText = text.trimEnd();
+      
       if (onPasteRef.current) {
         const result = onPasteRef.current(text);
         if (result?.prompt) {
@@ -104,9 +107,9 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = memo(
           return;
         }
       }
-      const newValue = val.slice(0, pos) + text + val.slice(pos);
+      const newValue = val.slice(0, pos) + cleanText + val.slice(pos);
       onChangeRef.current(newValue);
-      onChangeCursorPositionRef.current(pos + text.length);
+      onChangeCursorPositionRef.current(pos + cleanText.length);
     }, []);
 
     // Stable — Ink registers this once and never re-registers unless focusId changes.

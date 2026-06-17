@@ -2,6 +2,7 @@
 dist/standalone/
 dist/main.js
 dist/main.js.map
+dist/package.json
 node_modules/
 *.log
 .aegiscode/

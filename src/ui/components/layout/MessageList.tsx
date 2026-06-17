@@ -12,13 +12,71 @@
  *   counter (streamingVersion) — only MessageList re-renders, nothing else.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
 import { themeManager } from '../../themes/index.js';
+import type { ContentBlock } from '../../../store/types.js';
+
+// ── Line estimation for line-based scrolling ──────────────────────────
+
+/** Rough estimate of rendered terminal lines for a text string. */
+function estimateContentLines(text: string, terminalWidth: number): number {
+  if (!text) return 0;
+  const w = Math.max(terminalWidth, 20);
+  const raw = text.split('\n');
+  let total = 0;
+  for (const line of raw) {
+    const l = line.length;
+    total += l === 0 ? 1 : Math.max(1, Math.ceil(l / w));
+  }
+  return total;
+}
+
+/** Estimate total rendered lines for a message (role line + thinking + content + tool blocks). */
+function estimateMessageLines(
+  content: string,
+  thinking: string | undefined,
+  terminalWidth: number,
+  contentBlocks?: ContentBlock[],
+): number {
+  let total = 1; // role prefix line
+
+  // Thinking section
+  if (thinking && thinking.length > 0) {
+    total += 1; // "thought" header
+    total += estimateContentLines(thinking, terminalWidth);
+  }
+
+  // Structured content blocks (Claude Code style)
+  if (contentBlocks && contentBlocks.length > 0) {
+    for (const b of contentBlocks) {
+      switch (b.type) {
+        case 'thinking':
+          total += 1; // "thought" header
+          total += estimateContentLines(b.thinking || '', terminalWidth);
+          break;
+        case 'text':
+          total += estimateContentLines(b.text || '', terminalWidth);
+          break;
+        case 'tool_use':
+          total += 2; // ● line + at least one result line
+          break;
+        case 'tool_result':
+          total += estimateContentLines(b.content || '', terminalWidth);
+          break;
+      }
+    }
+    return total;
+  }
+
+  // Legacy markdown content
+  total += estimateContentLines(content, terminalWidth);
+  return total;
+}
 
 interface MessageListProps {
   terminalWidth: number;
@@ -31,16 +89,7 @@ const RAF_INTERVAL_MS = 30;   // ~33fps redraws
 const CONTENT_THRESHOLD = 1;   // re-render on every content character
 const THINKING_THRESHOLD = 1; // update thinking content every 1 char for real-time visibility
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
-
-// How many messages fit on screen (rough estimate)
-function calcVisibleCount(terminalHeight: number): number {
-  const available = Math.max(terminalHeight - UI_OVERHEAD, 5);
-  return Math.max(3, Math.ceil(available / 3));
-}
-
-export function calcPageSize(terminalHeight: number): number {
-  return calcVisibleCount(terminalHeight);
-}
+const MAX_HISTORY_MESSAGES = 200; // hard cap: only show last N completed messages
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({
   terminalWidth,
@@ -49,46 +98,86 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 }) => {
   // ==================== Internal Scroll State ====================
   const [messages, setMessages] = useState(() => getState().session.messages);
-  const [scrollOffset, setScrollOffset] = useState(0);
+  const [scrollLineOffset, setScrollLineOffset] = useState(0);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
   const [streamingVersion, setStreamingVersion] = useState(0);
 
   // Refs for values used in callbacks/RAF
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const scrollOffsetRef = useRef(scrollOffset);
-  scrollOffsetRef.current = scrollOffset;
   const showAllThinkingRef = useRef(showAllThinking);
   showAllThinkingRef.current = showAllThinking;
+  const terminalWidthRef = useRef(terminalWidth);
+  terminalWidthRef.current = terminalWidth;
   const terminalHeightRef = useRef(terminalHeight);
   terminalHeightRef.current = terminalHeight;
   const onScrolledUpChangeRef = useRef(onScrolledUpChange);
   onScrolledUpChangeRef.current = onScrolledUpChange;
 
   // ==================== Computed values ====================
-  const pageSize = calcVisibleCount(terminalHeight);
-  const completedMessages = messages.filter(msg => !msg.isStreaming);
+  const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
+  const allCompleted = messages.filter(msg => !msg.isStreaming);
+  const completedMessages = allCompleted.length > MAX_HISTORY_MESSAGES
+    ? allCompleted.slice(-MAX_HISTORY_MESSAGES)
+    : allCompleted;
   const streamingMsg = messages.find(msg => msg.isStreaming && isActiveStreamingMessage(msg));
   const buffer = streamingMsg ? getStreamingContent() : null;
 
-  const useWindowing = completedMessages.length > pageSize;
-  const maxOffset = Math.max(0, messages.length - pageSize);
-  const clampedOffset = Math.min(scrollOffset, maxOffset);
-  const isAtBottom = clampedOffset >= maxOffset;
+  // Estimate line counts for each completed message
+  const messageLines = useMemo(
+    () => completedMessages.map(msg =>
+      estimateMessageLines(msg.content, msg.thinking, terminalWidth, msg.contentBlocks),
+    ),
+    [completedMessages, terminalWidth],
+  );
 
-  // Clamp scrollOffset when terminal height or message count changes
-  // Prevents out-of-bounds after resize or new message arrival
+  // Prefix-sum of line offsets: lineOffsets[i] = lines before message i
+  // lineOffsets[0] = 0, lineOffsets[N] = totalLines
+  const lineOffsets = useMemo(() => {
+    const offs: number[] = [0];
+    for (let i = 0; i < messageLines.length; i++) {
+      offs.push(offs[i] + messageLines[i]);
+    }
+    return offs;
+  }, [messageLines]);
+
+  const totalLines = lineOffsets[lineOffsets.length - 1] || 0;
+  const maxLineOffset = Math.max(0, totalLines - viewportLines);
+  const clampedLineOffset = Math.min(scrollLineOffset, maxLineOffset);
+  const isAtBottom = clampedLineOffset >= maxLineOffset;
+
+  // Find which message index corresponds to the current line offset
+  const startMsgIndex = useMemo(() => {
+    if (lineOffsets.length <= 1) return 0;
+    // Binary search: largest i where lineOffsets[i] <= clampedLineOffset
+    let lo = 0;
+    let hi = lineOffsets.length - 1;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi + 1) / 2);
+      if (lineOffsets[mid] <= clampedLineOffset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }, [clampedLineOffset, lineOffsets]);
+
+  // Clamp scrollLineOffset when viewport lines or total content changes
   useEffect(() => {
-    setScrollOffset(prev => Math.min(prev, Math.max(0, messages.length - pageSize)));
-  }, [pageSize, messages.length]);
+    setScrollLineOffset(prev => Math.min(prev, maxLineOffset));
+  }, [maxLineOffset]);
+
+  // Build visible window: messages whose lines fit within the viewport
+  const useWindowing = totalLines > viewportLines;
 
   let visibleMessages = completedMessages;
   let showLastMsgOutside = false;
 
   if (useWindowing) {
-    const windowStart = clampedOffset;
-    const windowEnd = Math.min(clampedOffset + pageSize, completedMessages.length);
-    visibleMessages = completedMessages.slice(windowStart, windowEnd);
+    visibleMessages = [];
+    let linesLeft = viewportLines;
+    for (let i = startMsgIndex; i < completedMessages.length && linesLeft > 0; i++) {
+      visibleMessages.push(completedMessages[i]);
+      linesLeft -= messageLines[i];
+    }
     showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0;
   }
 
@@ -103,35 +192,45 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   }, [useWindowing, isAtBottom]);
 
   // ==================== Keyboard Scrolling ====================
+  function getMaxLineOffset(): number {
+    const msgs = messagesRef.current.filter(m => !m.isStreaming);
+    const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
+    const lines = capped.map(msg =>
+      estimateMessageLines(msg.content, msg.thinking, terminalWidthRef.current, msg.contentBlocks),
+    );
+    const total = lines.reduce((a, b) => a + b, 0);
+    return Math.max(0, total - Math.max(terminalHeightRef.current - UI_OVERHEAD, 5));
+  }
+
   useInput((_input, key) => {
     if (key.upArrow && key.ctrl) {
-      setScrollOffset(prev => Math.max(0, prev - 1));
+      setScrollLineOffset(prev => Math.max(0, prev - 1));
       return;
     }
     if (key.downArrow && key.ctrl) {
-      setScrollOffset(prev => {
-        const max = Math.max(0, messagesRef.current.length - pageSize);
+      setScrollLineOffset(prev => {
+        const max = getMaxLineOffset();
         return Math.min(max, prev + 1);
       });
       return;
     }
     if (key.pageUp) {
-      setScrollOffset(prev => Math.max(0, prev - pageSize));
+      setScrollLineOffset(prev => Math.max(0, prev - viewportLines));
       return;
     }
     if (key.pageDown) {
-      setScrollOffset(prev => {
-        const max = Math.max(0, messagesRef.current.length - pageSize);
-        return Math.min(max, prev + pageSize);
+      setScrollLineOffset(prev => {
+        const max = getMaxLineOffset();
+        return Math.min(max, prev + viewportLines);
       });
       return;
     }
     if (key.home) {
-      setScrollOffset(0);
+      setScrollLineOffset(0);
       return;
     }
     if (key.end) {
-      setScrollOffset(Math.max(0, messagesRef.current.length - pageSize));
+      setScrollLineOffset(getMaxLineOffset());
       return;
     }
   });
@@ -267,10 +366,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 
   return (
     <Box flexDirection="column">
-      {/* Scroll-up indicator */}
+      {/* Scroll-up indicator — shows lines above current viewport */}
       {useWindowing && !isAtBottom && !streamingMsg && (
         <Box>
-          <Text color={themeManager.getTheme().colors.text.muted} dimColor>↑ {completedMessages.length - clampedOffset - pageSize} more above</Text>
+          <Text color={themeManager.getTheme().colors.text.muted} dimColor>↑ {clampedLineOffset} lines above</Text>
         </Box>
       )}
 
