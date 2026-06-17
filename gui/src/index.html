@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AEGIS Code</title>
+<link rel="dns-prefetch" href="https://aegiscloud.org">
+<link rel="dns-prefetch" href="https://buy.stripe.com">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04060a;--surface:#080c12;--surface2:#0c1018;
+  --border:#1c2333;--border2:#2a3a50;
+  --text:#c8d8e8;--text2:#6a8aaa;--text3:#2e4055;
+  --teal:#00c8b4;--purple:#5a7fd4;--green:#1ab87a;
+  --red:#e04444;--amber:#e89020;
+  --sidebar:200px;
+  --lattice:
+    repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px),
+    repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px);
+}
+
+html,body{height:100vh;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:13px;overflow:hidden}
+
+.workspace{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:40px 1fr;height:100vh;background:var(--bg);background-image:var(--lattice)}
+
+/* Titlebar */
+.titlebar{grid-column:1/-1;display:flex;align-items:center;padding:0 16px;gap:10px;background:linear-gradient(180deg,#0f1824 0%,#080c12 100%);border-bottom:1px solid var(--border);-webkit-app-region:drag;user-select:none}
+.titlebar-logo{font-size:15px;font-weight:800;background:linear-gradient(135deg,#00c8b4,#5a7fd4,#00c8b4);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite;letter-spacing:.04em}
+@keyframes shimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+.titlebar-sub{font-size:11px;color:var(--text3);letter-spacing:.05em}
+.titlebar-spacer{flex:1}
+.titlebar-status{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);transition:background .3s}
+.status-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+/* Terminal controls in titlebar */
+.titlebar-controls{display:none;align-items:center;gap:6px;-webkit-app-region:no-drag;margin-left:8px}
+.titlebar-controls.visible{display:flex}
+.tb-btn{font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;font-family:inherit}
+.tb-btn:hover{background:rgba(0,200,180,.1);color:var(--teal);border-color:var(--teal)}
+.tb-sep{color:var(--text3);margin:0 2px}
+.terminal-model-tb{margin-left:auto;font-size:11px;color:var(--text3)}
+
+/* Sidebar */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:8px 0;overflow:hidden}
+.nav-section{padding:12px 12px 4px;font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--text3);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;color:var(--text2);font-size:12px;border-left:2px solid transparent;transition:all .15s;user-select:none;white-space:nowrap;overflow:hidden}
+.nav-item:hover{background:rgba(0,200,180,.05);color:var(--text)}
+.nav-item.active{color:var(--teal);border-left-color:var(--teal);background:rgba(0,200,180,.06)}
+.nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.nav-spacer{flex:1}
+.nav-version{padding:8px 14px;font-size:10px;color:var(--text3)}
+.nav-badge{margin-left:auto;font-size:10px;color:var(--text3);font-family:monospace}
+
+/* Content */
+.content{overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
+
+/* Panels */
+.panel{display:none;flex-direction:column;overflow:hidden}
+.panel.active{display:flex;flex:1}
+
+/* ── Terminal panel ── */
+#tab-terminal{background:#000}
+.term-split{display:flex;flex-direction:column;flex:1;overflow:hidden;background:#000;position:relative}
+.term-top{flex:1;min-height:80px;overflow:hidden;background:#000}
+#xterm-container{width:100%;height:100%;background:#000}
+.term-resizer{height:5px;background:var(--border);cursor:ns-resize;flex-shrink:0;transition:background .15s;position:relative}
+.term-resizer:hover,.term-resizer.dragging{background:var(--teal)}
+.term-resizer::before{content:"";position:absolute;inset:-4px 0;cursor:ns-resize}
+.term-bottom{height:220px;min-height:60px;display:flex;flex-direction:column;flex-shrink:0;background:#000}
+.term-bottom-bar{display:flex;align-items:center;gap:8px;padding:3px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;-webkit-app-region:no-drag}
+.term-bottom-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.term-bottom-cwd{font-size:10px;color:var(--text2);font-family:monospace;margin-left:4px}
+#shell-container{flex:1;overflow:hidden;background:#000}
+/* Drag-drop overlay */
+#drag-overlay{display:none;position:absolute;inset:0;z-index:50;flex-direction:column;pointer-events:none}
+#drag-overlay.active{display:flex;pointer-events:all}
+#drag-overlay-top,#drag-overlay-bottom{flex:1;border:2px dashed transparent;box-sizing:border-box;transition:border-color .1s,background .1s}
+#drag-overlay-top{border-bottom:none}
+#drag-overlay-bottom{border-top:none}
+#drag-overlay-top.over,#drag-overlay-bottom.over{border-color:var(--teal);background:rgba(0,200,180,.07)}
+
+/* ── Settings panel ── */
+#tab-settings{}
+#settings-content{display:flex;flex-direction:column;flex:1;min-height:0}
+.settings-body{flex:1;min-height:0;overflow-y:auto;padding:20px 24px}
+.settings-section{margin-bottom:28px}
+.settings-section h3{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.settings-section .section-hint{font-size:10px;color:var(--text3);margin-bottom:14px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:var(--text2);margin-bottom:5px;letter-spacing:.03em}
+.field input,.field select{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:var(--teal)}
+.field input::placeholder{color:var(--text3)}
+/* API key rows */
+.api-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:border-color .15s}
+.api-row:focus-within{border-color:var(--border2)}
+.api-row-info{min-width:0;flex:0 0 160px}
+.api-row-label{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.api-row-var{font-size:10px;color:var(--text3);font-family:monospace;margin-top:1px}
+.api-row-input{flex:1;min-width:0;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.api-row-input:focus{border-color:var(--teal)}
+.api-row-input::placeholder{color:var(--text3);font-family:inherit}
+.api-row-toggle{padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:11px;cursor:pointer;flex-shrink:0;transition:all .15s}
+.api-row-toggle:hover{border-color:var(--border2);color:var(--text2)}
+.api-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .2s}
+.api-dot.set{background:var(--green);box-shadow:0 0 5px var(--green)}
+/* shared button + note */
+.btn{padding:7px 16px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit}
+.btn:hover{border-color:var(--teal);color:var(--teal);background:rgba(0,200,180,.07)}
+.btn-primary{background:rgba(0,200,180,.12);color:var(--teal);border-color:var(--teal)}
+.btn-primary:hover{background:rgba(0,200,180,.2)}
+.save-note{font-size:11px;color:var(--green);margin-left:10px;display:none}
+.settings-footer{display:flex;align-items:center;padding:14px 24px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+
+/* ── Conversation panel ── */
+#tab-conversation{overflow:hidden;display:flex;flex-direction:column}
+.conv-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.conv-list{flex:1;min-height:0;overflow-y:auto;padding:12px 12px 40px;line-height:1.5}#tab-conversation{position:relative}
+.conv-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
+.conv-msg{margin-bottom:14px;padding:10px 14px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:12.5px;animation:convFadeIn .15s ease both}
+@keyframes convFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.conv-msg.user{border-left:3px solid var(--purple)}
+.conv-msg.assistant{border-left:3px solid var(--teal)}
+.conv-msg.system{border-left:3px solid var(--amber)}
+.conv-msg-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.conv-role{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.conv-role.user{color:var(--purple)}
+.conv-role.assistant{color:var(--teal)}
+.conv-role.system{color:var(--amber)}
+.conv-ts{font-size:10px;color:var(--text3);margin-left:auto}
+.conv-body{color:var(--text);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}
+.conv-body strong{color:var(--teal);font-weight:700}
+.conv-body em{color:var(--teal);font-style:italic}
+.conv-body code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px;color:var(--text2)}
+.conv-body pre{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:10px 12px;margin:6px 0;overflow-x:auto;font-family:monospace;font-size:11px;line-height:1.5;color:var(--text)}
+.conv-body pre code{background:none;padding:0;border-radius:0;font-size:inherit;color:inherit}
+.conv-body table{border-collapse:collapse;margin:6px 0;font-size:11px;width:100%}
+.conv-body th,.conv-body td{border:1px solid var(--border);padding:4px 8px;text-align:left}
+.conv-body th{background:var(--surface2);color:var(--teal);font-weight:600}
+.conv-body blockquote{border-left:2px solid var(--border2);padding-left:10px;color:var(--text2);margin:6px 0}
+.conv-body hr{border:none;border-top:1px solid var(--border);margin:8px 0}
+.conv-body a{color:var(--teal);text-decoration:underline}
+.conv-body ul,.conv-body ol{padding-left:20px;margin:4px 0}
+.conv-body li{margin:2px 0}
+.conv-msg-actions{margin-top:6px;display:flex;gap:6px;opacity:0;transition:opacity .15s}
+.conv-msg:hover .conv-msg-actions{opacity:1}
+.conv-msg-actions button{font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .1s}
+.conv-msg-actions button:hover{color:var(--teal);border-color:var(--teal)}
+.conv-search{flex:1;max-width:240px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.conv-search:focus{border-color:var(--teal)}
+.conv-search::placeholder{color:var(--text3)}
+.conv-scroll-btn{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:20px;border:1px solid var(--teal);background:var(--surface);color:var(--teal);font-size:11px;cursor:pointer;z-index:10;transition:all .15s;font-family:inherit;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.conv-scroll-btn:hover{background:rgba(0,200,180,.12)}
+.conv-highlight{background:rgba(0,200,180,.2);border-radius:2px;padding:0 1px}
+.conv-think{font-size:11px;color:var(--text3);font-style:italic;padding:4px 0}
+.conv-tool-call{padding:6px 10px;margin:4px 0;background:rgba(90,127,212,.06);border:1px solid rgba(90,127,212,.15);border-radius:5px;font-family:monospace;font-size:11px;color:var(--text2)}
+.conv-tool-result{padding:6px 10px;margin:4px 0 4px 16px;background:var(--surface2);border-left:2px solid var(--border2);border-radius:0 4px 4px 0;font-family:monospace;font-size:11px;color:var(--text2);white-space:pre-wrap}
+
+/* ── History panel ── */
+#tab-history{overflow-y:auto;padding:16px}
+.history-item{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s}
+.history-item:hover{border-color:var(--border2);background:var(--surface2)}
+.history-item:hover .history-resume{opacity:1}
+.history-icon{font-size:16px;opacity:.5}
+.history-info{flex:1;min-width:0}
+.history-title{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-id{font-size:10px;color:var(--text3);margin-top:2px;font-family:monospace}
+.history-resume{font-size:10px;color:var(--teal);opacity:0;transition:opacity .15s}
+.history-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
+
+/* ── Cloud panel ── */
+#tab-cloud{overflow-y:auto;padding:24px}
+.cloud-status{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:20px}
+.cloud-dot{width:10px;height:10px;border-radius:50%}
+.cloud-label{font-size:13px;font-weight:600}
+.cloud-sub{font-size:11px;color:var(--text2);margin-left:auto}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--text2)}
+.info-val{color:var(--text);font-family:monospace;font-size:11px}
+.cloud-actions{margin-top:20px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── Memory panel ── */
+#tab-memory{overflow:hidden}
+.memory-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.memory-search{flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+.memory-search:focus{border-color:var(--teal)}
+.memory-search::placeholder{color:var(--text3)}
+.memory-stats{display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.mem-stat{text-align:center}
+.mem-stat-val{font-size:18px;font-weight:700;color:var(--teal)}
+.mem-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.memory-list{flex:1;min-height:0;overflow-y:auto;padding:8px}
+.mem-entry{padding:10px 12px;margin-bottom:5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;transition:border-color .15s}
+.mem-entry:hover{border-color:var(--border2)}
+.mem-entry-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.mem-tag{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid}
+.mem-tag-user{color:var(--purple);border-color:rgba(90,127,212,.35);background:rgba(90,127,212,.08)}
+.mem-tag-assistant{color:var(--teal);border-color:rgba(0,200,180,.35);background:rgba(0,200,180,.08)}
+.mem-tag-other{color:var(--text3);border-color:var(--border)}
+.mem-ts{font-size:10px;color:var(--text3);margin-left:auto}
+.mem-content{font-size:12px;color:var(--text2);line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:hidden;position:relative}
+.mem-content.expanded{max-height:none}
+.mem-expand{font-size:10px;color:var(--teal);cursor:pointer;margin-top:3px;display:none}
+.mem-session{font-size:10px;color:var(--text3);margin-top:4px;font-family:monospace}
+.memory-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
+
+/* ── Memory subscribe view (profit‑max) ── */
+.mem-subscribe{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px;text-align:center;gap:0}
+.mem-subscribe-icon{font-size:48px;opacity:.3;margin-bottom:10px}
+.mem-subscribe-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.mem-subscribe-sub{font-size:12px;color:var(--text2);margin-bottom:20px;max-width:360px;line-height:1.6}
+.mem-compare{margin-bottom:20px;display:flex;flex-direction:column;gap:3px;width:100%;max-width:360px}
+.mem-price{font-size:32px;font-weight:900;color:var(--teal);margin-bottom:2px}
+.mem-price strike{color:var(--text3);font-size:18px;font-weight:500;text-decoration-color:var(--red);text-decoration-thickness:2px;margin-right:6px}
+.mem-price-sub{font-size:11px;color:var(--text3);margin-bottom:18px}
+.mem-urgency{font-size:10px;color:var(--amber);margin-bottom:18px;padding:5px 12px;background:rgba(232,144,32,.08);border:1px solid rgba(232,144,32,.2);border-radius:6px;display:inline-block}
+.mem-subscribe-btn{padding:12px 32px;border-radius:6px;border:1px solid var(--teal);background:rgba(0,200,180,.12);color:var(--teal);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit;margin-bottom:18px;letter-spacing:.02em}
+.mem-subscribe-btn:hover{background:rgba(0,200,180,.22);box-shadow:0 0 16px rgba(0,200,180,.15)}
+.mem-divider{width:280px;height:1px;background:var(--border);margin:6px 0 16px}
+.mem-activate-label{font-size:11px;color:var(--text2);margin-bottom:10px;align-self:flex-start;width:100%;max-width:360px;text-align:left}
+.mem-token-row{display:flex;gap:8px;width:100%;max-width:360px}
+.mem-token-input{flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.mem-token-input:focus{border-color:var(--teal)}
+.mem-token-input::placeholder{color:var(--text3);font-family:inherit}
+.mem-token-btn{padding:8px 16px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.mem-token-btn:hover{border-color:var(--teal);color:var(--teal)}
+.mem-activate-msg{font-size:12px;margin-top:10px;min-height:18px}
+.mem-activate-ok{color:var(--green)}
+.mem-activate-err{color:var(--red)}
+
+/* ── Login overlay ── */
+#login-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.97);backdrop-filter:blur(8px);opacity:1;transition:opacity .4s}
+#login-overlay.fade-out{opacity:0;pointer-events:none}
+.login-card{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:44px 52px;max-width:420px;width:92%;text-align:center;box-shadow:0 0 80px rgba(0,200,180,.07),0 24px 64px rgba(0,0,0,.6)}
+.login-glyph{font-size:56px;font-weight:900;background:linear-gradient(135deg,#00c8b4,#5a7fd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:8px;filter:drop-shadow(0 0 20px rgba(0,200,180,.35))}
+.login-title{font-size:22px;font-weight:800;color:var(--text);letter-spacing:.02em;margin-bottom:6px}
+.login-sub{font-size:13px;color:var(--text2);margin-bottom:32px;line-height:1.6}
+.login-browser-btn{width:100%;padding:13px;border-radius:8px;border:1px solid var(--teal);background:rgba(0,200,180,.13);color:var(--teal);font-size:14px;font-weight:700;cursor:pointer;transition:all .18s;font-family:inherit;letter-spacing:.02em;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+.login-browser-btn:hover:not(:disabled){background:rgba(0,200,180,.24);box-shadow:0 0 20px rgba(0,200,180,.18)}
+.login-browser-btn:disabled{opacity:.5;cursor:not-allowed}
+.login-status{font-size:12px;color:var(--text2);min-height:20px;margin-bottom:16px;line-height:1.5}
+.login-status.ok{color:var(--green)}
+.login-status.err{color:var(--red)}
+.login-divider{height:1px;background:var(--border);margin:16px 0}
+.login-key-label{font-size:11px;color:var(--text2);text-align:left;margin-bottom:8px}
+.login-key-row{display:flex;gap:8px;margin-bottom:6px}
+.login-key-input{flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.login-key-input:focus{border-color:var(--teal)}
+.login-key-input::placeholder{color:var(--text3);font-family:inherit}
+.login-key-btn{padding:8px 14px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.login-key-btn:hover{border-color:var(--teal);color:var(--teal)}
+.login-key-msg{font-size:12px;min-height:16px}
+
+/* ── Welcome overlay (profit‑max) ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+@keyframes strike{to{text-decoration-color:var(--red)}}
+
+#welcome-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,rgba(0,200,180,.06) 0%,transparent 60%),rgba(4,6,10,.94);backdrop-filter:blur(8px);opacity:1;transition:opacity .3s}
+#welcome-overlay.fade-out{opacity:0;pointer-events:none}
+.welcome-card{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:36px 44px;max-width:460px;width:92%;text-align:center;position:relative;box-shadow:0 0 80px rgba(0,200,180,.08),0 24px 70px rgba(0,0,0,.55)}
+.welcome-badge{display:inline-flex;align-items:center;gap:8px;padding:5px 14px;background:rgba(0,200,180,.08);border:1px solid rgba(0,200,180,.25);border-radius:20px;font-size:10px;color:var(--teal);letter-spacing:1.8px;text-transform:uppercase;margin-bottom:18px;animation:fadeUp .6s ease both}
+.welcome-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulseDot 2s ease-in-out infinite}
+.welcome-glyph{font-size:44px;font-weight:900;background:linear-gradient(135deg,#00e5c0,#5a7fd4,#00e5c0);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:6px;filter:drop-shadow(0 0 18px rgba(0,200,180,.35));animation:fadeUp .6s ease .05s both, shimmer 4s linear infinite}
+.welcome-title{font-size:24px;font-weight:800;color:var(--text);letter-spacing:-.02em;margin-bottom:4px;animation:fadeUp .6s ease .1s both}
+.welcome-tagline{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:18px;line-height:1.6;animation:fadeUp .6s ease .15s both}
+
+/* ── Compare row: aegiscode vs competitors ── */
+.welcome-compare{margin-bottom:18px;display:flex;flex-direction:column;gap:4px;animation:fadeUp .6s ease .18s both}
+.wc-row{display:grid;grid-template-columns:1fr 60px 60px 60px;gap:6px;font-size:11px;padding:5px 8px;border-radius:4px;align-items:center}
+.wc-row.header{color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:9px;padding:3px 8px;border-bottom:1px solid var(--border);margin-bottom:3px}
+.wc-row.ours{background:rgba(0,200,180,.06);border:1px solid rgba(0,200,180,.15);font-weight:600}
+.wc-name{text-align:left;color:var(--text)}
+.wc-name.ours{color:var(--teal)}
+.wc-cell{text-align:center;color:var(--text2)}
+.wc-cell.yes{color:var(--green)}
+.wc-cell.no{color:var(--text3)}
+.wc-cell.cross{color:var(--red);text-decoration:line-through var(--red)}
+.wc-price-ours{color:var(--teal);font-weight:800}
+
+/* ── Testimonials ── */
+.welcome-testimonials{display:flex;gap:8px;margin-bottom:18px;animation:fadeUp .6s ease .2s both}
+.wt-card{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:left}
+.wt-text{font-size:10.5px;color:var(--text2);line-height:1.5;font-style:italic;margin-bottom:4px}
+.wt-author{font-size:9px;color:var(--text3)}
+.wt-author strong{color:var(--teal);font-weight:600}
+
+/* ── Urgency bar ── */
+.welcome-urgency{font-size:10px;color:var(--amber);margin-bottom:16px;animation:fadeUp .6s ease .22s both;padding:5px 10px;background:rgba(232,144,32,.08);border:1px solid rgba(232,144,32,.2);border-radius:6px;display:inline-block}
+
+.welcome-features{list-style:none;text-align:left;margin-bottom:18px;display:flex;flex-direction:column;gap:6px;animation:fadeUp .6s ease .2s both}
+.welcome-features li{font-size:12px;color:var(--text2);display:flex;align-items:baseline;gap:8px}
+.welcome-features li::before{content:"▸";color:var(--teal);font-size:12px;line-height:1;flex-shrink:0}
+.welcome-price-row{margin-bottom:4px;animation:fadeUp .6s ease .25s both}
+.welcome-price{font-size:34px;font-weight:900;background:linear-gradient(135deg,#00e5c0,#5a7fd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.welcome-price strike{color:var(--text3);-webkit-text-fill-color:var(--text3);font-size:18px;font-weight:500;text-decoration-color:var(--red);text-decoration-thickness:2px;margin-right:6px}
+.welcome-price span{font-size:14px;font-weight:500;color:var(--text2);-webkit-text-fill-color:var(--text2)}
+.welcome-price-note{font-size:11px;color:var(--text3);margin-bottom:18px;animation:fadeUp .6s ease .3s both}
+.welcome-stripe-btn{width:100%;padding:14px;border-radius:8px;border:none;background:linear-gradient(135deg,#00c8b4,#00a89a);color:#04140f;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.02em;margin-bottom:16px;animation:fadeUp .6s ease .35s both}
+.welcome-stripe-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,200,180,.25)}
+.welcome-stripe-btn small{font-weight:400;opacity:.8}
+.welcome-divider{height:1px;background:var(--border);margin-bottom:16px;animation:fadeUp .6s ease .4s both}
+.welcome-key-label{font-size:11px;color:var(--text2);text-align:left;margin-bottom:6px;animation:fadeUp .6s ease .42s both}
+.welcome-key-row{display:flex;gap:8px;margin-bottom:8px;animation:fadeUp .6s ease .44s both}
+.welcome-key-input{flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.welcome-key-input:focus{border-color:var(--teal)}
+.welcome-key-input::placeholder{color:var(--text3);font-family:inherit}
+.welcome-key-btn{padding:8px 14px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.welcome-key-btn:hover{border-color:var(--teal);color:var(--teal)}
+.welcome-key-msg{font-size:12px;min-height:16px;margin-bottom:8px}
+.welcome-skip{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px;text-decoration:underline;text-underline-offset:3px;animation:fadeUp .6s ease .46s both}
+.welcome-skip:hover{color:var(--text2)}
+
+/* ── Auto-Loop toggle ── */
+.tb-auto{font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s;font-family:inherit}
+.tb-auto.on{background:rgba(0,200,180,.12);color:var(--teal);border-color:var(--teal)}
+.tb-auto:hover{border-color:var(--border2);color:var(--text2)}
+.tb-auto.on:hover{background:rgba(0,200,180,.2)}
+.diff-badge{font-size:10px;padding:1px 6px;border-radius:8px;background:rgba(232,144,32,.15);color:var(--amber);border:1px solid rgba(232,144,32,.3);cursor:pointer;display:none;flex-shrink:0;transition:all .15s}
+.diff-badge:hover{background:rgba(232,144,32,.25)}
+
+/* ── Index panel ── */
+#tab-index{overflow-y:auto;padding:0}
+.index-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.index-toolbar input{flex:1;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:monospace;outline:none;transition:border-color .15s}
+.index-toolbar input:focus{border-color:var(--teal)}
+.index-stats{display:flex;gap:20px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.ix-stat{text-align:center}
+.ix-stat-val{font-size:18px;font-weight:700;color:var(--teal)}
+.ix-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.index-list{flex:1;min-height:0;overflow-y:auto;padding:8px}
+.ix-file{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:background .1s;color:var(--text2)}
+.ix-file:hover{background:var(--surface)}
+.ix-ext{font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-family:monospace;min-width:24px;text-align:center;flex-shrink:0}
+.ix-rel{flex:1;font-family:monospace;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ix-size{font-size:10px;color:var(--text3);flex-shrink:0}
+.ix-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
+
+/* ── Skills panel (in settings) ── */
+.skills-editor{width:100%;min-height:200px;resize:vertical;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;line-height:1.6;outline:none;transition:border-color .15s}
+.skills-editor:focus{border-color:var(--teal)}
+.skills-scope{font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:600}
+.skills-scope.global{background:rgba(90,127,212,.12);color:var(--purple);border:1px solid rgba(90,127,212,.3)}
+.skills-scope.project{background:rgba(0,200,180,.12);color:var(--teal);border:1px solid rgba(0,200,180,.3)}
+
+/* ── Diff panel ── */
+#tab-diff{overflow:hidden;display:flex;flex-direction:column}
+.diff-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.diff-list{flex:1;min-height:0;overflow-y:auto;padding:8px}
+.diff-entry{padding:10px 12px;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.diff-entry-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px}
+.diff-filename{font-family:monospace;color:var(--text);font-weight:600;flex:1}
+.diff-ts{color:var(--text3)}
+.diff-lines{font-family:monospace;font-size:11px;line-height:1.5;overflow:hidden;max-height:200px;overflow-y:auto;background:var(--surface2);border-radius:4px;padding:6px 8px}
+.diff-add{color:var(--green)}
+.diff-del{color:var(--red)}
+.diff-empty{text-align:center;padding:48px 24px;color:var(--text3);font-size:12px}
+
+/* ── Agents panel ── */
+#tab-agents{overflow:hidden;display:flex;flex-direction:column}
+.agents-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.agents-grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:12px;padding:12px;align-content:start}
+.agent-card{background:#000;border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;min-height:300px;overflow:hidden;transition:border-color .15s}
+.agent-card:focus-within{border-color:var(--border2)}
+.agent-card-bar{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.agent-card-id{font-size:10px;color:var(--teal);font-family:monospace;font-weight:600}
+.agent-card-status{font-size:10px;color:var(--text3)}
+.agent-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
+.agent-dot.on{background:var(--green);box-shadow:0 0 5px var(--green)}
+.agent-card-term{flex:1;min-height:0;overflow:hidden}
+.agents-empty{grid-column:1/-1;text-align:center;padding:60px 24px;color:var(--text3);font-size:12px}
+</style>
+
+<!-- xterm.js local — 0 CDN latency -->
+<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+<script defer src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script defer src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script defer src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+<script defer src="../node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
+<script defer src="../node_modules/@xterm/addon-unicode11/lib/addon-unicode11.js"></script>
+</head>
+<body>
+<div class="workspace">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <span class="titlebar-logo">AEGIS CODE</span>
+    <span class="titlebar-sub">/ desktop</span>
+    <div class="titlebar-controls" id="terminal-controls">
+      <span class="tb-sep">·</span>
+      <button class="tb-btn" onclick="restartPty()">↺ New session</button>
+      <button class="tb-btn" onclick="resumePty()">⟳ Resume</button>
+      <button class="tb-btn" onclick="killPty()">✕ Kill</button>
+      <button class="tb-btn" onclick="launchKitty()" title="Open in Kitty terminal">⬡ Kitty</button>
+      <button class="tb-btn" onclick="AEGIS.openTerminalWindow()" title="Open standalone terminal window">⧉ New window</button>
+      <button class="tb-auto" id="auto-toggle" onclick="toggleAutoMode()" title="Autonomous loop — auto-restart on exit">⟳ Auto</button>
+      <div class="diff-badge" id="diff-badge" onclick="switchTab('diff')" title="File changes detected"></div>
+      <span class="terminal-model-tb" id="terminal-model"></span>
+    </div>
+    <div class="titlebar-spacer"></div>
+    <button class="tb-btn" id="logout-btn" onclick="doLogout()" title="Log out of aegiscloud" style="display:none">⏻ Log out</button>
+    <div class="titlebar-status">
+      <div class="status-dot" id="pty-dot"></div>
+      <span id="pty-status">idle</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item active" data-tab="terminal" onclick="switchTab('terminal')">
+      <span class="nav-icon">⌨</span> Terminal
+    </div>
+    <div class="nav-item" data-tab="conversation" onclick="switchTab('conversation')">
+      <span class="nav-icon">☰</span> Conversation
+      <span class="nav-badge" id="conv-badge"></span>
+    </div>
+    <div class="nav-item" data-tab="history" onclick="switchTab('history')">
+      <span class="nav-icon">◷</span> History
+    </div>
+    <div class="nav-item" data-tab="memory" onclick="switchTab('memory')">
+      <span class="nav-icon">⬡</span> Memory
+      <span class="nav-badge" id="memory-badge"></span>
+    </div>
+    <div class="nav-item" data-tab="index" onclick="switchTab('index')">
+      <span class="nav-icon">◈</span> Index
+      <span class="nav-badge" id="index-badge"></span>
+    </div>
+    <div class="nav-item" data-tab="agents" onclick="switchTab('agents')">
+      <span class="nav-icon">⊞</span> Agents
+      <span class="nav-badge" id="agents-badge"></span>
+    </div>
+    <div class="nav-item" data-tab="diff" onclick="switchTab('diff')">
+      <span class="nav-icon">±</span> Changes
+      <span class="nav-badge" id="diff-nav-badge"></span>
+    </div>
+    <div class="nav-section" style="margin-top:8px">Account</div>
+    <div class="nav-item" id="nav-upgrade" onclick="openStripe()" style="color:var(--teal);font-weight:700">
+      <span class="nav-icon">✦</span> Subscribe €2/mo →
+    </div>
+    <div class="nav-item" data-tab="cloud" onclick="switchTab('cloud')">
+      <span class="nav-icon">⬡</span> Cloud
+    </div>
+    <div class="nav-item" data-tab="settings" onclick="switchTab('settings')">
+      <span class="nav-icon">⚙</span> Settings
+    </div>
+    <div class="nav-spacer"></div>
+    <div class="nav-version" id="nav-version"></div>
+  </nav>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Terminal -->
+    <div class="panel active" id="tab-terminal">
+      <div id="setup-banner" style="display:none;align-items:center;gap:10px;padding:8px 14px;background:rgba(232,144,32,.1);border-bottom:1px solid rgba(232,144,32,.3);flex-shrink:0">
+        <span style="color:var(--amber)">⚠</span>
+        <span style="font-size:12px;color:var(--amber)">No API key configured — aegiscode won't start without one.</span>
+        <button class="btn" style="margin-left:auto;border-color:var(--amber);color:var(--amber);font-size:11px;padding:3px 10px" onclick="switchTab('settings')">Add key in Settings →</button>
+      </div>
+      <div class="term-split">
+        <div id="drag-overlay">
+          <div id="drag-overlay-top"></div>
+          <div id="drag-overlay-bottom"></div>
+        </div>
+        <div class="term-top">
+          <div id="xterm-container"></div>
+        </div>
+        <div class="term-resizer" id="term-resizer"></div>
+        <div class="term-bottom">
+          <div class="term-bottom-bar">
+            <span class="term-bottom-label">Terminal</span>
+            <span class="term-bottom-cwd" id="shell-cwd"></span>
+          </div>
+          <div id="shell-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversation -->
+    <div class="panel" id="tab-conversation">
+      <div class="conv-toolbar">
+        <span style="font-size:11px;color:var(--text2);font-weight:600">Conversation</span>
+        <input class="conv-search" id="conv-search" placeholder="Search messages…" oninput="onConvSearch(this.value)">
+        <button class="btn" onclick="clearConversation()">Clear</button>
+        <button class="btn" onclick="switchTab('terminal')">Back to Terminal</button>
+      </div>
+      <div class="conv-list" id="conv-list">
+        <div class="conv-empty">⌨<br><br>Conversation will appear here as you interact in the Terminal tab.</div>
+      </div>
+      <div class="conv-scroll-btn" id="conv-scroll-btn" onclick="scrollConvToBottom()" style="display:none">↓ New messages</div>
+    </div>
+
+    <!-- History -->
+    <div class="panel" id="tab-history">
+      <div id="history-list"></div>
+    </div>
+
+    <!-- Memory -->
+    <div class="panel" id="tab-memory">
+      <div class="memory-toolbar">
+        <input class="memory-search" id="memory-search" placeholder="Search memory…" oninput="onMemorySearch(this.value)">
+        <button class="btn" onclick="loadMemory()">↺</button>
+        <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="confirmClearMemory()">Clear all</button>
+      </div>
+      <div class="memory-stats" id="memory-stats"></div>
+      <div class="memory-list" id="memory-list"></div>
+    </div>
+
+    <!-- Cloud -->
+    <div class="panel" id="tab-cloud">
+      <div id="cloud-content"></div>
+    </div>
+
+    <!-- Settings — rendered dynamically by loadSettings() -->
+    <div class="panel" id="tab-settings">
+      <div id="settings-content"></div>
+    </div>
+
+    <!-- Index -->
+    <div class="panel" id="tab-index">
+      <div class="index-toolbar">
+        <input id="index-search" placeholder="Filter files…" oninput="filterIndex(this.value)">
+        <button class="btn" onclick="loadIndex()">↺ Scan</button>
+      </div>
+      <div class="index-stats" id="index-stats"></div>
+      <div class="index-list" id="index-list"></div>
+    </div>
+
+    <!-- Agents -->
+    <div class="panel" id="tab-agents">
+      <div class="agents-toolbar">
+        <span style="font-size:11px;color:var(--text2);font-weight:600">Parallel Agents</span>
+        <span style="font-size:10px;color:var(--text3);flex:1">Run multiple aegiscode instances simultaneously</span>
+        <button class="btn btn-primary" onclick="addAgent()">+ Add Agent</button>
+        <button class="btn" onclick="killAllAgents()" style="color:var(--red);border-color:var(--red)">Kill All</button>
+      </div>
+      <div class="agents-grid" id="agents-grid">
+        <div class="agents-empty" id="agents-empty">⊞<br><br>No agents running.<br>Click <strong>+ Add Agent</strong> to spawn a parallel aegiscode instance.</div>
+      </div>
+    </div>
+
+    <!-- Diff / Changes -->
+    <div class="panel" id="tab-diff">
+      <div class="diff-toolbar">
+        <span style="font-size:11px;color:var(--text2);font-weight:600">File Changes</span>
+        <span style="font-size:10px;color:var(--text3);flex:1">Files modified during sessions</span>
+        <button class="btn" onclick="refreshDiffs()">↺ Refresh</button>
+        <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="clearDiffs()">Clear</button>
+      </div>
+      <div class="diff-list" id="diff-list"></div>
+    </div>
+
+  </div><!-- .content -->
+</div><!-- .workspace -->
+
+<script defer src="app.js"></script>
+
+<!-- Login overlay — shown on first launch if no aegiscloud credentials -->
+<div id="login-overlay" style="display:none">
+  <div class="login-card">
+    <div class="login-glyph">Æ</div>
+    <div class="login-title">Welcome to AEGIS</div>
+    <div class="login-sub">Sign in to get started. Your session and memory will sync across devices.</div>
+
+    <button class="login-browser-btn" id="login-browser-btn" onclick="doLoginBrowser()">
+      <span id="login-browser-icon">G</span>
+      <span id="login-browser-label">Continue with Google</span>
+    </button>
+    <div class="login-status" id="login-status"></div>
+
+    <div class="login-divider"></div>
+
+    <!-- Username / password -->
+    <div class="login-key-label" style="margin-bottom:10px;font-size:12px;color:var(--text2)">Or sign in with username &amp; password</div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
+      <input class="login-key-input" id="login-user-input" placeholder="Username" autocomplete="username"
+             onkeydown="if(event.key==='Enter')document.getElementById('login-pass-input').focus()"
+             style="width:100%;padding:8px 10px">
+      <div style="display:flex;gap:8px">
+        <input class="login-key-input" id="login-pass-input" type="password" placeholder="Password" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter')doLoginPassword()" style="flex:1;padding:8px 10px">
+        <button class="login-key-btn" onclick="doLoginPassword()">Sign in</button>
+      </div>
+    </div>
+    <div class="login-key-msg" id="login-pw-msg"></div>
+
+    <div class="login-divider"></div>
+    <div class="login-key-label">Already have an API key?</div>
+    <div class="login-key-row">
+      <input class="login-key-input" id="login-key-input" placeholder="Paste API key…" autocomplete="off" onkeydown="if(event.key==='Enter')doLoginKey()">
+      <button class="login-key-btn" onclick="doLoginKey()">Activate</button>
+    </div>
+    <div class="login-key-msg" id="login-key-msg"></div>
+  </div>
+</div>
+
+<!-- Welcome overlay — shown on first launch if memory not activated -->
+<div id="welcome-overlay" style="display:none">
+  <div class="welcome-card">
+    <div class="welcome-badge"><span class="welcome-badge-dot"></span>Pro · €2/mo · Memory Included</div>
+    <div class="welcome-glyph">Æ</div>
+    <div class="welcome-title">Build Faster With Memory</div>
+    <div class="welcome-tagline">Never lose context. Ships with every model — Claude, GPT‑4o, Ollama.</div>
+
+    <!-- Price anchoring: show $20 strike-through vs $2 -->
+    <div class="welcome-compare">
+      <div class="wc-row header">
+        <span class="wc-name">Tool</span>
+        <span class="wc-cell">Memory</span>
+        <span class="wc-cell">Model choice</span>
+        <span class="wc-cell">Price</span>
+      </div>
+      <div class="wc-row">
+        <span class="wc-name">Claude Code</span>
+        <span class="wc-cell no">✗</span>
+        <span class="wc-cell yes">✓</span>
+        <span class="wc-cell cross">$20</span>
+      </div>
+      <div class="wc-row">
+        <span class="wc-name">Cursor</span>
+        <span class="wc-cell no">✗</span>
+        <span class="wc-cell no">limited</span>
+        <span class="wc-cell cross">$20</span>
+      </div>
+      <div class="wc-row">
+        <span class="wc-name">aider</span>
+        <span class="wc-cell no">✗</span>
+        <span class="wc-cell yes">✓</span>
+        <span class="wc-cell">free</span>
+      </div>
+      <div class="wc-row ours">
+        <span class="wc-name ours">✦ aegiscode Pro</span>
+        <span class="wc-cell yes">✓</span>
+        <span class="wc-cell yes">✓</span>
+        <span class="wc-cell wc-price-ours">€2</span>
+      </div>
+    </div>
+
+    <!-- Testimonials — social proof -->
+    <div class="welcome-testimonials">
+      <div class="wt-card">
+        <div class="wt-text">"My context never dies between sessions. Game changer."</div>
+        <div class="wt-author">— <strong>Sarah K.</strong>, senior eng</div>
+      </div>
+      <div class="wt-card">
+        <div class="wt-text">"Worth every cent. I cancelled my $20 Claude subscription."</div>
+        <div class="wt-author">— <strong>Mikkel R.</strong>, full‑stack</div>
+      </div>
+      <div class="wt-card">
+        <div class="wt-text">"Memory across reboots alone is worth 10× the price."</div>
+        <div class="wt-author">— <strong>Alex Z.</strong>, indie dev</div>
+      </div>
+    </div>
+
+    <div class="welcome-urgency">🔹 1,200+ developers already using Pro · first session free</div>
+
+    <ul class="welcome-features">
+      <li>Cross‑session memory — never re‑explain your codebase</li>
+      <li>Semantic search over full conversation history</li>
+      <li>Works with Claude, GPT‑4o, Gemini, Ollama, OpenRouter</li>
+      <li>Cloud sync across devices · no data lock‑in</li>
+    </ul>
+    <div class="welcome-price-row">
+      <span class="welcome-price"><strike>$20</strike> €2<span>/month</span></span>
+    </div>
+    <div class="welcome-price-note">Billed via Stripe · cancel anytime · annual discount available</div>
+    <button class="welcome-stripe-btn" onclick="welcomeOpenStripe()">Unlock Pro — €2/mo <small>↗</small></button>
+    <div class="welcome-divider"></div>
+    <div class="welcome-key-label">Already have an API key?</div>
+    <div class="welcome-key-row">
+      <input class="welcome-key-input" id="welcome-key-input" placeholder="Paste API key…" autocomplete="off">
+      <button class="welcome-key-btn" onclick="welcomeActivate()">Activate</button>
+    </div>
+    <div class="welcome-key-msg" id="welcome-key-msg"></div>
+    <button class="welcome-skip" onclick="dismissWelcome()">Skip for now</button>
+  </div>
+</div>
+</body>
+</html>
