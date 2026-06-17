@@ -101,9 +101,18 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 }) => {
   // ==================== Internal Scroll State ====================
   const [messages, setMessages] = useState(() => getState().session.messages);
-  const [scrollLineOffset, setScrollLineOffset] = useState(0);
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
   const [streamingVersion, setStreamingVersion] = useState(0);
+
+  // Start scrolled to bottom on mount so the latest messages are visible
+  const [scrollLineOffset, setScrollLineOffset] = useState(() => {
+    const msgs = getState().session.messages.filter(m => !m.isStreaming);
+    const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
+    const lines = capped.map(m => estimateMessageLines(m.content, m.thinking, terminalWidth, m.contentBlocks));
+    const total = lines.reduce((a, b) => a + b, 0);
+    const vp = Math.max(terminalHeight - UI_OVERHEAD, 5);
+    return Math.max(0, total - vp);
+  });
 
   // Refs for values used in callbacks/RAF
   const messagesRef = useRef(messages);
@@ -337,6 +346,23 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       }
 
       if (messagesChanged) {
+        // Auto-scroll to bottom when a new user message or streaming message appears
+        const prevLen = prevMessages.length;
+        const newLen = newMessages.length;
+        if (newLen > prevLen) {
+          const lastNew = newMessages[newLen - 1];
+          if (lastNew?.role === 'user' || lastNew?.isStreaming) {
+            // User message or streaming start → jump to bottom
+            const msgs = newMessages.filter(m => !m.isStreaming);
+            const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
+            const lines = capped.map(m => estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks));
+            const total = lines.reduce((a, b) => a + b, 0);
+            const vp = Math.max(terminalHeightRef.current - UI_OVERHEAD, 5);
+            const maxOff = Math.max(0, total - vp);
+            setScrollLineOffset(maxOff);
+          }
+        }
+
         // When streaming transitions to complete, apply immediately
         const wasStreaming = prevMessages[prevMessages.length - 1]?.isStreaming ?? false;
         const nowStreaming = newMessages[newMessages.length - 1]?.isStreaming ?? false;
