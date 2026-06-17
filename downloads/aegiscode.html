@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index, follow">
+<meta name="description" content="Download AEGIS Code — multi-model AI coding assistant with cross-session memory. Free to start, €2/mo Pro. Linux, macOS, Windows binaries.">
+<meta name="keywords" content="download aegiscode, AI coding assistant, terminal AI, Claude Code alternative, Cursor alternative, AI pair programmer">
+<link rel="canonical" href="https://dl.aegiscloud.org">
+<!-- Open Graph -->
+<meta property="og:title" content="Download AEGIS Code">
+<meta property="og:description" content="Multi-model AI coding sidekick with memory. Free to start, €2/mo Pro.">
+<meta property="og:url" content="https://dl.aegiscloud.org">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AEGIS Code">
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Download AEGIS Code">
+<meta name="twitter:description" content="AI coding sidekick with cross-session memory. Free to start, €2/mo.">
+<title>Download AEGIS Code — AI Coding Assistant With Memory</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04060a;--surface:#080c12;--surface2:#0c1018;
+  --border:#1c2333;--border2:#2a3a50;
+  --text:#c8d8e8;--text2:#6a8aaa;--text3:#2e4055;
+  --teal:#00c8b4;--purple:#5a7fd4;--green:#1ab87a;
+  --red:#e04444;--amber:#e89020;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh;
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px),
+  repeating-linear-gradient(90deg,transparent,transparent 28px,rgba(0,180,200,.03) 28px,rgba(0,180,200,.03) 29px)}
+a{color:var(--teal);text-decoration:underline;text-underline-offset:2px}
+a:hover{color:#00e8d0}
+header{text-align:center;padding:60px 20px 40px}
+.logo{font-size:48px;font-weight:900;background:linear-gradient(135deg,#00c8b4,#5a7fd4,#00c8b4);background-size:200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite;letter-spacing:.04em;display:inline-block}
+@keyframes shimmer{0%{background-position:0 50%}100%{background-position:200% 50%}}
+h1{font-size:32px;font-weight:800;color:var(--text);margin:8px 0 4px}
+.subtitle{font-size:15px;color:var(--text2);max-width:500px;margin:0 auto 24px}
+.tag{display:inline-block;padding:4px 14px;border-radius:20px;font-size:11px;background:rgba(0,200,180,.08);border:1px solid rgba(0,200,180,.25);color:var(--teal);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px}
+.container{max-width:960px;margin:0 auto;padding:0 20px 80px}
+
+/* Platform cards */
+.platforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:48px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;text-align:center;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card-icon{font-size:36px;margin-bottom:8px;line-height:1}
+.card h2{font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px}
+.card .desc{font-size:12px;color:var(--text3);margin-bottom:16px}
+.card .dl-btn{display:inline-block;padding:10px 26px;border-radius:6px;border:1px solid var(--teal);background:rgba(0,200,180,.12);color:var(--teal);font-size:13px;font-weight:700;text-decoration:none;transition:all .15s;font-family:inherit;margin-bottom:10px;cursor:pointer}
+.card .dl-btn:hover{background:rgba(0,200,180,.22);box-shadow:0 0 14px rgba(0,200,180,.12)}
+.card .dl-meta{font-size:10px;color:var(--text3)}
+.alt-link{font-size:11px;color:var(--text3);margin-top:8px}
+
+/* Install section */
+.section{margin-bottom:40px}
+.section h3{font-size:14px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.08em;padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.code-block{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px 16px;font-family:"SF Mono","Cascadia Code","Fira Code",monospace;font-size:12px;color:var(--text);line-height:1.7;overflow-x:auto;margin-bottom:10px;white-space:pre-wrap}
+.code-block .prompt{color:var(--text3);user-select:none}
+.code-block .hl{color:var(--teal)}
+.code-block .dim{color:var(--text3)}
+
+/* Feature grid */
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:24px 0}
+.feature{padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-align:center}
+.feature emoji{font-size:22px;display:block;margin-bottom:6px}
+.feature strong{font-size:12px;color:var(--text);display:block;margin-bottom:2px}
+.feature span{font-size:11px;color:var(--text2)}
+
+/* Quick install */
+.quick{text-align:center;padding:32px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:40px}
+.quick h3{font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px;border:none;padding:0}
+.quick p{font-size:12px;color:var(--text2);margin-bottom:14px}
+.quick .copy-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 20px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
+.quick .copy-btn:hover{color:var(--teal);border-color:var(--teal)}
+.quick .copy-ok{color:var(--green);font-size:11px;display:none}
+
+/* Footer */
+footer{text-align:center;padding:32px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)}
+footer a{color:var(--text2)}
+footer .links{display:flex;justify-content:center;gap:20px;margin-bottom:8px;flex-wrap:wrap}
+footer .links a{font-size:12px;text-decoration:none}
+footer .links a:hover{color:var(--teal)}
+
+@media(max-width:600px){
+  header{padding:40px 16px 28px}
+  .logo{font-size:36px}
+  h1{font-size:24px}
+  .platforms{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Æ</div>
+  <h1>Download AEGIS Code</h1>
+  <p class="subtitle">The multi-model AI coding sidekick that never forgets. Free to start, €2/mo for Pro.</p>
+  <div class="tag">v0.6.24 · Latest</div>
+</header>
+
+<div class="container">
+
+  <!-- Quick install -->
+  <div class="quick">
+    <h3>⚡ Quick Install — Linux & macOS</h3>
+    <p>One-line install via curl. Node.js 22+ required.</p>
+    <div class="code-block" style="text-align:left;margin-bottom:12px;display:inline-block;text-align:left">curl -fsSL https://dl.aegiscloud.org/install.sh | bash</div>
+    <div>
+      <button class="copy-btn" onclick="copyInstall()">📋 Copy command</button>
+      <span class="copy-ok" id="copy-ok">✓ Copied</span>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:10px">Then run: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px;font-family:monospace;font-size:11px">aegis</code></p>
+  </div>
+
+  <!-- Platform downloads -->
+  <div class="section">
+    <h3>⬇ Platform binaries</h3>
+    <div class="platforms">
+      <div class="card">
+        <div class="card-icon">🐧</div>
+        <h2>Linux</h2>
+        <p class="desc">x86_64 · deb / AppImage / tarball</p>
+        <a class="dl-btn" href="https://dl.aegiscloud.org/aegiscode-latest-linux-x64.deb">Download .deb</a>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:15px">or</p>
+        <a class="dl-btn" href="https://dl.aegiscloud.org/aegiscode-latest-linux-x64.AppImage">Download AppImage</a>
+      </div>
+      <div class="card">
+        <div class="card-icon">🍎</div>
+        <h2>macOS</h2>
+        <p class="desc">Universal (Intel &amp; Apple Silicon)</p>
+        <a class="dl-btn" href="https://dl.aegiscloud.org/aegiscode-latest-macos-universal.dmg">Download .dmg</a>
+      </div>
+      <div class="card">
+        <div class="card-icon">⊞</div>
+        <h2>Windows</h2>
+        <p class="desc">x86_64 · exe installer / portable</p>
+        <a class="dl-btn" href="https://dl.aegiscloud.org/aegiscode-latest-win-x64.exe">Download Installer</a>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:15px">or</p>
+        <a class="dl-btn" href="https://dl.aegiscloud.org/aegiscode-latest-win-x64.zip">Download Portable</a>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:11px;color:var(--text3)">SHA256 checksums: <a href="https://dl.aegiscloud.org/aegiscode-latest-checksums.txt">aegiscode-latest-checksums.txt</a></p>
+  </div>
+
+  <!-- Features -->
+  <div class="section">
+    <h3>✦ What you get</h3>
+    <div class="features">
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">🧠</div>
+        <strong>Cross-session memory</strong>
+        <span>Never re-explain your codebase</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">🔄</div>
+        <strong>Multi-model</strong>
+        <span>Claude, GPT-4o, Gemini, DeepSeek, Ollama</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">📦</div>
+        <strong>CLI + Desktop GUI</strong>
+        <span>Terminal-first with Electron desktop app</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">🔍</div>
+        <strong>Semantic search</strong>
+        <span>Full conversation &amp; memory search</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">🤖</div>
+        <strong>Parallel agents</strong>
+        <span>Run multiple AI agents at once</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">☁</div>
+        <strong>Cloud sync</strong>
+        <span>Across devices with aegiscloud</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Install from source -->
+  <div class="section">
+    <h3>🔧 Install from source</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Requires Node.js 22+ and git.</p>
+    <div class="code-block"><span class="prompt">$</span> git clone https://github.com/aegiscloud/aegiscode.git
+<span class="prompt">$</span> <span class="hl">cd</span> aegiscode
+<span class="prompt">$</span> npm install
+<span class="prompt">$</span> npm run build
+<span class="prompt">$</span> <span class="hl">./aegis</span></div>
+    <p style="font-size:11px;color:var(--text3)">Or install globally: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px;font-family:monospace;font-size:11px">npm install -g aegiscode</code></p>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <h3>🚀 Quick start</h3>
+    <div class="code-block"><span class="prompt">$</span> <span class="hl">aegis</span>
+<span class="dim"># First launch will prompt for API key(s).</span>
+<span class="dim"># Add keys to .env or use /model to switch:</span>
+<span class="prompt">$</span> /model claude
+<span class="prompt">$</span> /model deepseek
+<span class="prompt">$</span> /model groq
+<span class="prompt">$</span> /council <span class="dim">"review this diff"</span></div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="links">
+    <a href="https://aegiscloud.org">Home</a>
+    <a href="https://aegiscloud.org/docs">Docs</a>
+    <a href="https://github.com/aegiscloud/aegiscode">GitHub</a>
+    <a href="https://aegiscloud.org/pricing">Pricing</a>
+    <a href="https://aegiscloud.org/privacy">Privacy</a>
+  </div>
+  <p>© 2026 AEGIS Cloud · <a href="mailto:hello@aegiscloud.org">hello@aegiscloud.org</a></p>
+</footer>
+
+<script>
+function copyInstall(){
+  navigator.clipboard.writeText('curl -fsSL https://dl.aegiscloud.org/install.sh | bash');
+  document.getElementById('copy-ok').style.display='inline';
+  setTimeout(()=>{document.getElementById('copy-ok').style.display='none'},2000);
+}
+</script>
+</body>
+</html>
