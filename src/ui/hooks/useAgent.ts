@@ -116,15 +116,20 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
           if (loaded) {
             currentSessionId = resumeSessionId;
             const contextMessages = ctxManager.getMessages();
-            contextMessages
-              .filter(m => m.role === 'user' || m.role === 'assistant')
-              .forEach(m => {
-                if (m.role === 'user') {
-                  sessionActions().addUserMessage(m.content);
-                } else if (m.role === 'assistant') {
-                  sessionActions().addAssistantMessage(m.content);
-                }
-              });
+            // Batch-restore all messages in a single store update so MessageList's
+            // scrollLineOffset initializes correctly (showing the bottom of history).
+            // Adding messages one-by-one via addUserMessage/addAssistantMessage skips
+            // auto-scroll for assistant messages, leaving scrollLineOffset at 0 (top).
+            const restoredMessages: import('../../store/types.js').SessionMessage[] =
+              contextMessages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .map((m, i) => ({
+                  id: `restored-${i}-${Date.now()}`,
+                  role: m.role as 'user' | 'assistant',
+                  content: m.content,
+                  timestamp: m.timestamp || Date.now(),
+                }));
+            sessionActions().restoreSession(currentSessionId, restoredMessages);
             if (debugRef.current) {
               console.log('[DEBUG] Loaded session with', contextMessages.length, 'messages');
             }
