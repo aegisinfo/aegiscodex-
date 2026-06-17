@@ -4,7 +4,7 @@
  * 
  */
 
-import type { ParsedBlock, TableData, InlineSegment } from './types.js';
+import type { ParsedBlock, TableData } from './types.js';
 
 /** 已知的编程语言标识列表（用于区分 language 和 file path） */
 const KNOWN_LANGUAGES = new Set([
@@ -256,9 +256,9 @@ export function parseMarkdown(content: string): ParsedBlock[] {
     blocks.push({ type: 'text', content: line });
   }
 
-  // 处理未结束的代码块（渐进式渲染 — 立即显示空的代码块容器）
-  // 移除 && codeBlockContent.length > 0 条件，使得在 ``` 打开后立即渲染代码块
-  if (inCodeBlock) {
+  // Suppress empty code blocks during streaming — content arrives fast enough
+  // that the flash of an empty box is worse UX than a 1-frame delay.
+  if (inCodeBlock && codeBlockContent.length > 0) {
     blocks.push({
       type: 'code',
       content: codeBlockContent.join('\n'),
@@ -321,55 +321,6 @@ function createTableBlock(
       alignments: alignments.length > 0 ? alignments : headers.map(() => 'left'),
     },
   };
-}
-
-/**
- * 
- */
-export function parseInlineFormats(text: string): InlineSegment[] {
-  const segments: InlineSegment[] = [];
-  let remaining = text;
-  let lastIndex = 0;
-
-  // 简化的内联解析（实际使用时可以更复
-  // 按顺序处理：链接 > 粗体 > 斜体 > 代码 > 删除
-
-  // 处理链
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match;
-  
-  while ((match = linkRegex.exec(remaining)) !== null) {
-    // 添加链接前的文
-    if (match.index > lastIndex) {
-      segments.push({
-        type: 'text',
-        content: remaining.slice(lastIndex, match.index),
-      });
-    }
-    
-    segments.push({
-      type: 'link',
-      content: match[1],
-      url: match[2],
-    });
-    
-    lastIndex = match.index + match[0].length;
-  }
-
-  // 添加剩余文
-  if (lastIndex < remaining.length) {
-    segments.push({
-      type: 'text',
-      content: remaining.slice(lastIndex),
-    });
-  }
-
-  // 如果没有找到任何特殊格式，返回原文
-  if (segments.length === 0) {
-    return [{ type: 'text', content: text }];
-  }
-
-  return segments;
 }
 
 /**

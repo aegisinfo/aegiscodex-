@@ -29,6 +29,8 @@ interface StreamingState {
   transcriptBuffer: TranscriptBuffer;
   /** Maps content block index → tool use ID for input_json_delta accumulation */
   blockIndexToToolId: Map<number, string>;
+  /** Timestamp of last content write — used to measure render latency */
+  lastWriteTimestamp: number;
 }
 
 const streamingState: StreamingState = {
@@ -40,6 +42,7 @@ const streamingState: StreamingState = {
   toolCalls: new Map(),
   transcriptBuffer: new TranscriptBuffer({ showToolResults: false }),
   blockIndexToToolId: new Map(),
+  lastWriteTimestamp: 0,
 };
 
 /**
@@ -80,11 +83,13 @@ export function applyStreamEvent(event: AnthropicStreamEvent): void {
 
     if ((e.type === 'text_delta' || e.type === 'text_chunk') && e.text) {
       streamingState.content += e.text;
+      streamingState.lastWriteTimestamp = Date.now();
       streamingState.currentBlockType = 'text';
       streamingState.currentBlockAccumulator += e.text;
     }
     if ((e.type === 'thinking_delta' || e.type === 'thinking_chunk') && e.text) {
       streamingState.thinking += e.text;
+      streamingState.lastWriteTimestamp = Date.now();
       streamingState.currentBlockType = 'thinking';
       streamingState.currentBlockAccumulator += e.text;
     }
@@ -130,8 +135,18 @@ export function initStreamingBuffer(messageId: string): void {
  * Append content delta to the mutable buffer (NO store update).
  * Tracks as 'text' content block if we're in a text block.
  */
+/**
+ * Get the time (ms) since the last content was written to the buffer.
+ * Returns 0 if no streaming is active.
+ */
+export function getStreamingLatencyMs(): number {
+  if (!streamingState.messageId || streamingState.lastWriteTimestamp === 0) return 0;
+  return Date.now() - streamingState.lastWriteTimestamp;
+}
+
 export function appendToBuffer(contentDelta: string): void {
   streamingState.content += contentDelta;
+  streamingState.lastWriteTimestamp = Date.now();
   // Track as text block
   streamingState.currentBlockType = 'text';
   streamingState.currentBlockAccumulator += contentDelta;
@@ -143,6 +158,7 @@ export function appendToBuffer(contentDelta: string): void {
  */
 export function appendThinkingToBuffer(thinkingDelta: string): void {
   streamingState.thinking += thinkingDelta;
+  streamingState.lastWriteTimestamp = Date.now();
   streamingState.currentBlockType = 'thinking';
   streamingState.currentBlockAccumulator += thinkingDelta;
 }
@@ -196,6 +212,7 @@ export function clearBuffer(): void {
   streamingState.toolCalls.clear();
   streamingState.transcriptBuffer.clear();
   streamingState.blockIndexToToolId.clear();
+  streamingState.lastWriteTimestamp = 0;
 }
 
 /**

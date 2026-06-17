@@ -12,6 +12,7 @@ interface ChatStatusBarProps {
   model?: string;
   isVisible?: boolean;
   isScrolledUp?: boolean;
+  renderLatency?: number;
 }
 
 function formatTokens(count: number): string {
@@ -24,6 +25,7 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   model,
   isVisible = true,
   isScrolledUp = false,
+  renderLatency = 0,
 }) => {
   const theme = themeManager.getTheme();
   const displayModel = model;
@@ -41,6 +43,10 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
 
   if (displayModel) {
     items.push(displayModel.length > 24 ? displayModel.slice(0, 24) + '…' : displayModel);
+  }
+
+  if (renderLatency > 50) {
+    items.push(`lag: ${renderLatency}ms`);
   }
 
   if (messageCount !== undefined) {

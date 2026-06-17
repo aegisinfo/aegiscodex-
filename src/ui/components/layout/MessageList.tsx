@@ -17,7 +17,7 @@ import { Box, Text, useInput } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
+import { getStreamingContent, isActiveStreamingMessage, getStreamingLatencyMs } from '../../../store/streaming-buffer.js';
 import { themeManager } from '../../themes/index.js';
 import type { ContentBlock } from '../../../store/types.js';
 
@@ -83,6 +83,8 @@ interface MessageListProps {
   terminalHeight: number;
   /** Called when scroll state changes (for status bar indicator) */
   onScrolledUpChange?: (isScrolledUp: boolean) => void;
+  /** Called with render latency (ms) during streaming — for status bar display */
+  onRenderLatency?: (ms: number) => void;
 }
 
 const RAF_INTERVAL_MS = 30;   // ~33fps redraws
@@ -95,6 +97,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   terminalWidth,
   terminalHeight,
   onScrolledUpChange,
+  onRenderLatency,
 }) => {
   // ==================== Internal Scroll State ====================
   const [messages, setMessages] = useState(() => getState().session.messages);
@@ -113,6 +116,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   terminalHeightRef.current = terminalHeight;
   const onScrolledUpChangeRef = useRef(onScrolledUpChange);
   onScrolledUpChangeRef.current = onScrolledUpChange;
+  const onRenderLatencyRef = useRef(onRenderLatency);
+  onRenderLatencyRef.current = onRenderLatency;
 
   // ==================== Computed values ====================
   const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
@@ -286,6 +291,12 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
             thinking: buf.thinking.length,
           };
           setStreamingVersion(v => v + 1);
+
+          // Report render latency to status bar
+          const latency = getStreamingLatencyMs();
+          if (latency > 30) {
+            onRenderLatencyRef.current?.(latency);
+          }
         }
       }
 

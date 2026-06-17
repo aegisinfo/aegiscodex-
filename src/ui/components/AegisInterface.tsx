@@ -141,6 +141,24 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const [isExiting, setIsExiting] = useState(false);
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [renderLatency, setRenderLatency] = useState(0);
+
+  const renderLatencyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRenderLatency = useCallback((ms: number) => {
+    // Debounce: only update state at most every 500ms
+    if (renderLatencyTimerRef.current) return;
+    renderLatencyTimerRef.current = setTimeout(() => {
+      renderLatencyTimerRef.current = null;
+    }, 500);
+    setRenderLatency(ms);
+  }, []);
+
+  // Clean up latency debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (renderLatencyTimerRef.current) clearTimeout(renderLatencyTimerRef.current);
+    };
+  }, []);
 
   const [selectorState, setSelectorState] = useState<{
     isVisible: boolean;
@@ -338,6 +356,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
                   terminalWidth={terminalWidth - 2}
                   terminalHeight={terminalHeight}
                   onScrolledUpChange={handleScrolledUpChange}
+                  onRenderLatency={handleRenderLatency}
                 />
               </Box>
             </ErrorBoundary>
@@ -359,6 +378,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           <ChatStatusBar
             model={currentModel}
             isScrolledUp={messages.length > 0 && isScrolledUp}
+            renderLatency={renderLatency}
           />
         </>
       )}

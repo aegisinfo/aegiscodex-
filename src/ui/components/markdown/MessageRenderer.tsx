@@ -135,15 +135,18 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     // instead of the flat markdown string.
     const shouldUseContentBlocks = contentBlocks && contentBlocks.length > 0;
 
-    // User messages: compact "> prefix" style with theme primary color
+    // User messages: "You" label + content, clearly separated
     if (role === 'user') {
       return (
-        <Box flexDirection="row" marginBottom={0}>
-          <Box marginRight={1} flexShrink={0}>
-            <Text color={theme.colors.primary}>{'>'}</Text>
-          </Box>
-          <Box flexGrow={1} paddingX={1}>
-            <Text color={theme.colors.primary} wrap="wrap">{content}</Text>
+        <Box flexDirection="column" marginBottom={1} marginTop={0}>
+          <Box flexDirection="row">
+            <Box marginRight={1} flexShrink={0}>
+              <Text color={theme.colors.primary} bold>You</Text>
+              <Text color={theme.colors.border.light}>:</Text>
+            </Box>
+            <Box flexGrow={1}>
+              <Text color={theme.colors.text.primary} wrap="wrap">{content}</Text>
+            </Box>
           </Box>
         </Box>
       )
@@ -257,7 +260,7 @@ interface ContentBlockRendererProps {
  * Matches Claude Code's rendering: text blocks as markdown, thinking blocks inline,
  * tool_use blocks as ● colored lines, all in sequence.
  */
-const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({
+const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = React.memo(({
   contentBlocks,
   content,
   theme,
@@ -268,14 +271,14 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({
 }) => {
   const roleStyleWithPrefix = roleStyle && roleStyle.prefix ? roleStyle : undefined;
 
-  // Track whether we've emitted the prefix for the first block only
-  // Using a Set ref to persist across map callbacks within a single render pass
-  const prefixRef = useRef({ emitted: false });
-  prefixRef.current.emitted = false;
+  // Local variable tracks prefix emission within a single render pass.
+  // Unlike useRef, a local variable doesn't need reset logic and has no
+  // stale-closure risk — it's recreated each render.
+  let prefixEmitted = false;
 
   const emitPrefix = (): React.ReactNode | null => {
-    if (prefixRef.current.emitted || !roleStyleWithPrefix) return null;
-    prefixRef.current.emitted = true;
+    if (prefixEmitted || !roleStyleWithPrefix) return null;
+    prefixEmitted = true;
     return (
       <Box marginRight={1}>
         <Text color={roleStyleWithPrefix.color} bold={roleStyleWithPrefix.bold}>
@@ -392,7 +395,14 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({
       )}
     </>
   );
-};
+}, (prev, next) =>
+  prev.contentBlocks === next.contentBlocks &&
+  prev.content === next.content &&
+  prev.isStreaming === next.isStreaming &&
+  prev.terminalWidth === next.terminalWidth &&
+  prev.prefixOffset === next.prefixOffset &&
+  prev.theme.colors === next.theme.colors
+);
 
 // ===== Streaming Cursor Component (animated) =====
 
@@ -587,7 +597,7 @@ interface ActionsBlockProps {
   prefixOffset: number
 }
 
-const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefixOffset }) => {
+const ActionsBlock: React.FC<ActionsBlockProps> = React.memo(({ contentBlocks, theme, prefixOffset }) => {
   const toolBlocks = contentBlocks.filter(b => b.type === 'tool_use')
   if (toolBlocks.length === 0) return null
 
@@ -612,7 +622,11 @@ const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefi
       })}
     </Box>
   )
-}
+}, (prev, next) =>
+  prev.contentBlocks === next.contentBlocks &&
+  prev.theme === next.theme &&
+  prev.prefixOffset === next.prefixOffset
+)
 
 // ===== Block Renderer =====
 
@@ -681,6 +695,7 @@ const BlockRenderer: React.FC<BlockRendererProps> = React.memo(({
             rows={block.tableData.rows}
             alignments={block.tableData.alignments}
             theme={theme}
+            maxWidth={contentWidth}
           />
         ) : block.type === 'blockquote' ? (
           <Blockquote content={block.content} theme={theme} />
@@ -810,14 +825,57 @@ function getDiffColumnColor(header: string): string | null {
   return null
 }
 
+const MIN_COL_WIDTH = 6
+const TRUNCATION_MARKER = '…'
+
+/** Truncate cell content to fit within `maxWidth`, appending `…` if cut. */
+function truncateCell(content: string, maxWidth: number): string {
+  const cleaned = stripMarkdownForWidth(content)
+  const raw = stringWidth(cleaned)
+  if (raw <= maxWidth) return renderRawCell(content, maxWidth, 'left')
+  // Find safe truncation point respecting ansi / markdown
+  let visible = 0
+  let i = 0
+  const chars = [...content]
+  for (; i < chars.length; i++) {
+    const ch = chars[i]
+    visible += stringWidth(ch)
+    if (visible > maxWidth - 1) break
+  }
+  return content.slice(0, i) + TRUNCATION_MARKER
+}
+
+function renderRawCell(
+  content: string,
+  width: number,
+  align: 'left' | 'center' | 'right',
+): string {
+  const actualWidth = stringWidth(stripMarkdownForWidth(content))
+  const padding = Math.max(0, width - actualWidth)
+  if (align === 'center') {
+    const left = Math.floor(padding / 2)
+    const right = padding - left
+    return ' '.repeat(left) + content + ' '.repeat(right)
+  }
+  if (align === 'right') {
+    return ' '.repeat(padding) + content
+  }
+  return content + ' '.repeat(padding)
+}
+
 const TableRenderer: React.FC<
   {
     headers: string[]
     rows: string[][]
     alignments: ('left' | 'center' | 'right')[]
+    maxWidth: number
   } & ThemedProps
-> = ({ headers, rows, alignments, theme }) => {
-  const columnWidths = headers.map((header, index) => {
+> = ({ headers, rows, alignments, theme, maxWidth }) => {
+  const borderCost = 1 + headers.length * 2 // leading + each col pair (cell│)
+  const available = maxWidth - borderCost - 2 // safety margin
+
+  // 1. Compute natural column widths
+  const naturalWidths = headers.map((header, index) => {
     const headerWidth = stringWidth(stripMarkdownForWidth(header))
     const maxRowWidth = Math.max(
       0,
@@ -828,6 +886,16 @@ const TableRenderer: React.FC<
     return Math.max(headerWidth, maxRowWidth) + 2
   })
 
+  const totalNatural = naturalWidths.reduce((a, b) => a + b, 0)
+
+  // 2. Clamp column widths if they exceed available space
+  const columnWidths =
+    totalNatural <= available
+      ? naturalWidths
+      : naturalWidths.map((w) => Math.max(MIN_COL_WIDTH, Math.floor(w * (available / totalNatural))))
+
+  const truncated = totalNatural > available
+
   // Detect if any column is a diff column (Before/After/etc.)
   const diffColors = headers.map(h => getDiffColumnColor(h))
   const isDiffTable = diffColors.some(c => c !== null)
@@ -837,17 +905,10 @@ const TableRenderer: React.FC<
     width: number,
     align: 'left' | 'center' | 'right',
   ) => {
-    const actualWidth = stringWidth(stripMarkdownForWidth(content))
-    const padding = Math.max(0, width - actualWidth)
-    if (align === 'center') {
-      const left = Math.floor(padding / 2)
-      const right = padding - left
-      return ' '.repeat(left) + content + ' '.repeat(right)
+    if (truncated) {
+      return truncateCell(content, width)
     }
-    if (align === 'right') {
-      return ' '.repeat(padding) + content
-    }
-    return content + ' '.repeat(padding)
+    return renderRawCell(content, width, align)
   }
 
   return (
@@ -884,7 +945,7 @@ const TableRenderer: React.FC<
           <Text color={theme.colors.border.light}>│</Text>
           {headers.map((_, colIndex) => {
             const cellContent = row[colIndex] || ''
-            const paddedContent = renderCell(
+            const renderedContent = renderCell(
               cellContent,
               columnWidths[colIndex],
               alignments[colIndex] || 'left',
@@ -895,14 +956,14 @@ const TableRenderer: React.FC<
               <React.Fragment key={colIndex}>
                 {diffColor ? (
                   <Text color={diffColor} dimColor={rowIndex % 2 === 0}>
-                    {paddedContent}
+                    {renderedContent}
                   </Text>
                 ) : hasInlineFormat ? (
                   <Text>
-                    <InlineText content={paddedContent} theme={theme} />
+                    <InlineText content={renderedContent} theme={theme} />
                   </Text>
                 ) : (
-                  <Text>{paddedContent}</Text>
+                  <Text>{renderedContent}</Text>
                 )}
                 <Text color={theme.colors.border.light}>│</Text>
               </React.Fragment>
@@ -910,6 +971,14 @@ const TableRenderer: React.FC<
           })}
         </Box>
       ))}
+
+      {truncated && (
+        <Box>
+          <Text dimColor color={theme.colors.text.secondary}>
+            {`  ╚══ ${TRUNCATION_MARKER} columns scaled to fit terminal width (${maxWidth} cols)`}
+          </Text>
+        </Box>
+      )}
     </Box>
   )
 }
