@@ -34,31 +34,39 @@ export const ExitMessage: React.FC<ExitMessageProps> = ({
 
         // Local memory + episodic summary
         await appendToLocalMemory(sessionId, messages).catch(() => {});
-        if (sharedMemory.isEnabled()) {
-          try {
-            const fs   = await import('fs');
-            const path = await import('path');
-            const os   = await import('os');
-            const cfg  = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.aegiscode', 'config.json'), 'utf8'));
+        let model: string | undefined;
+        try {
+          const fs   = await import('fs');
+          const path = await import('path');
+          const os   = await import('os');
+          const cfg  = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.aegiscode', 'config.json'), 'utf8'));
+          model = cfg?.default?.model || cfg?.models?.find((m: any) => m.id === cfg.currentModelId)?.model;
+          if (sharedMemory.isEnabled()) {
             const apiKey  = cfg?.default?.apiKey || cfg?.models?.find((m: any) => m.id === cfg.currentModelId)?.apiKey;
             const baseURL = cfg?.default?.baseURL || cfg?.models?.find((m: any) => m.id === cfg.currentModelId)?.baseURL;
-            const model   = cfg?.default?.model   || cfg?.models?.find((m: any) => m.id === cfg.currentModelId)?.model;
             await sharedMemory.summarizeAndStoreSession(sessionId, apiKey, baseURL, model);
-          } catch {}
-        }
-
-        // Cloud sync to aegiscloud.org
-        try {
-          const result = await syncConversation(sessionId, messages);
-          if (result.reason === 'uploaded') {
-            setSyncStatus('done');
-          } else if (result.reason === 'error') {
-            setSyncStatus('error');
-          } else {
-            setSyncStatus('skip');
           }
-        } catch {
-          setSyncStatus('skip');
+        } catch {}
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const result = await syncConversation(sessionId, messages, model);
+            if (result.reason === 'uploaded') {
+              setSyncStatus('done');
+              break;
+            } else if (result.reason === 'error' && attempt < 2) {
+              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+              continue;
+            } else {
+              setSyncStatus(result.reason === 'error' ? 'error' : 'skip');
+              break;
+            }
+          } catch {
+            if (attempt < 2) {
+              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+              continue;
+            }
+            setSyncStatus('error');
+          }
         }
       } else {
         setSyncStatus('skip');

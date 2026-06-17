@@ -50,6 +50,7 @@ export async function syncConversation(
   if (!doSync) return { ok: false, reason: 'disabled' };
   if (!messages || messages.length === 0) return { ok: false, reason: 'empty' };
 
+  const timestamp = new Date().toISOString();
   const payload = JSON.stringify({
     session_id: sessionId,
     model: model ?? 'unknown',
@@ -57,16 +58,16 @@ export async function syncConversation(
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     })),
-    timestamp: new Date().toISOString(),
+    timestamp,
   });
 
   // Signera med användarens egna API-nyckel (per-user HMAC)
-  const timestamp = String(Math.floor(Date.now() / 1000));
+  const tsUnix = String(Math.floor(new Date(timestamp).getTime() / 1000));
   let signature   = '';
   try {
     const { createHmac } = await import('crypto');
     signature = createHmac('sha256', apiKey)
-      .update(`${timestamp}:${payload}`)
+      .update(`${tsUnix}:${payload}`)
       .digest('hex');
   } catch {}
 
