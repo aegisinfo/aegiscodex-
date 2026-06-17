@@ -45,8 +45,8 @@ import { TokenCounter } from '../context/TokenCounter.js';
 
 // ========== 常
 
-/** 硬性轮次上限，防止无限循环 */
-const TURN_LIMIT = 100;
+/** 轮次上限（Infinity = 无限制） */
+const TURN_LIMIT = Infinity;
 
 /** 意图未完成检测模式 */
 const INCOMPLETE_INTENT_PATTERNS = [

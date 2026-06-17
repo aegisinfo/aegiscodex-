@@ -483,5 +483,5 @@ export const DEFAULT_CONFIG: ClawdConfig = {
   mcpServers: {},
   permissions: DEFAULT_PERMISSIONS,
   defaultPermissionMode: 'default',
-  maxTurns: 100,
+  maxTurns: -1,
 };

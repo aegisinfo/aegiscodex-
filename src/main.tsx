@@ -176,6 +176,8 @@ async function main(): Promise<void> {
     // 示
     .example('$0', 'Start interactive mode')
     .example('$0 login', 'Log in via browser')
+    .example('$0 continue', 'Continue the most recent conversation')
+    .example('$0 resume <session-id>', 'Resume a specific conversation by ID')
     .example('$0 "帮我分析这个项目"', 'Start with an initial message')
     .example('$0 --model gpt-4', 'Use a specific model')
     .example('$0 --debug', 'Enable debug mode')
@@ -279,13 +281,29 @@ async function main(): Promise<void> {
 
         // 获取初始消息（支持多个单
         const messageArray = argv.message as string[] | undefined
-        const initialMessage =
+        let initialMessage =
           messageArray && messageArray.length > 0
             ? messageArray.join(' ')
             : undefined
 
         if (isDebugMode && initialMessage) {
           console.log('[DEBUG] Initial message:', initialMessage)
+        }
+
+        // Handle `aegis continue` and `aegis resume <id>` without `--` prefix
+        // so they behave like `aegis --continue` and `aegis --resume <id>`.
+        if (!args.continue && !args.resume && initialMessage && !initialMessage.startsWith('/')) {
+          const trimmed = initialMessage.trim();
+          if (trimmed === 'continue') {
+            args.continue = true;
+            initialMessage = undefined;
+          } else if (trimmed.startsWith('resume ') || trimmed.startsWith('resume\t')) {
+            const parts = trimmed.split(/\s+/);
+            if (parts.length >= 2) {
+              args.resume = parts[1];
+              initialMessage = undefined;
+            }
+          }
         }
 
         // 处理 --continue 和 --resume 参
