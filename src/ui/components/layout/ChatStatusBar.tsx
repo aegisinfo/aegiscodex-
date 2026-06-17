@@ -1,42 +1,25 @@
 /**
- * ChatStatusBar - 聊天状态栏组件
- * 
- * 
+ * ChatStatusBar — Claude Code style minimal status bar
  */
 
 import React from 'react';
 import { Box, Text } from 'ink';
 import { useShallow } from 'zustand/react/shallow';
 import { themeManager } from '../../themes/index.js';
-import {
-  useClawdStore,
-} from '../../../store/index.js';
+import { useClawdStore } from '../../../store/index.js';
 
 interface ChatStatusBarProps {
-  /** 当前模型 */
   model?: string;
-  /** 是否显示 */
   isVisible?: boolean;
-  /** Whether user has scrolled up (show hint to scroll back down) */
   isScrolledUp?: boolean;
 }
 
-/**
- * 
- */
 function formatTokens(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}k`;
-  }
+  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
   return String(count);
 }
 
-/**
- * 
- */
 export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   model,
   isVisible = true,
@@ -45,125 +28,40 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   const theme = themeManager.getTheme();
   const displayModel = model;
 
-  // Single store subscription with shallow comparison — avoids cascading
-  // re-renders when unrelated store slices change (e.g. isThinking during streaming).
-  // The 4 individual selectors were causing 4 separate subscriptions.
-  const { sessionId, inputTokens, outputTokens, maxContextTokens, messageCount, queuedCommands } = useClawdStore(
+  const { messageCount, queuedCommands } = useClawdStore(
     useShallow((state) => ({
-      sessionId:        state.session.sessionId,
-      inputTokens:      state.session.tokenUsage.inputTokens,
-      outputTokens:     state.session.tokenUsage.outputTokens,
-      maxContextTokens: state.session.tokenUsage.maxContextTokens,
       messageCount:     state.session.messages.length,
       queuedCommands:   state.command.pendingCommands.length,
     }))
   );
-  const tokenUsage = { inputTokens, outputTokens, maxContextTokens };
 
-  if (!isVisible) {
-    return null;
-  }
+  if (!isVisible) return null;
 
-  // 构建状态项（使用简洁的文字标
-  const segments: Array<{ content: React.ReactNode; dimmed?: boolean }> = [];
+  const items: string[] = [];
 
-  // Model - 核心信息，高亮显
   if (displayModel) {
-    segments.push({
-      content: (
-        <>
-          <Text color={theme.colors.text.muted}>model:</Text>
-          <Text color={theme.colors.primary} bold>{displayModel.length > 24 ? displayModel.slice(0, 24) + '…' : displayModel}</Text>
-        </>
-      ),
-    });
+    items.push(displayModel.length > 24 ? displayModel.slice(0, 24) + '…' : displayModel);
   }
 
-  // Messages count
   if (messageCount !== undefined) {
-    segments.push({
-      content: (
-        <>
-          <Text color={theme.colors.text.muted}>msgs:</Text>
-          <Text color={theme.colors.text.secondary}>{messageCount}</Text>
-        </>
-      ),
-    });
+    items.push(`${messageCount} msgs`);
   }
 
-  // Queue (only if > 0)
-  if (queuedCommands > 0) {
-    segments.push({
-      content: (
-        <>
-          <Text color={theme.colors.text.muted}>queue:</Text>
-          <Text color={theme.colors.warning}>{queuedCommands}</Text>
-        </>
-      ),
-    });
-  }
-
-  // Tokens - input/output format
-  if (tokenUsage && (tokenUsage.inputTokens + tokenUsage.outputTokens) > 0) {
-    segments.push({
-      content: (
-        <>
-          <Text color={theme.colors.text.muted}>tokens:</Text>
-          <Text color={theme.colors.info}>
-            {formatTokens(tokenUsage.inputTokens)}/{formatTokens(tokenUsage.outputTokens)}
-          </Text>
-        </>
-      ),
-    });
-  }
-
-
-
-  // Scroll hint when scrolled up
   if (isScrolledUp) {
-    segments.unshift({
-      content: (
-        <>
-          <Text color={theme.colors.warning}>↑ scrolled up</Text>
-        </>
-      ),
-      dimmed: false,
-    });
+    items.push('↑ scrolled');
   }
 
-  // Session ID
-  if (sessionId) {
-    segments.push({
-      content: (
-        <>
-          <Text color={theme.colors.text.muted}>sid:</Text>
-          <Text color={theme.colors.info} dimColor>{sessionId.slice(0, 8)}</Text>
-        </>
-      ),
-    });
+  if (queuedCommands > 0) {
+    items.push(`queue: ${queuedCommands}`);
   }
 
-  if (segments.length === 0) {
-    return null;
-  }
+  if (items.length === 0) return null;
 
   return (
-    <Box
-      flexDirection="row"
-      justifyContent="flex-start"
-      paddingX={0}
-      marginTop={0}
-    >
-      <Text color={theme.colors.primary} dimColor>◆ </Text>
-      {segments.map((seg, index) => (
-        <React.Fragment key={index}>
-          {index > 0 && (
-            <Text color={theme.colors.text.muted} dimColor> · </Text>
-          )}
-          <Text dimColor={seg.dimmed}>{seg.content}</Text>
-        </React.Fragment>
-      ))}
-      <Text color={theme.colors.text.muted} dimColor> ─</Text>
+    <Box flexDirection="row" paddingX={0} marginTop={0}>
+      <Text color={theme.colors.text.muted} dimColor>
+        {items.join(' · ')}
+      </Text>
     </Box>
   );
 });

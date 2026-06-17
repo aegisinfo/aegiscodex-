@@ -18,3 +18,6 @@ aegiscode.exe
 aegiscode-macos
 sea-prep.blob
 gui/dist/
+gui/
+.wrangler/
+main.js

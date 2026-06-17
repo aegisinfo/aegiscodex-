@@ -18,6 +18,7 @@ import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent, isActiveStreamingMessage } from '../../../store/streaming-buffer.js';
+import { themeManager } from '../../themes/index.js';
 
 interface MessageListProps {
   terminalWidth: number;
@@ -269,7 +270,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       {/* Scroll-up indicator */}
       {useWindowing && !isAtBottom && !streamingMsg && (
         <Box>
-          <Text dimColor>↑ scrolled ({completedMessages.length - clampedOffset - pageSize} more above)</Text>
+          <Text color={themeManager.getTheme().colors.text.muted} dimColor>↑ {completedMessages.length - clampedOffset - pageSize} more above</Text>
         </Box>
       )}
 

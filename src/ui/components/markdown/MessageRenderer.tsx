@@ -126,99 +126,102 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 
     
 
-    const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0
+    const prefixOffset = showPrefix && roleStyle && roleStyle.prefix ? roleStyle.prefix.length + 1 : 0
 
     const hasToolBlocks = contentBlocks && contentBlocks.some(b => b.type === 'tool_use' || b.type === 'tool_result')
 
-    // User messages: full-width background bar (Claude Code style)
+    // ===== Content-block-driven rendering (Claude Code style) =====
+    // When contentBlocks are present, render from the structured block model
+    // instead of the flat markdown string.
+    const shouldUseContentBlocks = contentBlocks && contentBlocks.length > 0;
+
+    // User messages: compact "> prefix" style with theme primary color
     if (role === 'user') {
-      const innerWidth = Math.max(0, terminalWidth - 2) // -2 for paddingX
-      const padded = (content || ' ').padEnd(innerWidth)
       return (
-        <Box marginBottom={1}>
-          <Box backgroundColor="#1e1e1e" paddingX={1}>
-            <Text color="white">{padded}</Text>
+        <Box flexDirection="row" marginBottom={0}>
+          <Box marginRight={1} flexShrink={0}>
+            <Text color={theme.colors.primary}>{'>'}</Text>
+          </Box>
+          <Box flexGrow={1} paddingX={1}>
+            <Text color={theme.colors.primary} wrap="wrap">{content}</Text>
           </Box>
         </Box>
       )
     }
 
     return (
-      <Box flexDirection="column" marginBottom={1}>
-        {!!thinking && (
-          <Box flexDirection="column" marginBottom={1}>
-            {isStreaming && (thinking?.length ?? 0) > 0 ? (
-              /* During streaming: show header + inline thinking text so user can
-                 see reasoning as it happens */
-              <>
-                <Box marginBottom={0}>
-                  <Text color={theme.colors.text.muted} dimColor>
-                    {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                    <ThinkingIcon />
-                    <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
-                  </Text>
-                </Box>
-                <Box flexDirection="column" marginLeft={prefixOffset} marginTop={0}>
-                  {filteredThinkingBlocks.map((block, index) => (
-                    <Box key={index}>
-                      <Text color={theme.colors.text.muted} dimColor italic>
-                        {block.content}
+      <Box flexDirection="column" marginBottom={0}>
+        {/* Thinking block — rendered inline */}
+        {shouldUseContentBlocks ? (
+          <ContentBlockRenderer
+            contentBlocks={contentBlocks!}
+            content={content}
+            theme={theme}
+            isStreaming={isStreaming}
+            roleStyle={roleStyle}
+            terminalWidth={terminalWidth}
+            prefixOffset={prefixOffset}
+          />
+        ) : (
+          <>
+            {/* Legacy path: flat thinking + markdown rendering */}
+            {!!thinking && (
+              <Box flexDirection="column">
+                {isStreaming ? (
+                  <>
+                    <Box>
+                      <Text color={theme.colors.text.muted} dimColor>
+                        <ThinkingIcon />
+                        <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
                       </Text>
                     </Box>
-                  ))}
-                </Box>
-              </>
-            ) : isStreaming ? (
-              /* First thinking chars: just show header until content arrives */
-              <Box marginBottom={0}>
-                <Text color={theme.colors.text.muted} dimColor>
-                  {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                  <ThinkingIcon />
-                  <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
-                </Text>
+                    <Box flexDirection="column" marginLeft={0}>
+                      {filteredThinkingBlocks.map((block, index) => (
+                        <Box key={index}>
+                          <Text color={theme.colors.text.muted} dimColor italic>
+                            {block.content}
+                          </Text>
+                        </Box>
+                      ))}
+                    </Box>
+                  </>
+                ) : thinking.length > 0 ? (
+                  <>
+                    <Box>
+                      <Text color={theme.colors.text.muted} dimColor>
+                        <Text color={theme.colors.primary}>{'□ '}</Text>
+                        <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
+                      </Text>
+                    </Box>
+                    <Box flexDirection="column" marginLeft={0}>
+                      {filteredThinkingBlocks.map((block, index) => (
+                        <Box key={index}>
+                          <Text color={theme.colors.text.muted} dimColor italic>
+                            {block.content}
+                          </Text>
+                        </Box>
+                      ))}
+                    </Box>
+                  </>
+                ) : null}
               </Box>
-            ) : (
-              <>
-                <Box marginBottom={0}>
-                  <Text color={theme.colors.text.muted} dimColor>
-                    {showPrefix && roleStyle && <Text>{roleStyle.prefix} </Text>}
-                    <Text color={theme.colors.primary}>{'□ '}</Text>
-                    <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
-                  </Text>
-                </Box>
-                <Box
-                  flexDirection="column"
-                  marginLeft={prefixOffset}
-                  borderStyle="round"
-                  borderColor={theme.colors.border.light}
-                  paddingX={1}
-                >
-                  {filteredThinkingBlocks.map((block, index) => (
-                    <Box key={index}>
-                      <Text color={theme.colors.text.muted} dimColor italic>
-                        {block.content}
-                      </Text>
-                    </Box>
-                  ))}
-                </Box>
-              </>
             )}
-          </Box>
+
+            {filteredBlocks.map((block, index) => (
+              <BlockRenderer
+                key={index}
+                block={block}
+                isFirst={index === 0 && filteredThinkingBlocks.length === 0}
+                roleStyle={showPrefix ? roleStyle : undefined}
+                terminalWidth={terminalWidth}
+                theme={theme}
+              />
+            ))}
+          </>
         )}
 
-        {filteredBlocks.map((block, index) => (
-          <BlockRenderer
-            key={index}
-            block={block}
-            isFirst={index === 0 && filteredThinkingBlocks.length === 0}
-            roleStyle={showPrefix ? roleStyle : undefined}
-            terminalWidth={terminalWidth}
-            theme={theme}
-          />
-        ))}
-
-        {/* Tool actions — shown during and after streaming */}
-        {hasToolBlocks && (
+        {/* Tool actions — only in legacy path; content block path renders inline */}
+        {!shouldUseContentBlocks && hasToolBlocks && (
           <ActionsBlock
             contentBlocks={contentBlocks!}
             theme={theme}
@@ -236,6 +239,160 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
 )
 
 MessageRenderer.displayName = 'MessageRenderer'
+
+// ===== Content Block Renderer (Claude Code style — inline rendering) =====
+
+interface ContentBlockRendererProps {
+  contentBlocks: ContentBlock[]
+  content: string
+  theme: any
+  isStreaming?: boolean
+  roleStyle?: { color: string; prefix: string; bold?: boolean }
+  terminalWidth: number
+  prefixOffset: number
+}
+
+/**
+ * ContentBlockRenderer — renders structured content blocks inline.
+ * Matches Claude Code's rendering: text blocks as markdown, thinking blocks inline,
+ * tool_use blocks as ● colored lines, all in sequence.
+ */
+const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = ({
+  contentBlocks,
+  content,
+  theme,
+  isStreaming,
+  roleStyle,
+  terminalWidth,
+  prefixOffset,
+}) => {
+  const roleStyleWithPrefix = roleStyle && roleStyle.prefix ? roleStyle : undefined;
+
+  // Track whether we've emitted the prefix for the first block only
+  // Using a Set ref to persist across map callbacks within a single render pass
+  const prefixRef = useRef({ emitted: false });
+  prefixRef.current.emitted = false;
+
+  const emitPrefix = (): React.ReactNode | null => {
+    if (prefixRef.current.emitted || !roleStyleWithPrefix) return null;
+    prefixRef.current.emitted = true;
+    return (
+      <Box marginRight={1}>
+        <Text color={roleStyleWithPrefix.color} bold={roleStyleWithPrefix.bold}>
+          {roleStyleWithPrefix.prefix}
+        </Text>
+      </Box>
+    );
+  };
+
+  return (
+    <>
+      {contentBlocks.map((block, idx) => {
+        if (block.type === 'thinking') {
+          const isActive = isStreaming && idx === contentBlocks.length - 1;
+          const filtered = parseMarkdown(block.thinking).filter(b => b.type !== 'empty');
+
+          return (
+            <Box key={`cb-think-${idx}`} flexDirection="column">
+              {emitPrefix()}
+              {isActive ? (
+                <>
+                  <Box>
+                    <Text color={theme.colors.text.muted} dimColor>
+                      <ThinkingIcon />
+                      <Text color={theme.colors.text.muted} dimColor italic>thinking</Text>
+                    </Text>
+                  </Box>
+                  <Box flexDirection="column" marginLeft={2}>
+                    {filtered.map((b, i) => (
+                      <Box key={i}>
+                        <Text color={theme.colors.text.muted} dimColor italic>{b.content}</Text>
+                      </Box>
+                    ))}
+                  </Box>
+                </>
+              ) : block.thinking ? (
+                <>
+                  <Box>
+                    <Text color={theme.colors.text.muted} dimColor>
+                      <Text color={theme.colors.primary}>{'□ '}</Text>
+                      <Text color={theme.colors.text.muted} dimColor italic>thought</Text>
+                    </Text>
+                  </Box>
+                  <Box flexDirection="column" marginLeft={2}>
+                    {filtered.map((b, i) => (
+                      <Box key={i}>
+                        <Text color={theme.colors.text.muted} dimColor italic>{b.content}</Text>
+                      </Box>
+                    ))}
+                  </Box>
+                </>
+              ) : null}
+            </Box>
+          );
+        }
+
+        if (block.type === 'text') {
+          const parsed = parseMarkdown(block.text);
+          const filtered = parsed.filter(b => b.type !== 'empty');
+          return (
+            <Box key={`cb-text-${idx}`} flexDirection="column">
+              {emitPrefix()}
+              {filtered.map((b, i) => (
+                <BlockRenderer
+                  key={i}
+                  block={b}
+                  isFirst={false}
+                  roleStyle={undefined}
+                  terminalWidth={terminalWidth}
+                  theme={theme}
+                />
+              ))}
+            </Box>
+          );
+        }
+
+        if (block.type === 'tool_use') {
+          const result = contentBlocks.find(
+            b => b.type === 'tool_result' && (b as any).tool_use_id === block.id
+          ) as (ContentBlock & { type: 'tool_result' }) | undefined
+
+          return (
+            <ToolUseBlock
+              key={`cb-tool-${block.id || idx}`}
+              block={block}
+              result={result}
+              theme={theme}
+              prefixOffset={prefixOffset}
+            />
+          );
+        }
+
+        return null;
+      })}
+
+      {/* Render any remaining text content from the message's content prop
+          (not duplicated in contentBlocks as text blocks) */}
+      {content && contentBlocks.every(b => b.type !== 'text') && (
+        <Box key="remaining-text" flexDirection="column">
+          {emitPrefix()}
+          {parseMarkdown(content)
+            .filter(b => b.type !== 'empty')
+            .map((b, i) => (
+              <BlockRenderer
+                key={i}
+                block={b}
+                isFirst={false}
+                roleStyle={undefined}
+                terminalWidth={terminalWidth}
+                theme={theme}
+              />
+            ))}
+        </Box>
+      )}
+    </>
+  );
+};
 
 // ===== Streaming Cursor Component (animated) =====
 
@@ -287,6 +444,84 @@ const ThinkingIcon: React.FC = React.memo(() => {
   return <Text color={theme.colors.primary}>{THINK_FRAMES[frame]}{' '}</Text>
 })
 ThinkingIcon.displayName = 'ThinkingIcon'
+
+// ===== Tool Use Block (shared between ContentBlockRenderer and ActionsBlock) =====
+
+interface ToolUseBlockProps {
+  block: ContentBlock & { type: 'tool_use' }
+  result?: ContentBlock & { type: 'tool_result' }
+  theme: any
+  prefixOffset: number
+}
+
+const ToolUseBlock: React.FC<ToolUseBlockProps> = React.memo(({
+  block,
+  result,
+  theme,
+  prefixOffset,
+}) => {
+  const isError   = block.status === 'error'
+  const isRunning = block.status === 'running'
+  const dotColor  = isError ? DOT_ERR : isRunning ? DOT_RUN : DOT_OK
+  const elapsed   = block.completedAt ? formatElapsed(block.completedAt - block.startedAt) : null
+  const summary   = getToolSummary(block.name, block.input)
+  const { label, path } = splitToolSummary(summary)
+
+  const subLines: Array<{ text: string; isUrl: boolean; isDiff?: boolean; diffType?: '+' | '-' }> = []
+  if (result?.content) {
+    const lines = result.content.split('\n').filter(l => l.trim())
+    const diffLines = lines.filter(l => /^[+-]/.test(l) && !l.startsWith('+++') && !l.startsWith('---'))
+    if (diffLines.length > 0) {
+      const added   = diffLines.filter(l => l.startsWith('+')).length
+      const removed = diffLines.filter(l => l.startsWith('-')).length
+      if (added > 0 || removed > 0) {
+        subLines.push({ text: `${added > 0 ? `+${added}` : ''}${removed > 0 ? ` -${removed}` : ''} lines`, isUrl: false })
+      }
+      diffLines.slice(0, 5).forEach(l => {
+        subLines.push({ text: l, isUrl: false, isDiff: true, diffType: l.startsWith('+') ? '+' : '-' })
+      })
+    } else {
+      lines.slice(0, 4).forEach(line => {
+        const trimmed = line.length > 100 ? line.slice(0, 97) + '…' : line
+        subLines.push({ text: trimmed, isUrl: /^https?:\/\//.test(trimmed) })
+      })
+    }
+  }
+
+  return (
+    <Box flexDirection="column" marginLeft={prefixOffset}>
+      <Box>
+        <Text color={dotColor} bold>{'● '}</Text>
+        <Text color={theme.colors.text.primary} bold>{label}</Text>
+        {path && <Text color={isError ? DOT_ERR : DOT_OK}>{path}</Text>}
+        {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
+      </Box>
+      {subLines.map((sub, i) => (
+        <Box key={i} marginLeft={2}>
+          <Text color={theme.colors.text.muted} dimColor>
+            {i === 0 ? '└ ' : '  '}
+          </Text>
+          {sub.isDiff ? (
+            <Box backgroundColor={sub.diffType === '+' ? '#0d2b0d' : '#2b0d0d'}>
+              <Text color={sub.diffType === '+' ? DOT_OK : DOT_ERR}>{sub.text}</Text>
+            </Box>
+          ) : sub.isUrl ? (
+            <Text color="#58a6ff" underline>{sub.text}</Text>
+          ) : (
+            <Text color={isError ? DOT_ERR : theme.colors.text.muted} dimColor={!isError}>{sub.text}</Text>
+          )}
+        </Box>
+      ))}
+    </Box>
+  )
+}, (prev, next) =>
+  prev.block === next.block &&
+  prev.result === next.result &&
+  prev.theme === next.theme &&
+  prev.prefixOffset === next.prefixOffset
+)
+
+ToolUseBlock.displayName = 'ToolUseBlock'
 
 // ===== Tool Call Visual Components =====
 
@@ -344,7 +579,7 @@ const DOT_OK  = '#3fb950'
 const DOT_ERR = '#f85149'
 const DOT_RUN = '#e3b341'
 
-// ===== ActionsBlock — Claude Code style: ● Name(args) + └ result =====
+// ===== ActionsBlock — delegates to ToolUseBlock =====
 
 interface ActionsBlockProps {
   contentBlocks: ContentBlock[]
@@ -357,7 +592,7 @@ const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefi
   if (toolBlocks.length === 0) return null
 
   return (
-    <Box flexDirection="column" marginLeft={prefixOffset}>
+    <Box flexDirection="column">
       {contentBlocks.map((block, idx) => {
         if (block.type !== 'tool_use') return null
 
@@ -365,65 +600,14 @@ const ActionsBlock: React.FC<ActionsBlockProps> = ({ contentBlocks, theme, prefi
           b => b.type === 'tool_result' && (b as any).tool_use_id === block.id
         ) as (ContentBlock & { type: 'tool_result' }) | undefined
 
-        const isError   = block.status === 'error'
-        const isRunning = block.status === 'running'
-        const dotColor  = isError ? DOT_ERR : isRunning ? DOT_RUN : DOT_OK
-        const elapsed   = block.completedAt ? formatElapsed(block.completedAt - block.startedAt) : null
-        const summary   = getToolSummary(block.name, block.input)
-        const { label, path } = splitToolSummary(summary)
-
-        // Build result sub-lines
-        const subLines: Array<{ text: string; isUrl: boolean; isDiff?: boolean; diffType?: '+' | '-' }> = []
-        if (result?.content) {
-          const lines = result.content.split('\n').filter(l => l.trim())
-          const diffLines = lines.filter(l => /^[+-]/.test(l) && !l.startsWith('+++') && !l.startsWith('---'))
-          if (diffLines.length > 0) {
-            // Show diff summary + first few diff lines
-            const added   = diffLines.filter(l => l.startsWith('+')).length
-            const removed = diffLines.filter(l => l.startsWith('-')).length
-            if (added > 0 || removed > 0) {
-              subLines.push({ text: `${added > 0 ? `+${added}` : ''}${removed > 0 ? ` -${removed}` : ''} lines`, isUrl: false })
-            }
-            diffLines.slice(0, 5).forEach(l => {
-              subLines.push({ text: l, isUrl: false, isDiff: true, diffType: l.startsWith('+') ? '+' : '-' })
-            })
-          } else {
-            lines.slice(0, 4).forEach(line => {
-              const trimmed = line.length > 100 ? line.slice(0, 97) + '…' : line
-              const isUrl = /^https?:\/\//.test(trimmed)
-              subLines.push({ text: trimmed, isUrl })
-            })
-          }
-        }
-
         return (
-          <Box key={`action-${block.id || idx}`} flexDirection="column">
-            {/* ● ToolName(args) */}
-            <Box>
-              <Text color={dotColor} bold>{'● '}</Text>
-              <Text color={theme.colors.text.primary} bold>{label}</Text>
-              {path && <Text color={isError ? DOT_ERR : DOT_OK}>{path}</Text>}
-              {elapsed && <Text color={theme.colors.text.muted} dimColor>{' '}{elapsed}</Text>}
-            </Box>
-
-            {/* └ sub-items */}
-            {subLines.map((sub, i) => (
-              <Box key={i} marginLeft={2}>
-                <Text color={theme.colors.text.muted} dimColor>
-                  {i === 0 ? '└ ' : '  '}
-                </Text>
-                {sub.isDiff ? (
-                  <Box backgroundColor={sub.diffType === '+' ? '#0d2b0d' : '#2b0d0d'}>
-                    <Text color={sub.diffType === '+' ? DOT_OK : DOT_ERR}>{sub.text}</Text>
-                  </Box>
-                ) : sub.isUrl ? (
-                  <Text color="#58a6ff" underline>{sub.text}</Text>
-                ) : (
-                  <Text color={isError ? DOT_ERR : theme.colors.text.muted} dimColor={!isError}>{sub.text}</Text>
-                )}
-              </Box>
-            ))}
-          </Box>
+          <ToolUseBlock
+            key={`action-${block.id || idx}`}
+            block={block}
+            result={result}
+            theme={theme}
+            prefixOffset={0}
+          />
         )
       })}
     </Box>
@@ -454,16 +638,18 @@ const BlockRenderer: React.FC<BlockRendererProps> = React.memo(({
     return null
   }
 
+  const roleStyleWithPrefix = roleStyle && roleStyle.prefix ? roleStyle : undefined;
+
   return (
     <Box flexDirection="row">
-      {isFirst && roleStyle && (
+      {isFirst && roleStyleWithPrefix && (
         <Box marginRight={1}>
-          <Text color={roleStyle.color} bold={roleStyle.bold}>
-            {roleStyle.prefix}
+          <Text color={roleStyleWithPrefix.color} bold={roleStyleWithPrefix.bold}>
+            {roleStyleWithPrefix.prefix}
           </Text>
         </Box>
       )}
-      {!isFirst && roleStyle && <Box width={prefixWidth + 1} />}
+      {!isFirst && roleStyleWithPrefix && <Box width={prefixWidth + 1} />}
 
       <Box flexGrow={1} flexShrink={1}>
         {block.type === 'code' ? (

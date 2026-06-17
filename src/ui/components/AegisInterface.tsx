@@ -66,17 +66,10 @@ const QueuedCommands: React.FC = React.memo(() => {
   if (pendingCommands.length === 0) return null;
 
   return (
-    <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" marginTop={0}>
       <Text color={theme.colors.text.muted} dimColor>
-        {'\u2500\u2500'} Queued ({pendingCommands.length}) {'\u2500\u2500'}
+        queued: {pendingCommands.length}
       </Text>
-      {pendingCommands.map((cmd, index) => (
-        <Box key={index} marginLeft={2}>
-          <Text color={theme.colors.text.muted} dimColor>
-            {index + 1}. {cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd}
-          </Text>
-        </Box>
-      ))}
     </Box>
   );
 });
@@ -322,7 +315,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
   return (
-    <Box flexDirection="column" width="100%">
+    <Box flexDirection="column" width="100%" paddingX={0}>
       <WelcomeMessage terminalWidth={terminalWidth - 2} />
 
       {selectorState.isVisible ? (

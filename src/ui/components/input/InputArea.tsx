@@ -169,7 +169,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           ? `Queued: ${pendingCommands.length} command(s). Type to add more...`
           : 'Processing... Type to queue next command';
       }
-      return 'Type a message... (Ctrl+Z to exit)';
+      return 'Type a message...';
     }, [isProcessing, pendingCommands.length]);
     
     // 自管理的输入状
@@ -265,30 +265,23 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <Box flexDirection="column">
-        {/* Thinking indicator — always occupies 1 row to prevent layout shift/flicker */}
-        <Box paddingX={1} marginBottom={0} height={1}>
+        {/* Thinking indicator — Claude Code style: minimal */}
+        <Box paddingX={0} marginBottom={0}>
           {thinkingLabel ? (
-            <>
-              <Text
-                color={ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]}
-                dimColor={glowPhase % 8 === 0}
-              > {thinkingLabel}</Text>
-              {pendingCommands.length > 0 && (
-                <Text color={theme.colors.text.muted} dimColor> · queued: {pendingCommands.length}</Text>
-              )}
-            </>
-          ) : <Text> </Text>}
+            <Text color={theme.colors.text.muted} dimColor>
+              {thinkingLabel}
+              {pendingCommands.length > 0 && <Text dimColor> · queued: {pendingCommands.length}</Text>}
+            </Text>
+          ) : null}
         </Box>
 
-        {/* 输入框 */}
+        {/* 输入框 — Claude Code style: no border, just prompt + input */}
         <Box
           flexDirection="row"
-          paddingX={1}
+          paddingX={0}
           paddingY={0}
-          borderStyle="single"
-          borderColor={isProcessing ? theme.colors.warning : theme.colors.border.light}
         >
-          {/* Spinner while AI works, □ when idle — frame driven by glowPhase (no own timer) */}
+          {/* Spinner while AI works, □ when idle */}
           <Box marginRight={1}>
             <PromptGlyph
               isProcessing={isProcessing}

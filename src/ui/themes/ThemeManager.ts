@@ -297,26 +297,26 @@ export class ThemeManager {
     switch (role) {
       case 'user':
         return {
-          color: colors.success,
-          prefix: '› ',
+          color: colors.text.muted,
+          prefix: '',
           bold: false,
         };
       case 'assistant':
         return {
-          color: colors.text.secondary,
-          prefix: '● ',
+          color: colors.primary,
+          prefix: '',
           bold: false,
         };
       case 'system':
         return {
           color: colors.warning,
-          prefix: '! ',
+          prefix: '!',
           bold: true,
         };
       case 'tool':
         return {
           color: colors.info,
-          prefix: '→ ',
+          prefix: '',
           bold: false,
         };
       default:

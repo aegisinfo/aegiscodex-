@@ -107,12 +107,10 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
-      borderColor={theme.colors.border.light}
-      paddingX={1}
-      marginY={1}
+      paddingX={0}
+      marginY={0}
     >
-      <Box marginBottom={1} justifyContent="space-between">
+      <Box>
         <Box>
           {filePath ? (
             <>
@@ -124,9 +122,6 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
           ) : language ? (
             <Text color={theme.colors.text.muted} dimColor>{language}</Text>
           ) : null}
-        </Box>
-        <Box>
-          <Text color={theme.colors.text.muted} dimColor>/copy</Text>
         </Box>
       </Box>
 
