@@ -134,8 +134,48 @@ async function main(): Promise<void> {
     // 注册中间
     .middleware(middlewareChain)
 
+    // ── auth commands ──────────────────────────────────────────────────────
+    .command(
+      'login',
+      'Log in to aegiscloud (Google or username/password)',
+      (y) => y.option('password', {
+        alias: 'p',
+        type: 'boolean',
+        describe: 'Log in with username and password instead of browser',
+        default: false,
+      }),
+      async (argv) => {
+        const { runLogin, runLoginPassword } = await import('./auth/login.js');
+        try {
+          if ((argv as any).password) {
+            await runLoginPassword();
+          } else {
+            await runLogin();
+          }
+          console.log('\n\x1b[32m✓ Logged in successfully.\x1b[0m');
+          console.log('\nRun \x1b[1maegis\x1b[0m to start coding.\n');
+        } catch (err) {
+          console.error('\n\x1b[31m✗ Login failed:\x1b[0m', (err as Error).message);
+          process.exit(1);
+        }
+        process.exit(0);
+      },
+    )
+
+    .command(
+      'logout',
+      'Log out and remove stored aegiscloud credentials',
+      () => {},
+      async () => {
+        const { runLogout } = await import('./auth/login.js');
+        runLogout();
+        process.exit(0);
+      },
+    )
+
     // 示
     .example('$0', 'Start interactive mode')
+    .example('$0 login', 'Log in via browser')
     .example('$0 "帮我分析这个项目"', 'Start with an initial message')
     .example('$0 --model gpt-4', 'Use a specific model')
     .example('$0 --debug', 'Enable debug mode')
@@ -193,33 +233,48 @@ async function main(): Promise<void> {
           process.exit(0)
         }
 
+        // ── Mandatory login check ─────────────────────────────────────────
+        // If no aegiscloud credentials exist at all, force login before proceeding.
+        {
+          const { readFileSync } = await import('node:fs');
+          const { homedir } = await import('node:os');
+          let hasCredentials = false;
+          try {
+            const cfg = JSON.parse(readFileSync(`${homedir()}/.aegiscode/config.json`, 'utf8'));
+            hasCredentials = !!(cfg?.aegiscloud?.api_key || cfg?.memory?.token);
+          } catch {}
+
+          if (!hasCredentials) {
+            const { runLogin } = await import('./auth/login.js');
+            try {
+              await runLogin();
+              console.log('\n\x1b[32m✓ Logged in.\x1b[0m Starting aegiscode...\n');
+              // Re-initialize config with the newly saved credentials
+              await configManager.initialize(process.cwd());
+            } catch (err) {
+              console.error('\n\x1b[31m✗ Login failed:\x1b[0m', (err as Error).message);
+              console.error('Run \x1b[1maegis login\x1b[0m to try again.');
+              process.exit(1);
+            }
+          }
+        }
+
         // 获取最终配
         const modelConfig = configManager.getDefaultModel()
 
         // 检
         if (!modelConfig.apiKey) {
-          console.error('Error: API key is required')
-          console.error('')
-          console.error('Configuration options (in priority order):')
-          console.error('')
-          console.error('  1. Config file (~/.aegiscode/config.json):')
-          console.error('     aegis-cli --init  # Create default config')
-          console.error('')
-          console.error('  2. Environment variable:')
-          console.error('     export OPENAI_API_KEY=sk-...')
-          console.error('')
-          console.error('  3. CLI argument:')
-          console.error('     aegis-cli --api-key sk-...')
-          console.error('')
-
-          // 显示已加载的配置文
-          const loadedPaths = configManager.getLoadedConfigPaths()
-          if (loadedPaths.length > 0) {
-            console.error('Loaded config files:')
-            loadedPaths.forEach((p) => console.error(`  - ${p}`))
-          }
-
-          process.exit(1)
+          const P = '\x1b[38;2;0;229;192m';
+          const R = '\x1b[0m';
+          const D = '\x1b[2m';
+          process.stderr.write(
+            `\n${P}◆ aegiscode — No API key configured${R}\n\n` +
+            `  Run ${P}aegis login${R} to authenticate via browser, or:\n\n` +
+            `  ${D}• Add an API key interactively:  aegis --init${R}\n` +
+            `  ${D}• Set an environment variable:   export OPENAI_API_KEY=sk-...${R}\n` +
+            `  ${D}• Pass it directly:              aegis --api-key sk-...${R}\n\n`,
+          );
+          process.exit(1);
         }
 
         // 获取初始消息（支持多个单
