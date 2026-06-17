@@ -391,7 +391,7 @@ async function main(): Promise<void> {
               patchConsole: true,
               stdin: renderStdin,
               stdout: process.stdout,
-              alternateScreen: false,
+              alternateScreen: true,
               maxFps: 30,
             },
           );

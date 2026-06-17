@@ -2555,6 +2555,8 @@ function createAppCommand(app: AppDefinition): SlashCommand {
   };
 }
 
+
+
 /** Generate SlashCommand wrappers for all AppBuilder apps */
 const appCommands: SlashCommand[] = BUILTIN_APPS.map(createAppCommand);
 

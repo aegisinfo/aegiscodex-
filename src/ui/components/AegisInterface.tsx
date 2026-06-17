@@ -315,7 +315,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const hasPendingInitialMessage = !!(initialMessage && !initialMessageSent.current);
 
   return (
-    <Box flexDirection="column" width="100%" paddingX={0}>
+    <Box flexDirection="column" width="100%" paddingX={0} flexGrow={1}>
       <WelcomeMessage terminalWidth={terminalWidth - 2} />
 
       {selectorState.isVisible ? (
@@ -333,11 +333,13 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         <>
           {messages.length > 0 && (
             <ErrorBoundary name="MessageList" fallback={<Text color="red">Message list error</Text>}>
-              <MessageList
-                terminalWidth={terminalWidth - 2}
-                terminalHeight={terminalHeight}
-                onScrolledUpChange={handleScrolledUpChange}
-              />
+              <Box flexGrow={1} minHeight={0}>
+                <MessageList
+                  terminalWidth={terminalWidth - 2}
+                  terminalHeight={terminalHeight}
+                  onScrolledUpChange={handleScrolledUpChange}
+                />
+              </Box>
             </ErrorBoundary>
           )}
           <QueuedCommands />
