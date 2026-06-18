@@ -234,15 +234,15 @@ export function parseSlashCommand(input: string): { name: string; args: string }
   }
 
   const withoutSlash = trimmed.slice(1);
-  const spaceIndex = withoutSlash.indexOf(' ');
+  const wsIndex = withoutSlash.search(/\s/);
 
-  if (spaceIndex === -1) {
+  if (wsIndex === -1) {
     return { name: withoutSlash, args: '' };
   }
 
   return {
-    name: withoutSlash.slice(0, spaceIndex),
-    args: withoutSlash.slice(spaceIndex + 1),
+    name: withoutSlash.slice(0, wsIndex),
+    args: withoutSlash.slice(wsIndex + 1),
   };
 }
 

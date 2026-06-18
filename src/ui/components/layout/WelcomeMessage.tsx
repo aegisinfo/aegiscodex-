@@ -19,11 +19,18 @@ const COMMANDS = [
   { cmd: '/compact', desc: 'compress context' },
 ];
 
+/** Keeps fade-in state alive across remounts (e.g. selector closing) */
+const fadePlayedRef = { current: false };
+
 const FadeInCommand: React.FC<{ cmd: string; desc: string; delayMs: number }> = ({ cmd, desc, delayMs }) => {
   const theme = themeManager.getTheme();
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(fadePlayedRef.current);
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), delayMs);
+    if (fadePlayedRef.current) return;
+    const t = setTimeout(() => {
+      fadePlayedRef.current = true;
+      setVisible(true);
+    }, delayMs);
     return () => clearTimeout(t);
   }, [delayMs]);
   if (!visible) return null;
@@ -40,7 +47,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
   const footerT  = cmdBaseT + COMMANDS.length * 100 + 80;
 
   return (
-    <Box flexDirection="column" paddingX={0} paddingY={0} marginBottom={0}>
+    <Box flexDirection="column" paddingX={0} paddingY={0} marginBottom={1}>
       {/* ASCII art logo */}
       <Box flexDirection="column">
         <Text color={theme.colors.primary}>{`

@@ -248,7 +248,16 @@ All agents write real files to your current directory.`,
 
     const cwd = context.cwd || process.cwd();
     const output: string[] = [];
-    const log = (s: string) => { output.push(s); process.stdout.write(s + '\n'); };
+    // Strip ANSI escape codes for clean markdown rendering in streaming buffer
+    const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    const log = (s: string) => {
+      output.push(s);
+      if (context.onContentDelta) {
+        context.onContentDelta(stripAnsi(s) + '\n');
+      } else {
+        process.stdout.write(s + '\n');
+      }
+    };
 
     log(`\n${C.cyan}${C.bold}⬡ AEGIS BUILD${C.reset}`);
     log(`${C.muted}Task: ${task}${C.reset}\n`);
@@ -385,21 +394,20 @@ Be concrete. No fluff.`,
 
     const totalMs = parallelResponses.reduce((s, r) => s + (r.metadata?.durationMs || 0), 0);
 
-    log(`${C.cyan}${C.bold}Build complete${C.reset} ${C.muted}· ${parallelResponses.length} agents · ${Math.round(totalMs / 1000)}s${errorCount > 0 ? ` · ${errorCount} error(s)` : ''}${C.reset}\n`);
+    const summaryText = [
+      `## ⬡ Build: ${plan.appName}`,
+      `**Stack:** ${plan.stack}`,
+      `**Run:** \`${plan.entrypoint}\``,
+      '',
+      synthesis,
+      '',
+      `---`,
+      `*${parallelResponses.length} agents · ${Math.round(totalMs / 1000)}s${errorCount > 0 ? ` · ⚠ ${errorCount} agent(s) had errors` : ' · all clean'}*`,
+    ].join('\n');
 
-    return {
-      success: true,
-      type: 'success',
-      content: [
-        `## ⬡ Build: ${plan.appName}`,
-        `**Stack:** ${plan.stack}`,
-        `**Run:** \`${plan.entrypoint}\``,
-        '',
-        synthesis,
-        '',
-        `---`,
-        `*${parallelResponses.length} agents · ${Math.round(totalMs / 1000)}s${errorCount > 0 ? ` · ⚠ ${errorCount} agent(s) had errors` : ' · all clean'}*`,
-      ].join('\n'),
-    };
+    log(`\n${summaryText}`);
+    log(`\n\n✅ **Build complete!**\n`);
+
+    return { success: true, type: 'silent' };
   },
 };

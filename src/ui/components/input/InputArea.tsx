@@ -8,8 +8,8 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, glowPhase, color, idleColor }) => {
-  const displayColor = isProcessing
+const PromptGlyph: React.FC<{ isProcessing: boolean; lockedIn: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, lockedIn, glowPhase, color, idleColor }) => {
+  const displayColor = (isProcessing && lockedIn)
     ? ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]
     : idleColor;
   return <Text color={displayColor} bold>□</Text>;
@@ -20,7 +20,7 @@ import { CommandSuggestions } from './CommandSuggestions.js';
 
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
+import { getState, useIsThinking, usePendingCommands, useCurrentCommand } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
 import { getStreamingContent } from '../../../store/streaming-buffer.js';
 
@@ -91,6 +91,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     // 自己订阅需要的状
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
+    const currentCommand = useCurrentCommand();
 
     const [pasteNotification, setPasteNotification] = useState<string | null>(null);
     const pasteNotifRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,11 +163,13 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     const thinkingLabel = useMemo(() => {
       if (!isProcessing) return null;
+      const cmd = currentCommand?.slice(0, 80);
+      const cmdStr = cmd ? ` · locked: ${cmd}` : '';
       const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
       const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
-      if (hasStreamingMessage) return `generating${elapsed}${tokens}`;
-      return `thinking${elapsed}`;
-    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens]);
+      if (hasStreamingMessage) return `generating${tokens}${elapsed}${cmdStr}`;
+      return `thinking${elapsed}${cmdStr}`;
+    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens, currentCommand]);
 
     // 计
     const placeholder = useMemo(() => {
@@ -308,6 +311,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
           <Box marginRight={1}>
             <PromptGlyph
               isProcessing={isProcessing}
+              lockedIn={currentCommand !== null}
               glowPhase={glowPhase}
               color={theme.colors.primary}
               idleColor={theme.colors.primary}

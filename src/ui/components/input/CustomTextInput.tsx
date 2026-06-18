@@ -146,7 +146,22 @@ export const CustomTextInput: React.FC<CustomTextInputProps> = memo(
           return;
         }
 
-        if (key.return) { onSubmitRef.current?.(val); return; }
+        // Multi-agent commands (/multi, /multiyolo, /research, /build, /forge, /council):
+        // Enter inserts newline, Shift+Enter submits — enables multi-line prompts.
+        // All other commands/messages: Enter submits immediately (as before).
+        const MULTI_AGENT_CMDS = ['/multi', '/multiyolo', '/research', '/build', '/forge', '/council'];
+        const isMultiAgent = MULTI_AGENT_CMDS.some(cmd => val.trimStart().startsWith(cmd));
+        if (key.return) {
+          if (isMultiAgent && !key.shift) {
+            // Insert newline at cursor
+            const newValue = val.slice(0, pos) + '\n' + val.slice(pos);
+            onChangeRef.current(newValue);
+            onChangeCursorPositionRef.current(pos + 1);
+          } else {
+            onSubmitRef.current?.(val);
+          }
+          return;
+        }
         if (key.leftArrow) { if (pos > 0) onChangeCursorPositionRef.current(pos - 1); return; }
         if (key.rightArrow) { if (pos < val.length) onChangeCursorPositionRef.current(pos + 1); return; }
         if (key.upArrow) { onArrowUpRef.current?.(); return; }

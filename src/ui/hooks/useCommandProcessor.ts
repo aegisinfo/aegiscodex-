@@ -62,6 +62,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
 
     if (isSlashCommand(value)) {
       // Phase 1: flush user message + thinking=true immediately
+      sessionActions().setCurrentCommand(value);
       startBatch();
       batchAddUserMessage(value);
       batchSetThinking(true);
@@ -93,6 +94,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         });
 
         if (streamingResult.type === 'selector' && streamingResult.selector) {
+          sessionActions().setCurrentCommand(null);
           sessionActions().setThinking(false);
           if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
           // Rollback: remove user command message + empty streaming message
@@ -103,6 +105,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         }
 
         if (streamingResult.sendToAgent && streamingResult.content) {
+          // Don't clear currentCommand — it continues via processCommand below
           sessionActions().setThinking(false);
           if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
           await processCommand(streamingResult.content, { silent: true });
@@ -111,6 +114,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
 
         if (streamingResult.type === 'silent') {
           if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          sessionActions().setCurrentCommand(null);
           sessionActions().setThinking(false);
           return;
         }
@@ -132,6 +136,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         if (streamingMsgId && streamingResult?.type !== 'silent') {
           try { sessionActions().finishStreamingMessage(streamingMsgId); } catch {}
         }
+        sessionActions().setCurrentCommand(null);
         batchSetThinking(false);
         flushBatchWithStore(vanillaStore);
       }
@@ -146,6 +151,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
       sessionActions().addUserMessage(value);
     }
 
+    sessionActions().setCurrentCommand(value);
     sessionActions().setThinking(true);
 
     const { onUserPromptSubmit } = await import('../../hooks/index.js');
@@ -301,6 +307,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         sessionActions().finishStreamingMessage(streamingMessageId);
       }
     } finally {
+      sessionActions().setCurrentCommand(null);
       sessionActions().setThinking(false);
     }
   }, [onSelectorRequest]);
