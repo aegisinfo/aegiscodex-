@@ -87,6 +87,15 @@ npm run build:mac         # → dist/aegiscode-gui*.dmg
 
 The GUI bundles the CLI `dist/` as an `extraResource`, along with `sql.js`, `@xenova/transformers`, and `@huggingface/jinja` for local AI features.
 
+## Gotchas
+
+- **`dist/main.js` does not auto-rebuild.** The `aegis` binary and
+  `aegiscode-gui` (in dev mode) both spawn the compiled `dist/main.js`, not
+  `src/`. `npm run dev` is the only entry point that reads `src/` live. If a
+  source fix "doesn't seem to work" when tested via the binary or the GUI,
+  run `npm run build` first. See the `run` skill for how to actually drive
+  the app and verify this.
+
 ## Cross-Session Memory
 
 Requires subscription at [aegiscloud.org](https://aegiscloud.org). Activate via `/memory activate <token>`. Stores project context across sessions — no re-explaining needed.
