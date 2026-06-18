@@ -112,15 +112,20 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const [showAllThinking, setShowAllThinking] = useState(() => vanillaStore.getState().app.showAllThinking);
   const [streamingVersion, setStreamingVersion] = useState(0);
 
-  // Start scrolled to bottom on mount so the latest messages are visible
-  const [scrollLineOffset, setScrollLineOffset] = useState(() => {
-    const msgs = getState().session.messages.filter(m => !m.isStreaming);
-    const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
-    const lines = capped.map(m => estimateMessageLines(m.content, m.thinking, terminalWidth, m.contentBlocks));
-    const total = lines.reduce((a, b) => a + b, 0);
-    const vp = Math.max(terminalHeight - UI_OVERHEAD, 5);
-    return Math.max(0, total - vp);
-  });
+  // Manual scroll offset — only meaningful while autoFollow is false.
+  const [scrollLineOffset, setScrollLineOffset] = useState(0);
+
+  // When true, the view always tracks the live bottom (recomputed fresh every
+  // render from maxLineOffset) instead of a stored offset number. estimateMessageLines
+  // is only an approximation of what Ink actually renders, so storing the "bottom"
+  // as a literal offset let per-message estimate error compound across messages
+  // until the stored value drifted from the true bottom — causing messages to
+  // appear/disappear inconsistently after a handful of exchanges. Recomputing the
+  // bottom fresh every render instead of trusting a remembered number makes it
+  // self-correcting, regardless of estimate accuracy.
+  const [autoFollow, setAutoFollow] = useState(true);
+  const autoFollowRef = useRef(autoFollow);
+  autoFollowRef.current = autoFollow;
 
   // Refs for values used in callbacks/RAF
   const messagesRef = useRef(messages);
@@ -138,8 +143,6 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const scrollLineOffsetRef = useRef(scrollLineOffset);
   scrollLineOffsetRef.current = scrollLineOffset;
   const maxLineOffsetRef = useRef(0);
-  /** Ref to the currently streaming message's estimated lines (from buffer content) */
-  const streamingMessageLineDeltaRef = useRef(0);
 
   // ==================== Computed values ====================
   const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
@@ -181,12 +184,13 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         streamingMsg.contentBlocks,
       )
     : 0;
-  streamingMessageLineDeltaRef.current = streamingLines;
 
   const totalLines = (lineOffsets[lineOffsets.length - 1] || 0) + streamingLines;
   const maxLineOffset = Math.max(0, totalLines - viewportLines);
   maxLineOffsetRef.current = maxLineOffset;
-  const clampedLineOffset = Math.min(scrollLineOffset, maxLineOffset);
+  // While auto-following, always use the freshly-computed bottom rather than a
+  // stored offset — see the autoFollow declaration above for why.
+  const clampedLineOffset = autoFollow ? maxLineOffset : Math.min(scrollLineOffset, maxLineOffset);
   const isAtBottom = clampedLineOffset >= maxLineOffset;
 
   // Find which message index corresponds to the current line offset
@@ -221,7 +225,12 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       visibleMessages.push(completedMessages[i]);
       linesLeft -= messageLines[i];
     }
-    showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0;
+    // Pin the latest message below the window when scrolled up, so the user
+    // never loses track of "what just happened" while reading history — but
+    // only if the window doesn't already end on it, otherwise it'd render twice.
+    const windowReachesEnd = visibleMessages.length > 0 &&
+      visibleMessages[visibleMessages.length - 1].id === completedMessages[completedMessages.length - 1]?.id;
+    showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0 && !windowReachesEnd;
   }
 
   // ==================== Notify parent about scroll state ====================
@@ -235,44 +244,48 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   }, [useWindowing, isAtBottom]);
 
   // ==================== Keyboard Scrolling ====================
-  function getMaxLineOffset(): number {
-    const msgs = messagesRef.current.filter(m => !m.isStreaming);
-    const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
-    let total = capped.reduce((sum, m) => sum + estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks), 0);
-    // Include streaming message lines for keyboard scroll max
-    total += streamingMessageLineDeltaRef.current;
-    return Math.max(0, total - Math.max(terminalHeightRef.current - UI_OVERHEAD, 5));
+  // Manual scroll-up moves: leave autoFollow, basing the new offset on the
+  // live bottom (maxLineOffsetRef) if we were following, or the stored
+  // offset otherwise.
+  function scrollUpBy(amount: number) {
+    const base = autoFollowRef.current ? maxLineOffsetRef.current : scrollLineOffsetRef.current;
+    setAutoFollow(false);
+    setScrollLineOffset(Math.max(0, base - amount));
+  }
+
+  // Manual scroll-down moves: re-enable autoFollow once we reach the bottom.
+  function scrollDownBy(amount: number) {
+    const base = autoFollowRef.current ? maxLineOffsetRef.current : scrollLineOffsetRef.current;
+    const max = maxLineOffsetRef.current;
+    const next = Math.min(max, base + amount);
+    setScrollLineOffset(next);
+    setAutoFollow(next >= max);
   }
 
   useInput((_input, key) => {
     if (key.upArrow && key.ctrl) {
-      setScrollLineOffset(prev => Math.max(0, prev - 1));
+      scrollUpBy(1);
       return;
     }
     if (key.downArrow && key.ctrl) {
-      setScrollLineOffset(prev => {
-        const max = getMaxLineOffset();
-        return Math.min(max, prev + 1);
-      });
+      scrollDownBy(1);
       return;
     }
     if (key.pageUp) {
-      setScrollLineOffset(prev => Math.max(0, prev - viewportLines));
+      scrollUpBy(viewportLines);
       return;
     }
     if (key.pageDown) {
-      setScrollLineOffset(prev => {
-        const max = getMaxLineOffset();
-        return Math.min(max, prev + viewportLines);
-      });
+      scrollDownBy(viewportLines);
       return;
     }
     if (key.home) {
+      setAutoFollow(false);
       setScrollLineOffset(0);
       return;
     }
     if (key.end) {
-      setScrollLineOffset(getMaxLineOffset());
+      setAutoFollow(true);
       return;
     }
   });
@@ -305,12 +318,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         setMessages(newMessages);
       }
 
-      // 2. Track scroll position during streaming
-      // When user is at the bottom, scroll follows the growing streaming content
-      const prevStreamingDelta = streamingMessageLineDeltaRef.current;
-      // (recomputed below if streaming is active)
-
-      // 3. Check and apply buffered streaming content
+      // 2. Check and apply buffered streaming content
       const buf = getStreamingContent();
       const state = vanillaStore.getState();
       const streaming = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
@@ -334,24 +342,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           };
           setStreamingVersion(v => v + 1);
 
-          // Track scroll position during streaming.
-          // When the user is at the bottom, keep them at the bottom as content grows.
-          const newStreamingDelta = estimateMessageLines(
-            streaming.content + buf.content,
-            (streaming.thinking || '') + buf.thinking,
-            terminalWidthRef.current,
-            streaming.contentBlocks,
-          );
-          streamingMessageLineDeltaRef.current = newStreamingDelta;
-          const delta = newStreamingDelta - prevStreamingDelta;
-          if (delta > 0) {
-            // If user was at the bottom, scroll down to follow new content.
-            const curOffset = scrollLineOffsetRef.current;
-            const curMax = maxLineOffsetRef.current;
-            if (curOffset >= curMax) {
-              setScrollLineOffset(prev => Math.min(prev + delta, curMax + delta));
-            }
-          }
+          // While autoFollow is true, the bottom is recomputed fresh every render
+          // (see clampedLineOffset above) — no offset bump needed here.
 
           // Report render latency to status bar
           const latency = getStreamingLatencyMs();
@@ -409,41 +401,18 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
 
       if (messagesChanged) {
         // Auto-scroll to bottom when new content arrives.
-        // Scrolls when:
+        // Re-enables follow mode when:
         //  - The last new message is a user message (just submitted)
         //  - The last new message is streaming (just started streaming)
-        //  - The user was already at the bottom (so they follow the conversation)
+        //  - The user was already following (so they keep following the conversation)
+        // No offset math here — autoFollow makes the render-time clampedLineOffset
+        // track the live bottom every render, so there's nothing to compute or store.
         const prevLen = prevMessages.length;
         const newLen = newMessages.length;
         if (newLen > prevLen) {
           const lastNew = newMessages[newLen - 1];
-          // Read from refs — these are updated every render, unlike the closure-captured consts
-          const wasAtBottom = scrollLineOffsetRef.current >= maxLineOffsetRef.current;
-          if (lastNew?.role === 'user' || lastNew?.isStreaming || wasAtBottom) {
-            // Jump to bottom of the updated content.
-            // IMPORTANT: Include the currently streaming message's buffer content in the
-            // line estimate. Without this, the streaming message's rendered lines are
-            // invisible to the scroll computation — causing the viewport to land short
-            // and pushing user input off-screen (Bug: can't see what you're typing).
-            const msgs = newMessages.filter(m => !m.isStreaming);
-            const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
-            let total = capped.reduce((sum, m) => sum + estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks), 0);
-            // Add streaming message's buffer content lines if active
-            const streamingContent = getStreamingContent();
-            if (streamingContent) {
-              const streamingMsg = newMessages.find(m => m.isStreaming && isActiveStreamingMessage(m));
-              if (streamingMsg) {
-                total += estimateMessageLines(
-                  streamingMsg.content + streamingContent.content,
-                  (streamingMsg.thinking || '') + streamingContent.thinking,
-                  terminalWidthRef.current,
-                  streamingMsg.contentBlocks,
-                );
-              }
-            }
-            const vp = Math.max(terminalHeightRef.current - UI_OVERHEAD, 5);
-            const maxOff = Math.max(0, total - vp);
-            setScrollLineOffset(maxOff);
+          if (lastNew?.role === 'user' || lastNew?.isStreaming || autoFollowRef.current) {
+            setAutoFollow(true);
           }
         }
 
@@ -519,7 +488,14 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         />
       )}
 
-      {/* Last completed message pinned at bottom when scrolled up */}
+      {/* Last completed message pinned at bottom when scrolled up — divider makes
+          clear this jumps past whatever's between the window and the latest
+          message, instead of looking like that content silently vanished. */}
+      {showLastMsgOutside && (
+        <Box>
+          <Text color={themeManager.getTheme().colors.text.muted} dimColor>⋯ latest (End to jump here) ⋯</Text>
+        </Box>
+      )}
       {showLastMsgOutside && (
         <MessageRenderer
           key={'last-' + completedMessages[completedMessages.length - 1].id}
