@@ -235,12 +235,62 @@ export async function runLoginPassword(): Promise<void> {
   }
 }
 
+// ── Claude Code Pro/Max subscription login ──────────────────────────────────
+// Stores the OAuth token from `claude setup-token` (or pasted manually) into
+// ~/.aegiscode/.env as CLAUDE_CODE_OAUTH_TOKEN, which ConfigManager picks up
+// as an alternative credential for the currently configured Anthropic model —
+// it does not change which model is selected.
+const ENV_FILE = path.join(os.homedir(), '.aegiscode', '.env');
+
+function saveClaudeCodeOAuthToken(token: string): void {
+  let lines: string[] = [];
+  try { lines = fs.readFileSync(ENV_FILE, 'utf8').split('\n'); } catch {}
+
+  const filtered = lines.filter(l => !l.startsWith('CLAUDE_CODE_OAUTH_TOKEN='));
+  filtered.push(`CLAUDE_CODE_OAUTH_TOKEN=${token}`);
+
+  const dir = path.dirname(ENV_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(ENV_FILE, filtered.filter(l => l.trim()).join('\n') + '\n');
+}
+
+export async function runLoginClaudePro(): Promise<void> {
+  process.stdout.write(
+    `\n${C.primary}◆ ÆGIS — Login with Claude Code Pro / Max${C.reset}\n\n` +
+    `  This uses your claude.ai subscription instead of a pay-per-token API key.\n` +
+    `  Generate a token with: ${C.bold}claude setup-token${C.reset}\n\n`,
+  );
+
+  const { createInterface } = await import('node:readline');
+  const token = await new Promise<string>(resolve => {
+    process.stdout.write('  Paste the token here: ');
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+    rl.once('line', line => { rl.close(); resolve(line.trim()); });
+  });
+
+  if (!token) throw new Error('No token provided');
+  if (!token.startsWith('sk-ant-oat')) {
+    throw new Error('That doesn\'t look like a Claude Code OAuth token (expected it to start with "sk-ant-oat").');
+  }
+
+  saveClaudeCodeOAuthToken(token);
+  process.stdout.write(`\n  ${C.green}✓ Saved.${C.reset} aegiscode will use your Claude Pro/Max subscription.\n\n`);
+}
+
 // ── Logout helper ─────────────────────────────────────────────────────────────
 export function runLogout(): void {
   let cfg: Record<string, any> = {};
   try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch {}
 
-  const hadKey = !!(cfg.aegiscloud?.api_key || cfg.memory?.token);
+  let hadOAuthToken = false;
+  try {
+    const lines = fs.readFileSync(ENV_FILE, 'utf8').split('\n');
+    hadOAuthToken = lines.some(l => l.startsWith('CLAUDE_CODE_OAUTH_TOKEN='));
+    const filtered = lines.filter(l => !l.startsWith('CLAUDE_CODE_OAUTH_TOKEN='));
+    fs.writeFileSync(ENV_FILE, filtered.filter(l => l.trim()).join('\n') + (filtered.some(l => l.trim()) ? '\n' : ''));
+  } catch {}
+
+  const hadKey = !!(cfg.aegiscloud?.api_key || cfg.memory?.token) || hadOAuthToken;
 
   if (cfg.aegiscloud) {
     delete cfg.aegiscloud.api_key;

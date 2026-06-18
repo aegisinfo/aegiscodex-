@@ -221,7 +221,14 @@ export function unregisterSlashCommand(name: string): boolean {
  * 
  */
 export function isSlashCommand(input: string): boolean {
-  return input.trim().startsWith('/');
+  const trimmed = input.trim();
+  if (!trimmed.startsWith('/')) return false;
+
+  // A real command name is a single word ("/help", "/model"); filesystem
+  // paths ("/home/neo/foo") also start with '/' but contain further '/'
+  // in that first token — treat those as plain chat text, not a command.
+  const firstToken = trimmed.slice(1).split(/\s/)[0];
+  return firstToken.length > 0 && !firstToken.includes('/');
 }
 
 /**

@@ -563,6 +563,10 @@ export class SharedMemory {
     model?: string,
   ): Promise<string | null> {
     if (!apiKey || entries.length < 3) return null;
+    // Claude Code Pro/Max OAuth tokens (sk-ant-oat...) only work through the
+    // official Claude Code client, not direct API calls — skip rather than
+    // make a request that's guaranteed to be rejected.
+    if (apiKey.startsWith('sk-ant-oat')) return null;
 
     const conversation = entries
       .slice(0, 20)

@@ -160,7 +160,15 @@ export class ConfigManager {
     const allModels: any[] = (this.config as any).models || [];
     for (const m of allModels) {
       const bu: string = m.baseURL || m.baseUrl || '';
-      if (bu.includes('anthropic') && process.env.ANTHROPIC_API_KEY) {
+      // Claude Code Pro/Max subscription OAuth token (from `claude setup-token`,
+      // or `aegis login --claude-pro`) works as a drop-in for ANTHROPIC_API_KEY
+      // against the same model — it does not change which model is selected.
+      // It takes priority over ANTHROPIC_API_KEY: logging in with --claude-pro
+      // is a deliberate choice and shouldn't be shadowed by a stale/out-of-credit
+      // API key still sitting in the environment.
+      if (bu.includes('anthropic') && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+        m.apiKey = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+      } else if (bu.includes('anthropic') && process.env.ANTHROPIC_API_KEY) {
         m.apiKey = process.env.ANTHROPIC_API_KEY;
       } else if (bu.includes('deepseek') && process.env.DEEPSEEK_API_KEY) {
         m.apiKey = process.env.DEEPSEEK_API_KEY;
@@ -193,10 +201,14 @@ export class ConfigManager {
         if (process.env.OPENAI_BASE_URL) defaultConfig.baseURL = process.env.OPENAI_BASE_URL;
         if (process.env.OPENAI_MODEL)    defaultConfig.model   = process.env.OPENAI_MODEL;
         else if (!defaultConfig.model)   defaultConfig.model   = 'gpt-4o';
+      } else if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+        defaultConfig.apiKey  = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+        defaultConfig.baseURL = 'https://api.anthropic.com/v1';
+        defaultConfig.model   = defaultConfig.model || 'claude-sonnet-4-6';
       } else if (process.env.ANTHROPIC_API_KEY) {
         defaultConfig.apiKey  = process.env.ANTHROPIC_API_KEY;
         defaultConfig.baseURL = 'https://api.anthropic.com/v1';
-        defaultConfig.model   = 'claude-sonnet-4-6';
+        defaultConfig.model   = defaultConfig.model || 'claude-sonnet-4-6';
       }
     }
   }

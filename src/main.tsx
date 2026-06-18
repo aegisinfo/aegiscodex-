@@ -137,17 +137,26 @@ async function main(): Promise<void> {
     // ── auth commands ──────────────────────────────────────────────────────
     .command(
       'login',
-      'Log in to aegiscloud (Google or username/password)',
-      (y) => y.option('password', {
-        alias: 'p',
-        type: 'boolean',
-        describe: 'Log in with username and password instead of browser',
-        default: false,
-      }),
+      'Log in to aegiscloud (Google or username/password), or Claude Code Pro/Max',
+      (y) => y
+        .option('password', {
+          alias: 'p',
+          type: 'boolean',
+          describe: 'Log in with username and password instead of browser',
+          default: false,
+        })
+        .option('claude-pro', {
+          type: 'boolean',
+          describe: 'Authenticate with a Claude Code Pro/Max subscription token instead of an API key',
+          default: false,
+        }),
       async (argv) => {
-        const { runLogin, runLoginPassword } = await import('./auth/login.js');
+        const { runLogin, runLoginPassword, runLoginClaudePro } = await import('./auth/login.js');
         try {
-          if ((argv as any).password) {
+          if ((argv as any).claudePro) {
+            await runLoginClaudePro();
+            process.exit(0);
+          } else if ((argv as any).password) {
             await runLoginPassword();
           } else {
             await runLogin();
