@@ -133,10 +133,12 @@ export class Agent {
       }
 
       // 2. 创
+      const defaultPermissionMode = configManager.getDefaultPermissionMode();
       this.chatService = createChatService({
         apiKey: this.config.apiKey,
         baseURL: this.config.baseURL,
         model: this.config.model,
+        permissionMode: defaultPermissionMode,
       });
 
       // Set Ollama base URL for cross-semantic memory embeddings
@@ -152,6 +154,7 @@ export class Agent {
           apiKey: this.config.apiKey,
           baseURL: this.config.baseURL,
           model: this.config.model,
+          permissionMode: defaultPermissionMode,
         });
       }
 
@@ -171,8 +174,8 @@ export class Agent {
 
       // 5. 创建执行管道（使用 settings.json 中的权限配
       const permissionConfig = configManager.getPermissionConfig();
-      const defaultMode = configManager.getDefaultPermissionMode() as 'default' | 'autoEdit' | 'yolo' | 'plan';
-      
+      const defaultMode = defaultPermissionMode as 'default' | 'autoEdit' | 'yolo' | 'plan';
+
       this.executionPipeline = new ExecutionPipeline(this.toolRegistry, {
         permissions: permissionConfig,
         defaultMode: this.mapPermissionMode(defaultMode),
