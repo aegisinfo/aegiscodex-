@@ -1714,7 +1714,7 @@ Flags:
       const cwd = context.cwd || process.cwd();
       const sourceCtx = buildSourceContext(cwd);
       const codeContext = sourceCtx
-        ? `\n\nWorkspace files:\n${sourceCtx}\n\nUse Read / Grep / Glob to examine these before responding.`
+        ? `\n\nWorkspace context (project metadata + file tree + structure summaries + git changes):\n${sourceCtx}\n\nUse Read / Grep / Glob to examine these — structure summaries show exports/classes in each file.`
         : '\n\nUse Read / Grep / Glob to explore the codebase before responding.';
 
       // Build sub-tasks — each agent gets a focused assignment matching their role
@@ -2097,20 +2097,22 @@ Agents deliberate in parallel, then results are aggregated.`,
 
       const researchTools = ['Read', 'Grep', 'Glob'];
 
+      const researchNote = `\n\nWorkspace context (project metadata + file tree + structure summaries + git changes):\n${sourceCtx}\n\nRead files with Read tool, search with Grep, browse with Glob. Structure summaries show exports/classes/functions — use them to navigate. Git changes show what was recently modified.\nAlways state VOTE: approve, reject, or abstain and REASONING: with clear justification.`;
+
       council.addMember('analyst', 'Data Analyst',
-        `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with data-driven justification.`,
+        `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.${researchNote}`,
         1, baseModelCfg, researchTools);
 
       council.addMember('architect', 'Systems Architect',
-        `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with architectural justification.`,
+        `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.${researchNote}`,
         1, baseModelCfg, researchTools);
 
       council.addMember('ethicist', 'Ethics & Safety Officer',
-        `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with ethical justification.`,
+        `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.${researchNote}`,
         1, baseModelCfg, researchTools);
 
       council.addMember('pragmatist', 'Pragmatic Engineer',
-        `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with practical justification.`,
+        `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.${researchNote}`,
         1, baseModelCfg, researchTools);
 
       const result = await council.deliberate(question, context.sessionId);

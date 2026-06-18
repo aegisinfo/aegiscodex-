@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { createChatService } from '../../services/ChatService.js';
 import { createToolRegistry, getBuiltinTools, ExecutionPipeline, PermissionMode } from '../../tools/index.js';
 import { configManager } from '../../config/ConfigManager.js';
@@ -176,58 +177,198 @@ const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
   '.py', '.rs', '.go', '.java', '.rb', '.php',
   '.vue', '.svelte', '.css', '.scss', '.html',
-  '.json', '.yaml', '.yml', '.toml',
+  '.json', '.yaml', '.yml', '.toml', '.prisma',
 ]);
 
+// Config files that are always included (even if they'd exceed maxFiles)
+const ALWAYS_INCLUDE = new Set([
+  'package.json', 'tsconfig.json', 'tsconfig.tsbuildinfo',
+  '.env.example', 'docker-compose.yml', 'Dockerfile',
+  'Makefile', 'Cargo.toml', 'go.mod', 'Gemfile',
+  'requirements.txt', 'Pipfile', 'pyproject.toml',
+  'wrangler.jsonc', 'wrangler.toml', '.eslintrc.js', '.prettierrc',
+]);
+
+/** Extract structural summary (exports / classes / functions / interfaces) from source */
+function extractStructure(content: string): string {
+  const lines = content.split('\n');
+  const sigs: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Exports
+    if (/^export\s+(default\s+)?(function|class|interface|type|enum|const|let|var|async\s+function)/.test(trimmed)) {
+      sigs.push(trimmed.replace(/^export\s+default\s+/, 'export default ').replace(/^export\s+/, ''));
+    }
+    // Top-level function/class defs (non-exported)
+    else if (/^(function|class|interface|type|enum|async\s+function)\s+\w+/.test(trimmed)) {
+      sigs.push(trimmed);
+    }
+    // Module-level const/let that looks like a binding (e.g., "const foo = ...")
+    else if (/^(const|let|var)\s+\w+\s*[:=]/.test(trimmed) && !trimmed.includes(';') && !trimmed.endsWith(')')) {
+      const name = trimmed.match(/^(const|let|var)\s+(\w+)/);
+      if (name) sigs.push(`${name[1]} ${name[2]} = ...`);
+    }
+    if (sigs.length >= 30) break;
+  }
+  return sigs.join('\n');
+}
+
+/** Try to load a JSON config file and return pretty-printed key fields */
+function loadConfigSummary(cwd: string, name: string): string | null {
+  try {
+    const raw = fs.readFileSync(path.join(cwd, name), 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (name === 'package.json') {
+      const deps = parsed.dependencies as Record<string, string> | undefined;
+      const devDeps = parsed.devDependencies as Record<string, string> | undefined;
+      const scripts = parsed.scripts as Record<string, string> | undefined;
+      const entries = [`name: ${parsed.name || '(unnamed)'}`];
+      if (parsed.type) entries.push(`type: ${parsed.type}`);
+      if (scripts) entries.push(`scripts: ${Object.keys(scripts).join(', ')}`);
+      if (deps) entries.push(`deps[${Object.keys(deps).length}]: ${Object.keys(deps).slice(0, 20).join(', ')}`);
+      if (devDeps) entries.push(`devDeps[${Object.keys(devDeps).length}]: ${Object.keys(devDeps).slice(0, 15).join(', ')}`);
+      return entries.join('\n');
+    }
+    if (name === 'tsconfig.json') {
+      const compiler = (parsed.compilerOptions as Record<string, unknown>) || {};
+      const entries: string[] = [];
+      if (compiler.target) entries.push(`target: ${compiler.target}`);
+      if (compiler.module) entries.push(`module: ${compiler.module}`);
+      if (compiler.outDir) entries.push(`outDir: ${compiler.outDir}`);
+      if (compiler.rootDir) entries.push(`rootDir: ${compiler.rootDir}`);
+      if (compiler.paths) entries.push(`paths: ${JSON.stringify(compiler.paths)}`);
+      return entries.length ? entries.join('\n') : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Get list of recently changed files from git (last N commits) */
+function getRecentGitChanges(cwd: string, max = 10): string[] {
+  try {
+    const out = execSync('git diff --name-only HEAD~5..HEAD 2>/dev/null || git diff --name-only HEAD~3..HEAD 2>/dev/null || true', {
+      cwd,
+      encoding: 'utf8',
+      timeout: 2000,
+    });
+    const files = out.split('\n').filter(Boolean).slice(0, max);
+    // Only keep source files that actually exist
+    return files.filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return SOURCE_EXTENSIONS.has(ext) && fs.existsSync(path.join(cwd, f));
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Sort source files: recently modified first, then alphabetical */
+function prioritizeFiles(files: string[], cwd: string, recentGit: string[]): string[] {
+  const recentSet = new Set(recentGit.map(f => path.resolve(cwd, f)));
+  const isConfig = (f: string) => ALWAYS_INCLUDE.has(path.basename(f));
+
+  return [...files].sort((a, b) => {
+    // Config files always first
+    if (isConfig(a) && !isConfig(b)) return -1;
+    if (!isConfig(a) && isConfig(b)) return 1;
+    // Recently git-changed files next
+    const aRecent = recentSet.has(a) ? 1 : 0;
+    const bRecent = recentSet.has(b) ? 1 : 0;
+    if (aRecent !== bRecent) return bRecent - aRecent;
+    // Then by modification time (newest first)
+    try {
+      return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs;
+    } catch {
+      return a.localeCompare(b);
+    }
+  });
+}
+
 /**
- * Build a compact source-code context string for a workspace directory.
+ * Build a rich source-code context string for a workspace directory.
  *
- * Scans the workspace keeping file count under a max to avoid bloat,
- * and includes the first N lines of key files that fit within a token budget.
+ * Scans the workspace and provides:
+ * - Project metadata (package.json scripts/deps, tsconfig)
+ * - Recently changed files (git)
+ * - Prioritized file tree (configs & recent changes first)
+ * - Structural summaries (exports, classes, functions) for each file
  *
- * Result is injected into sub-agent system prompts so they know what
- * files exist and can target their Read / Grep / Glob calls.
+ * Injected into sub-agent system prompts so they know what exists
+ * and can target their Read / Grep / Glob calls effectively.
  */
 export function buildSourceContext(
   cwd: string,
-  maxFiles = 30,
-  maxPreviewLines = 20,
-  maxTotalChars = 6000,
+  maxFiles = 50,
+  maxTotalChars = 12000,
 ): string {
   try {
-    const allFiles = listSourceFiles(cwd, maxFiles);
-    if (allFiles.length === 0) return '';
-
     const lines: string[] = [];
-    lines.push('--- WORKSPACE SOURCE FILES ---');
-    lines.push(`Directory: ${cwd}`);
-    lines.push('');
-
-    // File tree
-    for (const f of allFiles) {
-      const display = path.relative(cwd, f);
-      lines.push(`  ${display}`);
-    }
-    lines.push('');
-
-    // Previews of key files (keep under char budget)
     let budget = maxTotalChars;
-    for (const f of allFiles.slice(0, 8)) {
-      if (budget <= 0) break;
+    const append = (s: string) => {
+      if (s.length + 2 <= budget) {
+        lines.push(s);
+        budget -= s.length + 1;
+      }
+    };
+
+    // ── Project Metadata ──
+    const pkg = loadConfigSummary(cwd, 'package.json');
+    const tsConfig = loadConfigSummary(cwd, 'tsconfig.json');
+    if (pkg || tsConfig) {
+      append('--- PROJECT ---');
+      if (pkg) append(pkg);
+      if (tsConfig) append(tsConfig);
+      append('');
+    }
+
+    // ── Git Context ──
+    const recentGit = getRecentGitChanges(cwd);
+    if (recentGit.length > 0) {
+      append('--- RECENTLY CHANGED (git) ---');
+      for (const f of recentGit) append(`  ${f}`);
+      append('');
+    }
+
+    // ── File scan + prioritization ──
+    const allFiles = listSourceFiles(cwd, maxFiles);
+    if (allFiles.length === 0) return lines.join('\n').trim();
+
+    const prioritized = prioritizeFiles(allFiles, cwd, recentGit);
+
+    append('--- SOURCE FILES ---');
+    append(`Directory: ${cwd}`);
+    append('');
+    for (const f of prioritized) {
+      const display = path.relative(cwd, f);
+      if (budget <= 50) { append(`  ... and ${allFiles.length - prioritized.indexOf(f)} more files`); break; }
+      append(`  ${display}`);
+    }
+    append('');
+
+    // ── Structural summaries for top files ──
+    const summaryCount = Math.min(prioritized.length, 15);
+    for (let i = 0; i < summaryCount && budget > 300; i++) {
+      const f = prioritized[i];
       try {
         const content = fs.readFileSync(f, 'utf8');
         const rel = path.relative(cwd, f);
-        const preview = content.split('\n').slice(0, maxPreviewLines).join('\n');
-        const header = `--- ${rel} ---`;
-        const block = `\n${header}\n${preview}\n`;
-        if (block.length < budget - 200) {
-          lines.push(block);
-          budget -= block.length;
+        const structure = extractStructure(content);
+        if (structure) {
+          const header = `--- ${rel} ---`;
+          const block = `\n${header}\n${structure}\n`;
+          if (block.length < budget - 100) {
+            append(block);
+          }
         }
       } catch { /* skip unreadable */ }
     }
 
-    lines.push('--- END WORKSPACE SOURCE ---');
+    // ── Footer ──
+    const footer = '--- END WORKSPACE SOURCE ---';
+    if (footer.length <= budget) append(footer);
+
     return lines.join('\n');
   } catch {
     return '';

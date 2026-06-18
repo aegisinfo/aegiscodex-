@@ -166,7 +166,7 @@ async function planBuild(task: string): Promise<BuildPlan> {
 function buildSystemPrompt(component: BuildComponent, plan: BuildPlan, cwd: string): string {
   const sourceCtx = buildSourceContext(cwd);
   const codeContext = sourceCtx
-    ? `\n\nExisting code in workspace:\n${sourceCtx}\n\nCheck these files (via Read/Grep/Glob) before writing anything — your code may need to integrate with existing code.`
+    ? `\n\nExisting code in workspace (file tree + structure summaries + git context):\n${sourceCtx}\n\nUse Read / Grep / Glob to examine these before writing — your code must integrate with existing patterns.`
     : '';
 
   return `You are ${component.role} on a team building: ${plan.appName}
@@ -193,7 +193,7 @@ function integratorSystemPrompt(plan: BuildPlan, components: BuildComponent[], c
   const sourceCtx = buildSourceContext(cwd);
   const others = components.filter(c => c.name !== 'integrator');
   const codeContext = sourceCtx
-    ? `\n\nExisting code in workspace:\n${sourceCtx}\n\nUse Read/Grep/Glob to check existing files before wiring.`
+    ? `\n\nExisting code in workspace (file tree + structure summaries + git context):\n${sourceCtx}\n\nUse Read / Grep / Glob to check existing files before wiring.`
     : '';
 
   return `You are Integration Engineer on a team building: ${plan.appName}
