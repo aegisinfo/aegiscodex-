@@ -1,6 +1,8 @@
 /**
- * useCtrlCHandler - Ctrl+C 处理
+ * useCtrlCHandler - Ctrl+Z / Ctrl+C 处理
  * 
+ * Ctrl+Z 主退出键 (Kitty 中 Ctrl+C 用于复制)
+ * Ctrl+C 备用退出键
  * 
  * - 有任务运行时：请求中断
  * - 无任务时：退出应用
@@ -23,79 +25,77 @@ interface CtrlCHandlerOptions {
 }
 
 interface CtrlCHandlerResult {
-  /** 处理 Ctrl+C */
-  handleCtrlC: () => void;
+  /** 处理退出信号 (Ctrl+Z / Ctrl+C) */
+  handleExit: () => void;
   /** 重置强制退出状态 */
   resetForceExit: () => void;
 }
 
 /**
- * Ctrl+C 处理 Hook
+ * 退出处理 Hook
  * 
- * 
+ * Ctrl+Z = 主退出 (Kitty 中 Ctrl+C 用于复制)
+ * Ctrl+C = 备用退出
  */
 export const useCtrlCHandler = (options: CtrlCHandlerOptions): CtrlCHandlerResult => {
   const { onInterrupt, onBeforeExit, forceExitDelay = 2000 } = options;
   const { exit } = useApp();
   
-  const lastCtrlCTime = useRef<number>(0);
+  const lastExitTime = useRef<number>(0);
   const forceExitPending = useRef(false);
 
   const doExit = useCallback(() => {
-    // 执行退出前回
     if (onBeforeExit) {
       const handled = onBeforeExit();
-      // 返回 true 表示由回调处理退
       if (handled === true) {
         return;
       }
     }
     exit();
-    // 确保进程退出（exitOnCtrlC: false 时 Ink 的 exit() 可能不
     setTimeout(() => process.exit(0), 50);
   }, [onBeforeExit, exit]);
 
-  const handleCtrlC = useCallback(() => {
+  const handleExit = useCallback(() => {
     const now = Date.now();
-    const timeSinceLastCtrlC = now - lastCtrlCTime.current;
+    const timeSinceLastExit = now - lastExitTime.current;
     
-    // 使用 getState() 获取最新状态，避免订
     const hasRunningTask = getState().session.isThinking;
     
     if (hasRunningTask) {
-      if (forceExitPending.current && timeSinceLastCtrlC < forceExitDelay) {
-        // 第二次 Ctrl+C：强制退
+      if (forceExitPending.current && timeSinceLastExit < forceExitDelay) {
+        // 第二次退出信号：强制退出
         doExit();
         return;
       }
       
-      // 第一次 Ctrl+C：请求中
+      // 第一次退出信号：请求中断
       forceExitPending.current = true;
-      lastCtrlCTime.current = now;
+      lastExitTime.current = now;
       
       if (onInterrupt) {
         onInterrupt();
       }
     } else {
-      // 没有任务，直接退
+      // 没有任务，直接退出
       doExit();
     }
   }, [onInterrupt, forceExitDelay, doExit]);
 
-  // 监听 Ctrl+C 输
+  // Ctrl+Z = 主退出键 (Kitty-safe, Ctrl+C is copy)
+  // Ctrl+C = 备用退出键
   useInput((input, key) => {
-    if (input === 'z' && key.ctrl) {
-      handleCtrlC();
+    if ((input === 'z' && key.ctrl) || (input === 'c' && key.ctrl)) {
+      handleExit();
     }
   });
 
   const resetForceExit = useCallback(() => {
     forceExitPending.current = false;
-    lastCtrlCTime.current = 0;
+    lastExitTime.current = 0;
   }, []);
 
   return {
-    handleCtrlC,
+    handleExit,
     resetForceExit,
   };
 };

@@ -120,8 +120,13 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
               )}
             </>
           ) : language ? (
-            <Text color={theme.colors.text.muted} dimColor>{language}</Text>
+            <>
+              <Text color={theme.colors.text.muted} dimColor>{language}</Text>
+            </>
           ) : null}
+        </Box>
+        <Box marginLeft={1}>
+          <Text color={theme.colors.text.muted} dimColor>/copy</Text>
         </Box>
       </Box>
 

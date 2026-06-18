@@ -71,8 +71,18 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
       await cm.initialize();
       const newModel = cm.getDefaultModel();
 
-      contextManagerRef.current = new ContextManager({ compressionThreshold: 100000 });
-      const sid = await contextManagerRef.current.createSession();
+      // If we already have a ContextManager (e.g. session was loaded earlier),
+      // preserve it instead of creating a new one
+      if (!contextManagerRef.current) {
+        contextManagerRef.current = new ContextManager({ compressionThreshold: 100000 });
+      }
+      const ctxManager = contextManagerRef.current;
+
+      // Only create a new session if none exists
+      let sid = ctxManager.getCurrentSessionId();
+      if (!sid) {
+        sid = await ctxManager.createSession();
+      }
       sessionActions().setSessionId(sid);
 
       agentRef.current = await Agent.create({
@@ -180,7 +190,7 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
     initAgent();
 
     return () => {
-      contextManagerRef.current?.cleanup();
+      contextManagerRef.current?.cleanup().catch(() => {});
     };
   }, [apiKey, baseURL, model, debug, resumeSessionId]);
 

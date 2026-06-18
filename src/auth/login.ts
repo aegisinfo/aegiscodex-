@@ -156,7 +156,7 @@ export async function runLogin(): Promise<{ token: string }> {
         `  Opening browser...\n\n` +
         `  ${C.muted}${loginUrl}${C.reset}\n\n` +
         `  ${C.muted}Paste this URL manually if the browser doesn't open.${C.reset}\n\n` +
-        `  ${C.muted}Waiting for Google authentication… (Ctrl+C to cancel)${C.reset}\n`,
+        `  ${C.muted}Waiting for Google authentication… (Ctrl+Z to cancel)${C.reset}\n`,
       );
 
       openBrowser(loginUrl);

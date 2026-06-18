@@ -27,6 +27,7 @@ export class ContextManager {
   private readonly options: ContextManagerOptions;
 
   private currentSessionId: string | null = null;
+  private readonly pendingSaves: Array<Promise<void>> = [];
 
   constructor(options: Partial<ContextManagerOptions> = {}) {
     // 默认配
@@ -174,8 +175,8 @@ export class ContextManager {
       await this.compressCurrentContext();
     }
 
-    // 异步保存到持久化存储（不阻塞主流
-    this.saveMessageAsync(message);
+    // 持久化保存到 JSONL 文件
+    await this.saveMessagePersist(message);
   }
 
   /**
@@ -186,25 +187,31 @@ export class ContextManager {
   }
 
   /**
-   * 
+   * Persist message to JSONL synchronously (awaited by the caller).
+   * The promise is tracked so cleanup() can flush before exit.
    */
-  private saveMessageAsync(message: ContextMessage): void {
+  private async saveMessagePersist(message: ContextMessage): Promise<void> {
     if (!this.currentSessionId) return;
-
-    // 使用 setImmediate 避免阻
-    setImmediate(async () => {
-      try {
-        await this.persistent.saveMessage(
-          this.currentSessionId!,
-          message.role as 'user' | 'assistant' | 'system',
-          message.content,
-          null,
-          message.metadata as any
-        );
-      } catch (error) {
-        console.error('[ContextManager] 保存消息失败:', error);
-      }
+    const promise = this.persistent.saveMessage(
+      this.currentSessionId!,
+      message.role as 'user' | 'assistant' | 'system',
+      message.content,
+      null,
+      message.metadata as any
+    ).catch(error => {
+      console.error('[ContextManager] 保存消息失败:', error);
     });
+    this.pendingSaves.push(promise as Promise<void>);
+    await promise;
+  }
+
+  /**
+   * Flush all pending saves — call before exit to ensure no data loss.
+   */
+  async flush(): Promise<void> {
+    const pending = [...this.pendingSaves];
+    this.pendingSaves.length = 0;
+    await Promise.all(pending);
   }
 
   /**
@@ -434,7 +441,8 @@ export class ContextManager {
   /**
    * 
    */
-  cleanup(): void {
+  async cleanup(): Promise<void> {
+    await this.flush();
     this.memory.clear();
     this.cache.clear();
     TokenCounter.clearCache();

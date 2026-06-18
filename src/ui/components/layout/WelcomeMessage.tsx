@@ -15,6 +15,7 @@ const COMMANDS = [
   { cmd: '/help',    desc: 'all commands' },
   { cmd: '/model',   desc: 'switch AI model' },
   { cmd: '/theme',   desc: 'change appearance' },
+  { cmd: '/copy',    desc: 'copy code/text to clipboard' },
   { cmd: '/compact', desc: 'compress context' },
 ];
 
@@ -61,7 +62,7 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
 
       {/* Footer */}
       <Box marginTop={0}>
-        <Text color={theme.colors.text.muted} dimColor>Ctrl+Z exit  ·  Ctrl+F search</Text>
+        <Text color={theme.colors.text.muted} dimColor>Ctrl+Z exit  ·  Ctrl+F search  ·  Alt+C copy last</Text>
       </Box>
     </Box>
   );

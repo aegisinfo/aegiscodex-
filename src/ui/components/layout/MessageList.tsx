@@ -373,15 +373,10 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           }
         }
 
-        // When streaming transitions to complete, apply immediately
-        const wasStreaming = prevMessages[prevMessages.length - 1]?.isStreaming ?? false;
-        const nowStreaming = newMessages[newMessages.length - 1]?.isStreaming ?? false;
-        if (wasStreaming && !nowStreaming) {
-          pendingMessagesRef.current = null;
-          setMessages([...newMessages]);
-        } else {
-          pendingMessagesRef.current = [...newMessages];
-        }
+        // Always flow through RAF — never bypass with pendingMessagesRef.current = null.
+        // The bypass path caused user messages to be lost when a streaming message finished
+        // and a new user message arrived in the same synchronous tick.
+        pendingMessagesRef.current = [...newMessages];
         ensureRafRunning();
       }
 

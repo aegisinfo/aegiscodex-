@@ -814,14 +814,15 @@ const stripMarkdownForWidth = (text: string): string => {
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
 }
 
-// VS Code diff colors — reused for Before/After tables
-const VS_TABLE_DEL = '#f85149'
-const VS_TABLE_ADD = '#3fb950'
-
-function getDiffColumnColor(header: string): string | null {
+/**
+ * Get theme-aware diff color for Before/After table columns.
+ * Returns theme.colors.error for "before"-like headers,
+ * theme.colors.success for "after"-like headers.
+ */
+function getDiffColumnColor(header: string, theme: ReturnType<typeof themeManager.getTheme>): string | null {
   const h = header.trim().toLowerCase()
-  if (/^(before|old|previous|removed?|from)$/.test(h)) return VS_TABLE_DEL
-  if (/^(after|new|updated?|added?|to)$/.test(h))      return VS_TABLE_ADD
+  if (/^(before|old|previous|removed?|from)$/.test(h)) return theme.colors.error
+  if (/^(after|new|updated?|added?|to)$/.test(h))      return theme.colors.success
   return null
 }
 
@@ -897,7 +898,7 @@ const TableRenderer: React.FC<
   const truncated = totalNatural > available
 
   // Detect if any column is a diff column (Before/After/etc.)
-  const diffColors = headers.map(h => getDiffColumnColor(h))
+  const diffColors = headers.map(h => getDiffColumnColor(h, theme))
   const isDiffTable = diffColors.some(c => c !== null)
 
   const renderCell = (

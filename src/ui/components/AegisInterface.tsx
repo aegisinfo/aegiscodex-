@@ -204,6 +204,37 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     }
   });
 
+  // ==================== Alt+C: Copy last assistant reply ====================
+  useInput((_input, key) => {
+    if (key.meta && _input === 'c') {
+      const msgs = getState().session.messages.filter(m => m.role === 'assistant');
+      if (msgs.length === 0) return;
+      const last = msgs[msgs.length - 1];
+      // Strip markdown for clean copy
+      const plain = last.content
+        .replace(/```[\s\S]*?```/g, m => m.replace(/```\w*\n?/, '').replace(/\n?```/, ''))
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/~~(.+?)~~/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/^>\s+/gm, '')
+        .trim();
+      if (!plain) return;
+      import('child_process').then(({ execSync }) => {
+        const platform = process.platform;
+        try {
+          if (platform === 'darwin') execSync('pbcopy', { input: plain });
+          else if (platform === 'linux') {
+            try { execSync('xclip -selection clipboard', { input: plain }); }
+            catch { execSync('xsel --clipboard --input', { input: plain }); }
+          } else if (platform === 'win32') execSync('clip', { input: plain });
+        } catch {}
+      }).catch(() => {});
+    }
+  });
+
   // ==================== Ctrl+C Handler ====================
   useCtrlCHandler({
     onInterrupt: () => {
@@ -214,6 +245,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
       const currentMessageCount = getState().session.messages.length;
       const currentSessionId = contextManagerRef.current?.getCurrentSessionId() || getState().session.sessionId;
       if (currentSessionId && currentMessageCount > 0) {
+        // Flush pending saves before exit so the last messages are persisted
+        contextManagerRef.current?.flush().catch(() => {});
         setExitSessionId(currentSessionId);
         setIsExiting(true);
         return true;
@@ -334,7 +367,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   return (
     <Box flexDirection="column" width="100%" paddingX={0} flexGrow={1}>
-      <WelcomeMessage terminalWidth={terminalWidth - 2} />
+      {messages.length === 0 && <WelcomeMessage terminalWidth={terminalWidth - 2} />}
 
       {selectorState.isVisible ? (
         <>
