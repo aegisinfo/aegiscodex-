@@ -109,15 +109,15 @@ footer .links a:hover{color:var(--teal)}
   <div class="logo">Æ</div>
   <h1>Download ÆGIS</h1>
   <p class="subtitle">The multi-model AI coding sidekick that never forgets. Free to start, €2/mo for Pro.</p>
-  <div class="tag">v2.2.1 · Latest</div>
+  <div class="tag">v2.3.0 · Latest</div>
 </header>
 
 <div class="container">
 
-  <!-- DeepSeek cost demo -->
+  <!-- Token-cost demo -->
   <div class="section">
-    <h3>💰 DeepSeek: ~78% cheaper than Claude</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Run <code style="background:rgba(0,200,180,.15);padding:1px 6px;border-radius:3px;font-size:12px">/tokens</code> to see your actual spend vs benchmark. DeepSeek at $0.14/MTok in, $0.28/MTok out.</p>
+    <h3>💰 skill(optimization): 78% cheaper than benchmark</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">The optimization skill pushes you toward reuse over rebuild and the right-sized model for the job. Run <code style="background:rgba(0,200,180,.15);padding:1px 6px;border-radius:3px;font-size:12px">/tokens</code> to see it in your own sessions — DeepSeek at $0.14/$0.28 per MTok vs. Claude's $3/$15.</p>
     <div class="demo-terminal" id="demo">
       <div class="demo-bar"><span class="demo-dot" style="background:#e04444"></span><span class="demo-dot" style="background:#e89020"></span><span class="demo-dot" style="background:#1ab87a"></span><span class="demo-title">aegis — /tokens output</span></div>
       <div class="demo-body" id="demo-body">
@@ -140,6 +140,27 @@ footer .links a:hover{color:var(--teal)}
       </div>
     </div>
     <p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Pricing: DeepSeek $0.14/$0.28 · Claude Sonnet $3/$15 per MTok — <a href="https://github.com/aegisinfo/aegiscode">actual API cost, not markup</a></p>
+  </div>
+
+  <!-- Memory demo -->
+  <div class="section">
+    <h3>🧠 memory: this is what €2/mo buys</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Cross-session memory means every session starts with what earlier ones learned about your codebase — not just what you typed a minute ago. Unedited output below, from a brand-new terminal session that had typed zero messages about architecture.</p>
+    <div class="demo-terminal">
+      <div class="demo-bar"><span class="demo-dot" style="background:#e04444"></span><span class="demo-dot" style="background:#e89020"></span><span class="demo-dot" style="background:#1ab87a"></span><span class="demo-title">aegis — fresh session, memory on</span></div>
+      <div class="demo-body">
+        <div class="demo-line"><span class="prompt" style="color:var(--green)">you ›</span> design the security architecture for the auto-router</div>
+        <div class="demo-line dim">╭──────────────────────────────────────────────────────────────────────────╮</div>
+        <div class="demo-line response">│ 3. Snapshot the security context at request start. The auto-router must  │</div>
+        <div class="demo-line response">│    bind {modelId, apiKey, permissionMode} into an immutable request      │</div>
+        <div class="demo-line response">│    envelope before dispatch. A concurrent /model swap must not retarget │</div>
+        <div class="demo-line response">│    an in-flight request — capture by value, not by reading the store    │</div>
+        <div class="demo-line response">│    at send time.                                                         │</div>
+        <div class="demo-line dim">╰──────────────────────────────────────────────────────────────────────────╯</div>
+        <div class="demo-line"><span class="hl" style="font-weight:700">↳ caught a real bug in code written 90 seconds earlier — in a session that had never seen it.</span></div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Free tier works fully without memory. Pro (€2/mo) is for when you want every session to remember the last one.</p>
   </div>
 
   <!-- Quick install -->
@@ -195,6 +216,11 @@ footer .links a:hover{color:var(--teal)}
         <div style="font-size:22px;margin-bottom:6px">🔄</div>
         <strong>Multi-model</strong>
         <span>Claude, GPT-4o, Gemini, DeepSeek, Ollama</span>
+      </div>
+      <div class="feature">
+        <div style="font-size:22px;margin-bottom:6px">🎯</div>
+        <strong>Auto-router</strong>
+        <span>Picks the right model per message — no extra cost to decide</span>
       </div>
       <div class="feature">
         <div style="font-size:22px;margin-bottom:6px">📦</div>
@@ -264,8 +290,8 @@ function copyInstall(){
 }
 // DeepSeek demo animation
 (function(){
-  var ids=['dl1','dr1','dl2','dr2','dl3','dr3','dl4','dr4','dl5','dr5'];
-  var delays=[200,400,600,300,500,250,400,200,300,200];
+  var ids=['dl1','dr1','dl2','dr2','dl3','dr3','dl4','dr4','dl5','dr5','dr6'];
+  var delays=[200,400,600,300,500,250,400,200,300,200,300];
   var total=0;
   ids.forEach(function(id,i){
     total+=delays[i];
