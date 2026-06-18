@@ -103,6 +103,19 @@ Only add the keys for providers you want to use. aegiscode picks them up automat
 
 ---
 
+## Claude Code Pro/Max subscription login
+
+Already paying for Claude Code? Use your subscription instead of a pay-per-token Anthropic API key:
+
+```bash
+claude setup-token        # generates a Claude Code OAuth token (sk-ant-oat...)
+aegis login --claude-pro  # paste it in
+```
+
+The token is saved to `~/.aegiscode/.env` as `CLAUDE_CODE_OAUTH_TOKEN` and takes priority over `ANTHROPIC_API_KEY` for any Anthropic model. Anthropic only allows OAuth subscription tokens to make API calls through the official `claude` binary, so aegiscode shells out to it instead of calling the API directly — the `claude` CLI must be installed and on `PATH`. Tool calls (file edits, shell commands) run through `claude`'s own permission system, following whichever permission mode you've set in aegiscode.
+
+---
+
 ## Quick start
 
 ```bash
