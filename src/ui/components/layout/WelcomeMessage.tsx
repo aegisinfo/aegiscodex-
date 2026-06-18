@@ -71,6 +71,13 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
       <Box marginTop={0}>
         <Text color={theme.colors.text.muted} dimColor>Ctrl+Z exit  ·  Ctrl+F search  ·  Alt+C copy last</Text>
       </Box>
+
+      {/* Claude Pro/Max tip — only shown when subscription auth isn't already set up */}
+      {!process.env.CLAUDE_CODE_OAUTH_TOKEN && (
+        <Box marginTop={0}>
+          <Text color={theme.colors.text.muted} dimColor>Have Claude Pro/Max? Run aegis login --claude-pro to use your subscription</Text>
+        </Box>
+      )}
     </Box>
   );
 });

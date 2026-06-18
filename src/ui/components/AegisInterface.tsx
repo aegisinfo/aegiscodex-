@@ -364,7 +364,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   return (
     <Box flexDirection="column" width="100%" paddingX={0} flexGrow={1}>
-      <WelcomeMessage terminalWidth={terminalWidth - 2} />
+      {messages.length === 0 && <WelcomeMessage terminalWidth={terminalWidth - 2} />}
 
       {selectorState.isVisible ? (
         <>
