@@ -10,6 +10,7 @@ import {
   OrchestratorAgent,
   CouncilAgent,
   requireModelConfig,
+  buildSourceContext,
   createBuiltinApps,
   runApp,
   getApp,
@@ -1709,26 +1710,33 @@ Flags:
         });
       }
 
+      // Build workspace source context so agents know what files exist
+      const cwd = context.cwd || process.cwd();
+      const sourceCtx = buildSourceContext(cwd);
+      const codeContext = sourceCtx
+        ? `\n\nWorkspace files:\n${sourceCtx}\n\nUse Read / Grep / Glob to examine these before responding.`
+        : '\n\nUse Read / Grep / Glob to explore the codebase before responding.';
+
       // Build sub-tasks — each agent gets a focused assignment matching their role
       const subTasks: Record<string, string> = {};
 
       // Mapping of agent names to focused sub-task descriptions
       const subTaskMap: Record<string, string> = {
-        architect:  `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.`,
-        scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.`,
-        reviewer:   `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.`,
-        debugger:   `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.`,
-        scanner:    `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.`,
-        analyzer:   `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.`,
-        planner:    `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.`,
-        implementer:`Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.`,
+        architect:  `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.${codeContext}`,
+        scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.${codeContext}`,
+        reviewer:   `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.${codeContext}`,
+        debugger:   `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.${codeContext}`,
+        scanner:    `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.${codeContext}`,
+        analyzer:   `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.${codeContext}`,
+        planner:    `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.${codeContext}`,
+        implementer:`Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.${codeContext}`,
         synthesizer:`Focus on synthesis. You will receive all agent responses and produce a final summary. (Synthesis task is handled separately.)`,
       };
 
       // Exclude the synthesizer from parallel sub-tasks — it only runs during synthesis phase
       for (const agent of agents) {
         if (agent.name === 'synthesizer') continue;
-        subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.`;
+        subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.${codeContext}`;
       }
 
       // Stream progress in real-time if context supports it
@@ -1741,7 +1749,7 @@ Flags:
       }
 
       // Run
-      const result = await orchestrator.orchestrate(task, subTasks, synthesizerName);
+      const result = await orchestrator.orchestrate(task, subTasks, synthesizerName, context.sessionId);
 
       // If --save-as, register as reusable AppBuilder app
       if (saveAs) {
@@ -2066,7 +2074,7 @@ const researchCommand: SlashCommand = {
 
 Agents deliberate in parallel, then results are aggregated.`,
 
-  async handler(args: string, _context: SlashCommandContext): Promise<SlashCommandResult> {
+  async handler(args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
     const question = args?.trim();
     if (!question) return { success: false, type: 'error', error: 'Usage: /research <question>' };
 
@@ -2074,30 +2082,38 @@ Agents deliberate in parallel, then results are aggregated.`,
     try { modelConfig = requireModelConfig(); }
     catch (e) { return { success: false, type: 'error', error: (e as Error).message }; }
 
+    // Build workspace source context so agents can reference real code
+    const cwd = context.cwd || process.cwd();
+    const sourceCtx = buildSourceContext(cwd);
+
+    const baseModelCfg = { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey };
+
     try {
       const council = new CouncilAgent('research-council', modelConfig, {
         rule: 'majority',
-        maxTokensPerAgent: 400,
+        maxTokensPerAgent: 800,
         enableIteration: false,
       });
 
+      const researchTools = ['Read', 'Grep', 'Glob'];
+
       council.addMember('analyst', 'Data Analyst',
-        `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.\nAlways state VOTE: approve, reject, or abstain and REASONING: with data-driven justification.`,
-        1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
+        `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with data-driven justification.`,
+        1, baseModelCfg, researchTools);
 
       council.addMember('architect', 'Systems Architect',
-        `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.\nAlways state VOTE: approve, reject, or abstain and REASONING: with architectural justification.`,
-        1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
+        `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with architectural justification.`,
+        1, baseModelCfg, researchTools);
 
       council.addMember('ethicist', 'Ethics & Safety Officer',
-        `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.\nAlways state VOTE: approve, reject, or abstain and REASONING: with ethical justification.`,
-        1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
+        `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with ethical justification.`,
+        1, baseModelCfg, researchTools);
 
       council.addMember('pragmatist', 'Pragmatic Engineer',
-        `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.\nAlways state VOTE: approve, reject, or abstain and REASONING: with practical justification.`,
-        1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
+        `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.\n\n${sourceCtx}\n\nUse Read / Grep / Glob to explore the codebase before answering.\nAlways state VOTE: approve, reject, or abstain and REASONING: with practical justification.`,
+        1, baseModelCfg, researchTools);
 
-      const result = await council.deliberate(question);
+      const result = await council.deliberate(question, context.sessionId);
 
       // Build research-focused output (not vote-centric)
       const lines: string[] = [];

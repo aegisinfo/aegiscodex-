@@ -383,6 +383,19 @@ export const createSessionSlice: StateCreator<
     },
 
     /**
+     * Remove the last N messages from the store.
+     * Used to rollback messages added before discovering a selector result.
+     */
+    removeLastMessages: (count: number) => {
+      set((state) => ({
+        session: {
+          ...state.session,
+          messages: state.session.messages.slice(0, -count),
+        },
+      }));
+    },
+
+    /**
      * Clear all messages (new session within same session ID).
      */
     clearMessages: () => {

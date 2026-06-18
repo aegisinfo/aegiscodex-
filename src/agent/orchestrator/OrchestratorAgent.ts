@@ -118,7 +118,10 @@ class SubAgentRunner {
     const sid = sessionId || 'default';
     this.currentSessionId = sid;
 
-    // ── Inject shared memory context from other agents ──
+    // ── Inject cross-session persistent memory ──
+    const memCtx = await sharedMemory.buildContext(task, 3, sid);
+
+    // ── Inject shared agent memory bus context (inter-agent communication) ──
     const agentContext = await agentMemoryBus.getContextForAgent(
       this.config.name,
       sid,
@@ -126,14 +129,18 @@ class SubAgentRunner {
       600,
     );
 
+    let systemPrompt = this.config.systemPrompt;
+    if (memCtx) {
+      systemPrompt += '\n\n' + memCtx;
+    }
+    if (agentContext) {
+      systemPrompt += '\n\n' + agentContext;
+    }
+
     const messages: Message[] = [
-      { role: 'system', content: this.config.systemPrompt },
+      { role: 'system', content: systemPrompt },
       ...(context?.messages || []),
     ];
-
-    if (agentContext) {
-      messages.push({ role: 'system', content: agentContext });
-    }
 
     messages.push({
       role: 'user',

@@ -8,7 +8,7 @@ export { CouncilAgent } from './CouncilAgent.js';
 export { AppBuilder, runApp, getApp, getRegisteredApps, createBuiltinApps } from './AppBuilder.js';
 export type { AppDefinition, AppRunOptions, AppRunResult } from './AppBuilder.js';
 
-export { resolveModelConfig, requireModelConfig, createSubAgentToolkit, createSubAgentChatService } from './utils.js';
+export { resolveModelConfig, requireModelConfig, createSubAgentToolkit, createSubAgentChatService, buildSourceContext } from './utils.js';
 export type { ResolvedModelConfig, SubAgentOptions } from './utils.js';
 
 export type {

@@ -296,10 +296,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           } catch { /* non-fatal */ }
         } catch { /* non-fatal */ }
         configActions().updateConfig({ currentModelId: id });
-        sessionActions().addAssistantMessage(`✓ ${modelName} (saved to config)`);
       } else {
         configActions().updateConfig({ currentModelId: value });
-        sessionActions().addAssistantMessage('✓ ' + value);
       }
     }
   }, [selectorState]);
@@ -307,7 +305,6 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   const handleSelectorCancel = useCallback(() => {
     setSelectorState({ isVisible: false, title: '', options: [], handler: null });
     focusActions.setFocus(FocusId.MAIN_INPUT);
-    sessionActions().addAssistantMessage('');
   }, []);
 
   // ==================== Queue Processor ====================

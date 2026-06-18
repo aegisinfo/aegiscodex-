@@ -95,6 +95,9 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         if (streamingResult.type === 'selector' && streamingResult.selector) {
           sessionActions().setThinking(false);
           if (streamingMsgId) sessionActions().finishStreamingMessage(streamingMsgId);
+          // Rollback: remove user command message + empty streaming message
+          // so WelcomeScreen stays visible (messages.length === 0)
+          sessionActions().removeLastMessages(2);
           onSelectorRequest?.(streamingResult.selector);
           return;
         }

@@ -95,7 +95,8 @@ export class CouncilAgent {
     role: string,
     systemPrompt: string,
     weight: number = 1,
-    config: AgentConfig
+    config: AgentConfig,
+    tools?: string[],
   ): void {
     const colorIndex = this.agentRoles.size % COLORS.length;
     const color = COLORS[colorIndex];
@@ -105,6 +106,7 @@ export class CouncilAgent {
       role,
       systemPrompt,
       config,
+      tools,
     };
 
     this.orchestrator.registerAgent(subConfig);
@@ -133,7 +135,7 @@ export class CouncilAgent {
   /**
    * Convene the council to deliberate on a question
    */
-  async deliberate(question: string): Promise<DeliberationResult> {
+  async deliberate(question: string, sessionId?: string): Promise<DeliberationResult> {
     const members = this.getMembers();
     if (members.length === 0) {
       throw new Error('CouncilAgent: No members registered. Add members before deliberating.');
@@ -160,7 +162,8 @@ export class CouncilAgent {
       const orchestration = await this.orchestrator.orchestrate(
         question,
         subTasks,
-        members[0]?.name
+        members[0]?.name,
+        sessionId,
       );
 
       // Parse votes from responses

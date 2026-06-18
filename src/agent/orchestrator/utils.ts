@@ -6,6 +6,8 @@
  * the same boilerplate.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { createChatService } from '../../services/ChatService.js';
 import { createToolRegistry, getBuiltinTools, ExecutionPipeline, PermissionMode } from '../../tools/index.js';
 import { configManager } from '../../config/ConfigManager.js';
@@ -160,4 +162,95 @@ export function createSubAgentChatService(cfg: ResolvedModelConfig) {
     model: cfg.model,
     timeout: cfg.timeout,
   });
+}
+
+// ─── Workspace Source Context ─────────────────────────────────────
+
+const IGNORE_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.next', '.turbo',
+  'coverage', '.nyc_output', '__pycache__', '.cache', 'target',
+  'vendor', '.venv', 'venv', '.aegiscode', '.claude',
+]);
+
+const SOURCE_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  '.py', '.rs', '.go', '.java', '.rb', '.php',
+  '.vue', '.svelte', '.css', '.scss', '.html',
+  '.json', '.yaml', '.yml', '.toml',
+]);
+
+/**
+ * Build a compact source-code context string for a workspace directory.
+ *
+ * Scans the workspace keeping file count under a max to avoid bloat,
+ * and includes the first N lines of key files that fit within a token budget.
+ *
+ * Result is injected into sub-agent system prompts so they know what
+ * files exist and can target their Read / Grep / Glob calls.
+ */
+export function buildSourceContext(
+  cwd: string,
+  maxFiles = 30,
+  maxPreviewLines = 20,
+  maxTotalChars = 6000,
+): string {
+  try {
+    const allFiles = listSourceFiles(cwd, maxFiles);
+    if (allFiles.length === 0) return '';
+
+    const lines: string[] = [];
+    lines.push('--- WORKSPACE SOURCE FILES ---');
+    lines.push(`Directory: ${cwd}`);
+    lines.push('');
+
+    // File tree
+    for (const f of allFiles) {
+      const display = path.relative(cwd, f);
+      lines.push(`  ${display}`);
+    }
+    lines.push('');
+
+    // Previews of key files (keep under char budget)
+    let budget = maxTotalChars;
+    for (const f of allFiles.slice(0, 8)) {
+      if (budget <= 0) break;
+      try {
+        const content = fs.readFileSync(f, 'utf8');
+        const rel = path.relative(cwd, f);
+        const preview = content.split('\n').slice(0, maxPreviewLines).join('\n');
+        const header = `--- ${rel} ---`;
+        const block = `\n${header}\n${preview}\n`;
+        if (block.length < budget - 200) {
+          lines.push(block);
+          budget -= block.length;
+        }
+      } catch { /* skip unreadable */ }
+    }
+
+    lines.push('--- END WORKSPACE SOURCE ---');
+    return lines.join('\n');
+  } catch {
+    return '';
+  }
+}
+
+function listSourceFiles(dir: string, max: number): string[] {
+  const result: string[] = [];
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      if (result.length >= max) break;
+      if (e.name.startsWith('.') || IGNORE_DIRS.has(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        result.push(...listSourceFiles(full, max - result.length));
+      } else if (e.isFile()) {
+        const ext = path.extname(e.name).toLowerCase();
+        if (SOURCE_EXTENSIONS.has(ext)) {
+          result.push(full);
+        }
+      }
+    }
+  } catch { /* skip inaccessible */ }
+  return result;
 }

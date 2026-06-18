@@ -8,8 +8,11 @@
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, color, idleColor }) => {
-  return <Text color={isProcessing ? color : idleColor} bold>□</Text>;
+const PromptGlyph: React.FC<{ isProcessing: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, glowPhase, color, idleColor }) => {
+  const displayColor = isProcessing
+    ? ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]
+    : idleColor;
+  return <Text color={displayColor} bold>□</Text>;
 });
 PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';

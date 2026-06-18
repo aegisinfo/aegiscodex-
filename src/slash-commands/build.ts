@@ -11,7 +11,7 @@
  */
 
 import { OrchestratorAgent, type SubAgentConfig } from '../agent/orchestrator/OrchestratorAgent.js';
-import { requireModelConfig } from '../agent/orchestrator/utils.js';
+import { requireModelConfig, buildSourceContext } from '../agent/orchestrator/utils.js';
 import { PermissionMode } from '../tools/index.js';
 import { createChatService } from '../services/ChatService.js';
 import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './types.js';
@@ -164,6 +164,11 @@ async function planBuild(task: string): Promise<BuildPlan> {
 // ── Agent system prompts ──────────────────────────────────────────
 
 function buildSystemPrompt(component: BuildComponent, plan: BuildPlan, cwd: string): string {
+  const sourceCtx = buildSourceContext(cwd);
+  const codeContext = sourceCtx
+    ? `\n\nExisting code in workspace:\n${sourceCtx}\n\nCheck these files (via Read/Grep/Glob) before writing anything — your code may need to integrate with existing code.`
+    : '';
+
   return `You are ${component.role} on a team building: ${plan.appName}
 Stack: ${plan.stack}
 Working directory: ${cwd}
@@ -171,11 +176,11 @@ Working directory: ${cwd}
 Your assignment:
 ${component.description}
 
-Files you should write: ${component.files.join(', ')}
+Files you should write: ${component.files.join(', ')}${codeContext}
 
 CRITICAL RULES:
 1. Use Write tool to create each file — write complete, production-ready code
-2. Use Read to check existing files before editing
+2. Use Read / Grep / Glob to explore existing code before writing
 3. Do NOT write placeholder code — implement fully working logic
 4. Follow the stack: ${plan.stack}
 5. When done, list each file you created with a one-line description
@@ -185,16 +190,21 @@ The "integrator" agent will wire everything together.`;
 }
 
 function integratorSystemPrompt(plan: BuildPlan, components: BuildComponent[], cwd: string): string {
+  const sourceCtx = buildSourceContext(cwd);
   const others = components.filter(c => c.name !== 'integrator');
+  const codeContext = sourceCtx
+    ? `\n\nExisting code in workspace:\n${sourceCtx}\n\nUse Read/Grep/Glob to check existing files before wiring.`
+    : '';
+
   return `You are Integration Engineer on a team building: ${plan.appName}
 Stack: ${plan.stack}
-Working directory: ${cwd}
+Working directory: ${cwd}${codeContext}
 
 Other agents are building:
 ${others.map(c => `- ${c.name}: ${c.files.join(', ')}`).join('\n')}
 
 Your job:
-1. Use Read to check what each agent wrote
+1. Use Read / Grep / Glob to check what each agent wrote and any existing code
 2. Write the main entrypoint: ${plan.entrypoint}
 3. Write a README.md with: what the app does, how to install, how to run
 4. Fix any import/wiring issues between components

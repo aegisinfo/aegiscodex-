@@ -112,6 +112,7 @@ export interface SessionActions {
   setSessionId: (sessionId: string) => void;
   restoreSession: (sessionId: string, messages: SessionMessage[]) => void;
   updateTokenUsage: (usage: Partial<TokenUsage>) => void;
+  removeLastMessages: (count: number) => void;
   clearMessages: () => void;
   resetSession: () => void;
 }
