@@ -54,19 +54,27 @@ import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis
 
     const result = JavaScriptObfuscator.obfuscate(body, {
       compact: true,
-      controlFlowFlattening: true,
-      controlFlowFlatteningThreshold: 0.5,
+      // controlFlowFlattening's cost grows superlinearly with bundle size —
+      // on this ~8MB bundle (vendored deps included) it ran for 25+ minutes
+      // and then OOM-crashed. String/identifier obfuscation below is what
+      // actually protects secrets and naming; flattening isn't worth the cost.
+      controlFlowFlattening: false,
       deadCodeInjection: false,
       stringArray: true,
       stringArrayEncoding: ['rc4'],
       stringArrayThreshold: 0.85,
       stringArrayRotate: true,
       stringArrayShuffle: true,
-      splitStrings: true,
-      splitStringsChunkLength: 8,
+      // splitStrings at a short chunk length re-slices nearly every string
+      // literal in the bundle; on ~8MB of vendored+own code that dominated
+      // runtime far more than controlFlowFlattening did. Off entirely —
+      // stringArray + rc4 encoding already hides literal contents.
+      splitStrings: false,
       identifierNamesGenerator: 'mangled',
       renameGlobals: false,
-      selfDefending: true,
+      // selfDefending adds tamper-detection wrapping across the whole
+      // bundle; also expensive at this size and not worth it for a CLI tool.
+      selfDefending: false,
       debugProtection: false,
       disableConsoleOutput: false,
       sourceMap: false,
