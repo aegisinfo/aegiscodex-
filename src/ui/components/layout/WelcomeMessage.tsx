@@ -48,33 +48,39 @@ export const WelcomeMessage: React.FC<WelcomeMessageProps> = React.memo(({ termi
 
   return (
     <Box flexDirection="column" paddingX={0} paddingY={0} marginBottom={1}>
-      {/* ASCII art logo */}
+      {/* ASCII art logo — kept in sync with assets/demo.svg */}
       <Box flexDirection="column">
-        <Text color={theme.colors.primary}>{`
-    █████╗ ███████╗ ██████╗ ██╗███████╗
-   ██╔══██╗██╔════╝██╔════╝ ██║██╔════╝
-   ███████║█████╗  ██║  ███╗██║███████╗
-   ██╔══██║██╔══╝  ██║   ██║██║╚════██║
-   ██║  ██║███████╗╚██████╔╝██║███████║
-   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝╚══════╝`}</Text>
-        <Text color={theme.colors.text.muted} dimColor>  v{pkg.version} · terminal coding agent</Text>
+        <Text color={theme.colors.primary} bold>{`
+  ╔═╗╔═╗╔═╗╦╔═╗
+  ╠═╣║╣ ║ ╦║╚═╗
+  ╩ ╩╚═╝╚═╝╩╚═╝`}</Text>
+        <Box marginLeft={2}>
+          <Text color={theme.colors.text.muted} dimColor>v{pkg.version}</Text>
+        </Box>
+        <Box marginLeft={2}>
+          <Text color={theme.colors.primary} bold>ÆGIS  </Text>
+          <Text color={theme.colors.text.muted} dimColor>·  terminal coding agent</Text>
+        </Box>
+        <Box marginLeft={2}>
+          <Text color={theme.colors.text.muted} dimColor>──────────────────────────────────────</Text>
+        </Box>
       </Box>
 
       {/* Commands */}
-      <Box flexDirection="column" marginTop={0}>
+      <Box flexDirection="column" marginTop={0} marginLeft={2}>
         {COMMANDS.map(({ cmd, desc }, i) => (
           <FadeInCommand key={cmd} cmd={cmd} desc={desc} delayMs={cmdBaseT + i * 100} />
         ))}
       </Box>
 
       {/* Footer */}
-      <Box marginTop={0}>
+      <Box marginTop={0} marginLeft={2}>
         <Text color={theme.colors.text.muted} dimColor>Ctrl+Z exit  ·  Ctrl+F search  ·  Alt+C copy last</Text>
       </Box>
 
       {/* Claude Pro/Max tip — only shown when subscription auth isn't already set up */}
       {!process.env.CLAUDE_CODE_OAUTH_TOKEN && (
-        <Box marginTop={0}>
+        <Box marginTop={0} marginLeft={2}>
           <Text color={theme.colors.text.muted} dimColor>Have Claude Pro/Max? Run aegis login --claude-pro to use your subscription</Text>
         </Box>
       )}
