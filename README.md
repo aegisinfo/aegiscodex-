@@ -217,7 +217,7 @@ aegiscode can pick which configured model handles each message for you, based on
 /router                             # show current status + tier mapping
 ```
 
-Classification is a handful of cheap heuristics (message length, question phrasing, keywords like "architecture" or "security") — no extra model call to decide. When no tier is pinned explicitly, it falls back to a fixed cost-ordered list of the built-in models and picks the first one you actually have an API key for.
+Classification is a handful of cheap heuristics (message length, question phrasing, keywords like "architecture" or "security") — no extra model call to decide. When no tier is pinned explicitly, it defaults to a fixed cost-ordered list of the built-in models filtered to ones you have an API key for — and learns from there: if you abort (`Esc`/`Ctrl+C`) a response, that costs the model handling it some confidence for that tier, so a model that keeps getting cut off loses ground to the next cheapest one over time. `/router stats` shows the learned success rate per tier and model. This is a noisy signal (people abort for reasons that have nothing to do with quality too), so don't expect it to be perfectly tuned after a handful of sessions — it's real adaptation from real usage, not a black box.
 
 Running `/model <id>` always wins — it pins your choice for the rest of the session and the router backs off until you run `/router on` again. The status bar shows `model: <name> (auto)` whenever the router picked it for you.
 

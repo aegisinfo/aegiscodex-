@@ -6,6 +6,7 @@
  */
 
 import type { ModelConfig } from '../config/types.js';
+import { pickByOutcomes } from './routerStats.js';
 
 export type ComplexityTier = 'simple' | 'medium' | 'complex';
 
@@ -67,9 +68,7 @@ export function resolveModelForTier(
   const explicit = usable(explicitTiers?.[tier]);
   if (explicit) return explicit;
 
-  for (const id of TIER_FALLBACKS[tier]) {
-    const found = usable(id);
-    if (found) return found;
-  }
-  return undefined;
+  const usableIds = TIER_FALLBACKS[tier].filter(id => usable(id));
+  const picked = pickByOutcomes(tier, usableIds);
+  return usable(picked);
 }

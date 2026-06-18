@@ -491,12 +491,13 @@ export const routerCommand: SlashCommand = {
   name: 'router',
   description: 'Auto-pick a model per message based on task complexity',
   category: 'config',
-  usage: '/router [on|off|set <simple|medium|complex> <modelId>]',
-  examples: ['/router', '/router on', '/router off', '/router set simple deepseek-chat'],
+  usage: '/router [on|off|set <simple|medium|complex> <modelId>|stats]',
+  examples: ['/router', '/router on', '/router off', '/router set simple deepseek-chat', '/router stats'],
   fullDescription:
     'Classifies each message as simple/medium/complex (cheap heuristics, no extra LLM call) ' +
     'and picks the cheapest configured model that fits, unless /model has been used this session. ' +
-    'Falls back to a fixed cost-ordered list of known models when no tier is set explicitly.',
+    'When no tier is set explicitly, learns from outcomes (a model that keeps getting aborted for a ' +
+    'tier loses ground to the next cheapest one over time) — see /router stats for the learned data.',
 
   async handler(args: string): Promise<SlashCommandResult> {
     const { configActions, appActions, getState } = await import('../store/index.js');
@@ -548,6 +549,28 @@ export const routerCommand: SlashCommand = {
       }
       await persist({ ...autoRouter, tiers: { ...autoRouter.tiers, [tier]: modelId } });
       return { success: true, type: 'success', message: `auto-router: ${tier} -> ${modelId}` };
+    }
+
+    if (subcommand === 'stats') {
+      const { getRouterStats } = await import('../agent/routerStats.js');
+      const stats = getRouterStats();
+      const tierNames: Array<'simple' | 'medium' | 'complex'> = ['simple', 'medium', 'complex'];
+      const lines = ['learned outcomes (success / aborted-or-errored), per tier:'];
+      for (const tier of tierNames) {
+        const tierStats = stats[tier];
+        if (!tierStats || Object.keys(tierStats).length === 0) {
+          lines.push(`  ${tier.padEnd(8)} no data yet`);
+          continue;
+        }
+        lines.push(`  ${tier}:`);
+        for (const [modelId, s] of Object.entries(tierStats)) {
+          const total = s.success + s.failure;
+          const rate = total > 0 ? Math.round((s.success / total) * 100) : 0;
+          lines.push(`    ${modelId.padEnd(20)} ${s.success}/${total} (${rate}%)`);
+        }
+      }
+      lines.push('', 'Aborting a response counts against the model that was handling it — this is what nudges future picks.');
+      return { success: true, type: 'info', content: lines.join('\n') };
     }
 
     // ── no args — status ──

@@ -18,6 +18,7 @@ import {
   getState,
 } from '../../store/index.js';
 import { classifyComplexity, resolveModelForTier } from '../../agent/router.js';
+import type { ComplexityTier } from '../../agent/router.js';
 import {
   applyStreamEvent,
   finishToolCallInBuffer,
@@ -162,6 +163,10 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
     // has manually chosen one with /model this session. Never throws —
     // a classification or Agent.create failure just leaves the current
     // agent/model in place.
+    // Captured here, recorded after the chat call resolves/aborts below —
+    // this is the learning loop's only outcome signal (see routerStats.ts).
+    let routedTier: ComplexityTier | undefined;
+    let routedModelId: string | undefined;
     try {
       const routerState = getState();
       const autoRouter = routerState.config.config?.autoRouter;
@@ -189,6 +194,11 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
           agentRef.current = agent;
           modelRef.current = targetLabel;
           routerActiveModelIdRef.current = targetId;
+        }
+
+        if (targetId) {
+          routedTier = tier;
+          routedModelId = targetId;
         }
 
         appActions().setAutoRouterActiveModel(
@@ -355,7 +365,16 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         console.log('[DEBUG] Token usage - input:', inputTokens, 'output:', outputTokens);
         console.log('[DEBUG] Total context tokens:', ctxManager.getTokenCount());
       }
+
+      if (routedTier && routedModelId) {
+        const { recordRouterOutcome } = await import('../../agent/routerStats.js');
+        recordRouterOutcome(routedTier, routedModelId, true);
+      }
     } catch (error) {
+      if (routedTier && routedModelId) {
+        const { recordRouterOutcome } = await import('../../agent/routerStats.js');
+        recordRouterOutcome(routedTier, routedModelId, false);
+      }
       if ((error as Error)?.name !== 'AbortError') {
         const errorContent = 'Error: ' + (error as Error).message;
         sessionActions().forceAppendToMessage(streamingMessageId, errorContent);
