@@ -106,6 +106,9 @@ export const useAwaitingSecondCtrlC = () =>
 export const useShowAllThinking = () =>
   useClawdStore((state) => state.app.showAllThinking);
 
+export const useAutoRouterActiveModel = () =>
+  useClawdStore((state) => state.app.autoRouterActiveModel);
+
 // ========== Focus 选择
 
 export const useCurrentFocus = () =>

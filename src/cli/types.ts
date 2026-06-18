@@ -26,6 +26,7 @@ export interface CliArguments extends Arguments {
   baseUrl?: string;
   model?: string;
   maxTurns?: number;
+  router?: boolean;
 
   // 安全选
   permissionMode?: PermissionMode;

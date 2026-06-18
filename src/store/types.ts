@@ -149,6 +149,10 @@ export interface AppState {
   /** 是否展开所有思考块（全局开关） */
   showAllThinking: boolean;
   todos: TodoItem[];
+  /** Set once the user runs /model this session — auto-router backs off until /router on resets it */
+  manualModelOverride: boolean;
+  /** Display label of the model the auto-router picked for the in-flight/last turn, or null if none */
+  autoRouterActiveModel: string | null;
 }
 
 export interface AppActions {
@@ -161,6 +165,8 @@ export interface AppActions {
   removeTodo: (id: string) => void;
   setAwaitingSecondCtrlC: (awaiting: boolean) => void;
   toggleShowAllThinking: () => void;
+  setManualModelOverride: (value: boolean) => void;
+  setAutoRouterActiveModel: (label: string | null) => void;
 }
 
 export interface AppSlice extends AppState {

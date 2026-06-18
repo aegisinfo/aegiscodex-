@@ -12,6 +12,8 @@ const initialAppState = {
   todos: [] as TodoItem[],
   awaitingSecondCtrlC: false,
   showAllThinking: false,
+  manualModelOverride: false,
+  autoRouterActiveModel: null as string | null,
 };
 
 export const createAppSlice: StateCreator<
@@ -116,6 +118,24 @@ export const createAppSlice: StateCreator<
     toggleShowAllThinking: () => {
       set((state) => ({
         app: { ...state.app, showAllThinking: !state.app.showAllThinking },
+      }));
+    },
+
+    /**
+     *
+     */
+    setManualModelOverride: (value: boolean) => {
+      set((state) => ({
+        app: { ...state.app, manualModelOverride: value },
+      }));
+    },
+
+    /**
+     *
+     */
+    setAutoRouterActiveModel: (label: string | null) => {
+      set((state) => ({
+        app: { ...state.app, autoRouterActiveModel: label },
       }));
     },
   },

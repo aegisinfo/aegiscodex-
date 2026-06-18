@@ -14,8 +14,10 @@ import type { SlashCommandResult } from '../../slash-commands/types.js';
 import {
   sessionActions,
   commandActions,
+  appActions,
   getState,
 } from '../../store/index.js';
+import { classifyComplexity, resolveModelForTier } from '../../agent/router.js';
 import {
   applyStreamEvent,
   finishToolCallInBuffer,
@@ -53,6 +55,14 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
     confirmationHandlerRef,
     onSelectorRequest,
   } = options;
+
+  // Auto-router: lazily-created Agent instances per model id, keyed by config
+  // model id, reused across turns so picking the same tier twice in a row
+  // doesn't pay an Agent.create() again.
+  const routerAgentCacheRef = useRef<Map<string, Agent>>(new Map());
+  // Which model id the auto-router last swapped agentRef.current to (or
+  // undefined if it's still whatever /model or initial setup left it as).
+  const routerActiveModelIdRef = useRef<string | undefined>(undefined);
 
   const processCommand = useCallback(async (value: string, options?: { silent?: boolean }) => {
     const { isSlashCommand, executeSlashCommand } = await import('../../slash-commands/index.js');
@@ -147,6 +157,53 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
 
     const ctxManager = contextManagerRef.current;
 
+    // ==================== Auto-router ====================
+    // Pick a model for this turn based on task complexity, unless the user
+    // has manually chosen one with /model this session. Never throws —
+    // a classification or Agent.create failure just leaves the current
+    // agent/model in place.
+    try {
+      const routerState = getState();
+      const autoRouter = routerState.config.config?.autoRouter;
+      const defaultModelId = routerState.config.config?.currentModelId;
+      const activeModelId = routerActiveModelIdRef.current ?? defaultModelId;
+
+      if (autoRouter?.enabled && !routerState.app.manualModelOverride) {
+        const models = routerState.config.config?.models || [];
+        const tier = classifyComplexity(value);
+        const targetModel = resolveModelForTier(tier, models, autoRouter.tiers);
+        const targetId = targetModel?.id;
+        const targetLabel = targetModel ? (targetModel.model || targetId) : undefined;
+
+        if (targetModel && targetId && targetId !== activeModelId) {
+          let agent = routerAgentCacheRef.current.get(targetId);
+          if (!agent) {
+            const { Agent } = await import('../../agent/Agent.js');
+            agent = await Agent.create({
+              apiKey: targetModel.apiKey!,
+              baseURL: targetModel.baseURL,
+              model: targetLabel!,
+            });
+            routerAgentCacheRef.current.set(targetId, agent);
+          }
+          agentRef.current = agent;
+          modelRef.current = targetLabel;
+          routerActiveModelIdRef.current = targetId;
+        }
+
+        appActions().setAutoRouterActiveModel(
+          targetId && targetId !== defaultModelId ? (targetLabel ?? null) : null
+        );
+      }
+    } catch { /* non-fatal — keep using whatever agent is already active */ }
+
+    // Capture the agent for this turn by value now that routing is decided.
+    // Several awaits follow before chat() actually dispatches; reading
+    // `agentRef.current` fresh at each of those points would let a
+    // concurrent /model switch (its Agent.create() resolves async, on its
+    // own timeline) retarget a request that's already committed to this turn.
+    const dispatchAgent = agentRef.current;
+
     if (!options?.silent) {
       sessionActions().addUserMessage(value);
     }
@@ -184,7 +241,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
           const result = await CompactionService.compact(msgs, {
             modelName: modelRef.current || 'claude-sonnet-4-6',
             maxContextTokens: maxCtx,
-            chatService: agentRef.current?.getChatService(),
+            chatService: dispatchAgent?.getChatService(),
             trigger: 'auto',
             actualPreTokens: currentTokens,
           });
@@ -209,7 +266,8 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
 
     // Dual-path streaming: mutable buffer + store
     const streamingMessageId = sessionActions().startStreamingMessage();
-    const abortController = new AbortController();
+    // Wire to store so Escape/Ctrl+C can actually abort the agent
+    const abortController = commandActions().createAbortController();
 
     try {
       const contextMessages = ctxManager.getMessages();
@@ -231,7 +289,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         confirmationHandler: confirmationHandlerRef.current,
       };
 
-      const result = await agentRef.current.chat(value, chatContext, {
+      const result = await dispatchAgent!.chat(value, chatContext, {
         signal: abortController.signal,
         onStreamEvent: (event) => {
           if (!abortController.signal.aborted) {

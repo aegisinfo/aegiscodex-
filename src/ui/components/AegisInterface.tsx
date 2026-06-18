@@ -14,6 +14,7 @@ import {
   useActiveModal,
   useMessages,
   usePendingCommands,
+  useAutoRouterActiveModel,
   sessionActions,
   configActions,
   commandActions,
@@ -128,6 +129,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     currentModel,
     handleSetupComplete,
   } = useAgent({ apiKey, baseURL, model, debug, resumeSessionId });
+
+  const autoRouterActiveModel = useAutoRouterActiveModel();
 
   // ==================== Stable Refs ====================
   const debugRef = useRef(debug);
@@ -406,7 +409,8 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             <InputArea onSubmit={handleSubmit} />
           </ErrorBoundary>
           <ChatStatusBar
-            model={currentModel}
+            model={autoRouterActiveModel || currentModel}
+            modelIsAuto={!!autoRouterActiveModel}
             isScrolledUp={messages.length > 0 && isScrolledUp}
             renderLatency={renderLatency}
           />

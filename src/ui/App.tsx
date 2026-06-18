@@ -31,6 +31,7 @@ export interface AppProps {
   permissionMode?: PermissionMode;
   versionCheckPromise?: Promise<VersionCheckResult | null>;
   resumeSessionId?: string;
+  routerEnabled?: boolean;
 }
 
 function mergeRuntimeConfig(baseConfig: ClawdConfig, props: AppProps): RuntimeConfig {
@@ -39,6 +40,9 @@ function mergeRuntimeConfig(baseConfig: ClawdConfig, props: AppProps): RuntimeCo
   if (props.initialMessage) runtimeConfig.initialMessage = props.initialMessage;
   if (props.resumeSessionId) runtimeConfig.resumeSessionId = props.resumeSessionId;
   if (props.permissionMode) runtimeConfig.defaultPermissionMode = props.permissionMode;
+  if (props.routerEnabled) {
+    runtimeConfig.autoRouter = { ...runtimeConfig.autoRouter, enabled: true };
+  }
   if (props.model) {
     // Try to map model name to model ID first
     const models = baseConfig.models || [];

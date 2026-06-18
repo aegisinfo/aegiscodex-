@@ -374,8 +374,11 @@ export const modelCommand: SlashCommand = {
         m => m.id === trimmedArgs || m.model === trimmedArgs || m.name === trimmedArgs
       );
       if (targetModel) {
-        const { configActions } = await import('../store/index.js');
+        const { configActions, appActions } = await import('../store/index.js');
         configActions().updateConfig({ currentModelId: targetModel.id });
+        // A manual pick wins over the auto-router for the rest of the session
+        appActions().setManualModelOverride(true);
+        appActions().setAutoRouterActiveModel(null);
         try {
           const fs = await import('fs');
           const path = await import('path');
@@ -481,6 +484,83 @@ export const modelCommand: SlashCommand = {
   },
 };
 
+/**
+ * /router - 自动路由：按任务复杂度自动选择模
+ */
+export const routerCommand: SlashCommand = {
+  name: 'router',
+  description: 'Auto-pick a model per message based on task complexity',
+  category: 'config',
+  usage: '/router [on|off|set <simple|medium|complex> <modelId>]',
+  examples: ['/router', '/router on', '/router off', '/router set simple deepseek-chat'],
+  fullDescription:
+    'Classifies each message as simple/medium/complex (cheap heuristics, no extra LLM call) ' +
+    'and picks the cheapest configured model that fits, unless /model has been used this session. ' +
+    'Falls back to a fixed cost-ordered list of known models when no tier is set explicitly.',
+
+  async handler(args: string): Promise<SlashCommandResult> {
+    const { configActions, appActions, getState } = await import('../store/index.js');
+    const state = getState();
+    const config = state.config.config;
+    const autoRouter = config?.autoRouter || { enabled: false, tiers: {} };
+    const models = config?.models || [];
+
+    const persist = async (next: typeof autoRouter) => {
+      configActions().updateConfig({ autoRouter: next });
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+        const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.autoRouter = next;
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      } catch { /* non-fatal */ }
+    };
+
+    const parts = args.trim().split(/\s+/).filter(Boolean);
+    const subcommand = parts[0]?.toLowerCase();
+
+    if (subcommand === 'on') {
+      await persist({ ...autoRouter, enabled: true });
+      appActions().setManualModelOverride(false);
+      return { success: true, type: 'success', message: 'auto-router: on' };
+    }
+
+    if (subcommand === 'off') {
+      await persist({ ...autoRouter, enabled: false });
+      appActions().setAutoRouterActiveModel(null);
+      return { success: true, type: 'success', message: 'auto-router: off' };
+    }
+
+    if (subcommand === 'set') {
+      const tier = parts[1]?.toLowerCase();
+      const modelId = parts[2];
+      if (!tier || !['simple', 'medium', 'complex'].includes(tier) || !modelId) {
+        return {
+          success: false,
+          type: 'error',
+          content: 'usage: /router set <simple|medium|complex> <modelId>',
+        };
+      }
+      if (!models.find(m => m.id === modelId)) {
+        return { success: false, type: 'error', content: `unknown model id: \`${modelId}\` — see /model list` };
+      }
+      await persist({ ...autoRouter, tiers: { ...autoRouter.tiers, [tier]: modelId } });
+      return { success: true, type: 'success', message: `auto-router: ${tier} -> ${modelId}` };
+    }
+
+    // ── no args — status ──
+    const tiers = autoRouter.tiers || {};
+    const lines = [
+      `auto-router: ${autoRouter.enabled ? 'on' : 'off'}${state.app.manualModelOverride ? ' (backed off — /model set manually this session)' : ''}`,
+      `  simple   ${tiers.simple || '(auto)'}`,
+      `  medium   ${tiers.medium || '(auto)'}`,
+      `  complex  ${tiers.complex || '(auto)'}`,
+    ];
+    return { success: true, type: 'info', content: lines.join('\n') };
+  },
+};
 
 /**
  * /theme - 切换主题
@@ -2586,6 +2666,7 @@ export const builtinCommands: SlashCommand[] = [
   compactCommand,
   versionCommand,
   modelCommand,
+  routerCommand,
   themeCommand,
   statusCommand,
   tokensCommand,

@@ -189,6 +189,7 @@ async function main(): Promise<void> {
     .example('$0 resume <session-id>', 'Resume a specific conversation by ID')
     .example('$0 "帮我分析这个项目"', 'Start with an initial message')
     .example('$0 --model gpt-4', 'Use a specific model')
+    .example('$0 --router', 'Start with the auto-router on')
     .example('$0 --debug', 'Enable debug mode')
     .example('$0 --init', 'Create default config file')
 
@@ -413,6 +414,7 @@ async function main(): Promise<void> {
               permissionMode={args.permissionMode}
               versionCheckPromise={versionCheckPromise}
               resumeSessionId={resumeSessionId}
+              routerEnabled={args.router}
             />,
             {
               exitOnCtrlC: false,

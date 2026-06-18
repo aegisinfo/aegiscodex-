@@ -50,6 +50,7 @@ export {
   useTodos,
   useAwaitingSecondCtrlC,
   useShowAllThinking,
+  useAutoRouterActiveModel,
   // Focus
   useCurrentFocus,
   usePreviousFocus,

@@ -95,6 +95,13 @@ export const globalOptions = {
     group: 'AI Options:',
   },
 
+  router: {
+    type: 'boolean',
+    describe: 'Start with the auto-router on — picks a model per message based on task complexity',
+    default: false,
+    group: 'AI Options:',
+  },
+
   // ========== Security Options ==========
   'permission-mode': {
     type: 'string',

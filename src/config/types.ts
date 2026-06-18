@@ -60,6 +60,18 @@ export const UIConfigSchema = z.object({
 });
 
 /**
+ * Auto-router Schema — per-tier model id overrides for simple/medium/complex tasks
+ */
+export const AutoRouterConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  tiers: z.object({
+    simple: z.string().optional(),
+    medium: z.string().optional(),
+    complex: z.string().optional(),
+  }).optional(),
+});
+
+/**
  * 
  */
 export const PermissionConfigSchema = z.object({
@@ -193,7 +205,10 @@ export const ClawdConfigSchema = z.object({
   // MCP
   mcpEnabled: z.boolean().optional(),
   mcpServers: z.record(McpServerConfigSchema).optional(),
-  
+
+  // 自动路由：按任务复杂度自动选择模型
+  autoRouter: AutoRouterConfigSchema.optional(),
+
   // ===== 行为配
   
   // 权
@@ -247,6 +262,7 @@ export const RuntimeConfigSchema = ClawdConfigSchema.extend({
 
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
 export type UIConfig = z.infer<typeof UIConfigSchema>;
+export type AutoRouterConfig = z.infer<typeof AutoRouterConfigSchema>;
 export type PermissionConfig = z.infer<typeof PermissionConfigSchema>;
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
 export type HookConfig = z.infer<typeof HookConfigSchema>;
@@ -280,6 +296,7 @@ export const FIELD_ROUTING_TABLE: Record<string, FieldRouting> = {
   language: { target: 'config', defaultScope: 'global', mergeStrategy: 'replace', persistable: true },
   mcpServers: { target: 'config', defaultScope: 'global', mergeStrategy: 'deep-merge', persistable: true },
   mcpEnabled: { target: 'config', defaultScope: 'global', mergeStrategy: 'replace', persistable: true },
+  autoRouter: { target: 'config', defaultScope: 'global', mergeStrategy: 'deep-merge', persistable: true },
   
   // settings.json 字
   permissions: { target: 'settings', defaultScope: 'local', mergeStrategy: 'replace', persistable: true },
@@ -480,6 +497,7 @@ export const DEFAULT_CONFIG: ClawdConfig = {
   theme: 'dark',
   language: 'en',
   mcpEnabled: true,
+  autoRouter: { enabled: false, tiers: {} },
   mcpServers: {},
   permissions: DEFAULT_PERMISSIONS,
   defaultPermissionMode: 'default',
