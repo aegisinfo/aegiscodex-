@@ -26,12 +26,20 @@ Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq
 > **Important:** Use [Kitty](https://sw.kovidgoyal.net/kitty/) (recommended) or a modern terminal emulator (Ghostty, WezTerm, Alacritty, iTerm2, Windows Terminal) for the best experience. Older terminals may have rendering issues.
 
 ```bash
+npm install -g aegiscode
+```
+
+Or from source:
+
+```bash
 git clone https://github.com/aegisinfo/aegiscode
 cd aegiscode
 bash install.sh
 ```
 
 `install.sh` builds the project and creates an `aegis` wrapper in `~/.local/bin` — no sudo needed.
+
+Either way, the command is `aegis`.
 
 ---
 
@@ -122,6 +130,7 @@ The token is saved to `~/.aegiscode/.env` as `CLAUDE_CODE_OAUTH_TOKEN` and takes
 aegis                        # interactive mode
 aegis "refactor this file"   # start with a message
 aegis --model deepseek-chat  # use a specific model
+aegis --router               # start with the auto-router on
 aegis --continue             # resume last session
 aegis --resume <session-id>  # resume specific session
 ```
@@ -175,6 +184,9 @@ Any OpenAI-compatible API can be added as a custom model.
 | `/model list` | | List all configured models |
 | `/model add <id> <name> <model> <baseURL> <apiKey>` | | Add a custom model |
 | `/model remove <id>` | | Remove a model |
+| `/router` | | Show auto-router status and tier mapping |
+| `/router on` / `/router off` | | Toggle automatic per-message model routing |
+| `/router set <tier> <id>` | | Pin a model to the simple/medium/complex tier |
 | `/clear` | `/cls` | Clear chat history |
 | `/compact` | | Compress context to save tokens |
 | `/status` | `/st` | Show session info and token usage |
@@ -192,6 +204,22 @@ Any OpenAI-compatible API can be added as a custom model.
 | `/skills` | `/sk` | List loaded skills |
 | `/hooks` | | View and manage hooks |
 | `/version` | `/v` | Show version info |
+
+---
+
+## /router — automatic model routing
+
+aegiscode can pick which configured model handles each message for you, based on how hard the task actually looks — so a quick lookup doesn't pay for an expensive model, and a real architecture question doesn't get shortchanged by a cheap one.
+
+```
+/router on                          # start auto-picking a model per message
+/router set simple deepseek-chat    # pin a tier to a specific model id
+/router                             # show current status + tier mapping
+```
+
+Classification is a handful of cheap heuristics (message length, question phrasing, keywords like "architecture" or "security") — no extra model call to decide. When no tier is pinned explicitly, it falls back to a fixed cost-ordered list of the built-in models and picks the first one you actually have an API key for.
+
+Running `/model <id>` always wins — it pins your choice for the rest of the session and the router backs off until you run `/router on` again. The status bar shows `model: <name> (auto)` whenever the router picked it for you.
 
 ---
 
@@ -274,6 +302,40 @@ Sessions are stored locally as JSONL files. Resume a previous session:
 ```bash
 aegis --continue              # resume most recent
 aegis --resume <session-id>   # resume by ID
+```
+
+If cloud sync is active (`/cloud activate`, requires an aegiscloud.org API key), every session is also uploaded and browsable from **[aegiscloud.org/dashboard](https://aegiscloud.org/dashboard)** — search, folders, notes, and bulk export, from any browser. The desktop GUI's Cloud tab links straight there.
+
+---
+
+## Skills
+
+Skills are Markdown files (`SKILL.md`) that teach aegiscode a specialized capability or house rule — discovered automatically, loaded only when relevant so they don't cost tokens up front.
+
+```
+.aegis/skills/<name>/SKILL.md     # project-level, git-tracked
+~/.aegis/skills/<name>/SKILL.md   # user-level, global
+```
+
+`.claude/skills/` is also scanned for compatibility with Claude Code skills. Project-level skills win over user-level ones with the same name, so a project can override a global skill with local knowledge.
+
+```
+/skills              # list discovered skills
+/load <name>         # load a skill's full content on demand
+/skill <name> <desc> # scaffold a new skill
+```
+
+A `SKILL.md` is just frontmatter + instructions:
+
+```markdown
+---
+name: my-skill
+description: What it does and when to use it — this is what the AI sees by default.
+allowed-tools: [Read, Grep, Bash]
+user-invocable: true
+---
+
+Full instructions, loaded only when the skill is actually triggered.
 ```
 
 ---
