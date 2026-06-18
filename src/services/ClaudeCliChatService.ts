@@ -14,6 +14,13 @@
  * runs its own tools directly against this directory. aegiscode's
  * permission mode is passed through via --permission-mode so the
  * subscription session honors the same approval policy the user configured.
+ *
+ * Each `claude --print` call exits after one response, so a fresh process
+ * has no memory of tool calls the previous turn started. We capture the
+ * `session_id` from the first reply and pass it back via `--resume` on
+ * later turns so the CLI continues the same session instead of replaying
+ * the whole transcript as flat text into a brand-new one (which left tool
+ * calls half-finished and re-described as text on every "continue").
  */
 
 import { spawn } from 'node:child_process';
@@ -54,6 +61,9 @@ function transcriptFor(messages: Message[]): { systemPrompt: string; prompt: str
 }
 
 export class ClaudeCliChatService implements IChatService {
+  /** Set once the first reply gives us a session_id; reused via --resume on later turns. */
+  private sessionId: string | undefined;
+
   constructor(private config: ClaudeCliChatServiceConfig) {}
 
   async chat(
@@ -62,13 +72,22 @@ export class ClaudeCliChatService implements IChatService {
     signal?: AbortSignal,
     streamCallbacks?: StreamCallbacks
   ): Promise<ChatResponse> {
-    const { systemPrompt, prompt } = transcriptFor(messages);
-
     const args = ['--print', '--output-format', 'json'];
     const cliPermissionMode = PERMISSION_MODE_MAP[this.config.permissionMode ?? 'default'] ?? 'default';
     args.push('--permission-mode', cliPermissionMode);
     if (this.config.model) args.push('--model', this.config.model);
-    if (systemPrompt) args.push('--append-system-prompt', systemPrompt);
+
+    let prompt: string;
+    if (this.sessionId) {
+      // Resuming: the CLI already has the prior turns (and any tool calls it
+      // started) in its own session — just send the newest user message.
+      args.push('--resume', this.sessionId);
+      prompt = messages.filter(m => m.role === 'user').at(-1)?.content ?? '';
+    } else {
+      const { systemPrompt, prompt: fullPrompt } = transcriptFor(messages);
+      if (systemPrompt) args.push('--append-system-prompt', systemPrompt);
+      prompt = fullPrompt;
+    }
     args.push('--', prompt);
 
     const result = await new Promise<{ content: string; usage?: ChatResponse['usage'] }>((resolve, reject) => {
@@ -104,6 +123,7 @@ export class ClaudeCliChatService implements IChatService {
         }
         try {
           const parsed = JSON.parse(stdout);
+          if (parsed.session_id) this.sessionId = parsed.session_id;
           resolve({
             content: parsed.result ?? parsed.content ?? '',
             usage: parsed.usage && {
