@@ -66,7 +66,15 @@ function estimateMessageLines(
           total += 2; // ● line + at least one result line
           break;
         case 'tool_result':
-          total += estimateContentLines(b.content || '', terminalWidth);
+          // ToolUseBlock folds results into their paired tool_use block and
+          // truncates to a handful of sublines (see MessageRenderer.tsx) —
+          // it's never rendered standalone or proportional to full content
+          // length. Estimating it that way previously inflated the line
+          // budget for messages with large tool output (file reads, bash
+          // output), which could exhaust the entire windowing budget in one
+          // message and silently drop every message after it — including
+          // the next user message — from the visible render.
+          total += Math.min(estimateContentLines(b.content || '', terminalWidth), 6);
           break;
       }
     }
