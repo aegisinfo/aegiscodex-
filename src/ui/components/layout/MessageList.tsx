@@ -130,6 +130,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const scrollLineOffsetRef = useRef(scrollLineOffset);
   scrollLineOffsetRef.current = scrollLineOffset;
   const maxLineOffsetRef = useRef(0);
+  /** Ref to the currently streaming message's estimated lines (from buffer content) */
+  const streamingMessageLineDeltaRef = useRef(0);
 
   // ==================== Computed values ====================
   const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
@@ -158,7 +160,22 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
     return offs;
   }, [messageLines]);
 
-  const totalLines = lineOffsets[lineOffsets.length - 1] || 0;
+  // Account for streaming message lines in total/max offset.
+  // During streaming, the message content lives in the mutable buffer (not the store),
+  // so its estimated lines must be added separately. Without this, the scroll position
+  // is computed as if the streaming message doesn't exist, causing auto-scroll to land
+  // short and push user input off-screen.
+  const streamingLines = streamingMsg && buffer
+    ? estimateMessageLines(
+        streamingMsg.content + buffer.content,
+        (streamingMsg.thinking || '') + buffer.thinking,
+        terminalWidth,
+        streamingMsg.contentBlocks,
+      )
+    : 0;
+  streamingMessageLineDeltaRef.current = streamingLines;
+
+  const totalLines = (lineOffsets[lineOffsets.length - 1] || 0) + streamingLines;
   const maxLineOffset = Math.max(0, totalLines - viewportLines);
   maxLineOffsetRef.current = maxLineOffset;
   const clampedLineOffset = Math.min(scrollLineOffset, maxLineOffset);
@@ -213,10 +230,9 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   function getMaxLineOffset(): number {
     const msgs = messagesRef.current.filter(m => !m.isStreaming);
     const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
-    const lines = capped.map(msg =>
-      estimateMessageLines(msg.content, msg.thinking, terminalWidthRef.current, msg.contentBlocks),
-    );
-    const total = lines.reduce((a, b) => a + b, 0);
+    let total = capped.reduce((sum, m) => sum + estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks), 0);
+    // Include streaming message lines for keyboard scroll max
+    total += streamingMessageLineDeltaRef.current;
     return Math.max(0, total - Math.max(terminalHeightRef.current - UI_OVERHEAD, 5));
   }
 
@@ -281,7 +297,12 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         setMessages(newMessages);
       }
 
-      // 2. Check and apply buffered streaming content
+      // 2. Track scroll position during streaming
+      // When user is at the bottom, scroll follows the growing streaming content
+      const prevStreamingDelta = streamingMessageLineDeltaRef.current;
+      // (recomputed below if streaming is active)
+
+      // 3. Check and apply buffered streaming content
       const buf = getStreamingContent();
       const state = vanillaStore.getState();
       const streaming = state.session.messages.find(m => m.isStreaming && isActiveStreamingMessage(m));
@@ -305,6 +326,25 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           };
           setStreamingVersion(v => v + 1);
 
+          // Track scroll position during streaming.
+          // When the user is at the bottom, keep them at the bottom as content grows.
+          const newStreamingDelta = estimateMessageLines(
+            streaming.content + buf.content,
+            (streaming.thinking || '') + buf.thinking,
+            terminalWidthRef.current,
+            streaming.contentBlocks,
+          );
+          streamingMessageLineDeltaRef.current = newStreamingDelta;
+          const delta = newStreamingDelta - prevStreamingDelta;
+          if (delta > 0) {
+            // If user was at the bottom, scroll down to follow new content.
+            const curOffset = scrollLineOffsetRef.current;
+            const curMax = maxLineOffsetRef.current;
+            if (curOffset >= curMax) {
+              setScrollLineOffset(prev => Math.min(prev + delta, curMax + delta));
+            }
+          }
+
           // Report render latency to status bar
           const latency = getStreamingLatencyMs();
           if (latency > 30) {
@@ -313,9 +353,19 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
         }
       }
 
-      // Keep polling if there's pending work
+      // Keep polling if there's pending work.
+      // Read `stillStreaming` FRESH from both the buffer and store — the captured
+      // `streaming` variable (line 287) is stale by the time we reach here if
+      // finishStreamingMessage fired between our read and this check.
+      // Race condition: clearBuffer() + set({isStreaming:false}) can flip both
+      // sources synchronously between our getStreamingContent() and store reads
+      // on different lines. Single-expression evaluation avoids this window.
       const stillHasPending = pendingMessagesRef.current !== null;
-      const stillStreaming = !!(getStreamingContent() && streaming);
+      const liveStoreState = vanillaStore.getState();
+      const liveStreaming = liveStoreState.session.messages.find(
+        m => m.isStreaming && isActiveStreamingMessage(m),
+      );
+      const stillStreaming = !!(getStreamingContent() && liveStreaming);
       if (stillHasPending || stillStreaming) {
         rafIdRef.current = requestAnimationFrame(flushTick);
       } else {
@@ -362,11 +412,27 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           // Read from refs — these are updated every render, unlike the closure-captured consts
           const wasAtBottom = scrollLineOffsetRef.current >= maxLineOffsetRef.current;
           if (lastNew?.role === 'user' || lastNew?.isStreaming || wasAtBottom) {
-            // Jump to bottom of the updated content
+            // Jump to bottom of the updated content.
+            // IMPORTANT: Include the currently streaming message's buffer content in the
+            // line estimate. Without this, the streaming message's rendered lines are
+            // invisible to the scroll computation — causing the viewport to land short
+            // and pushing user input off-screen (Bug: can't see what you're typing).
             const msgs = newMessages.filter(m => !m.isStreaming);
             const capped = msgs.length > MAX_HISTORY_MESSAGES ? msgs.slice(-MAX_HISTORY_MESSAGES) : msgs;
-            const lines = capped.map(m => estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks));
-            const total = lines.reduce((a, b) => a + b, 0);
+            let total = capped.reduce((sum, m) => sum + estimateMessageLines(m.content, m.thinking, terminalWidthRef.current, m.contentBlocks), 0);
+            // Add streaming message's buffer content lines if active
+            const streamingContent = getStreamingContent();
+            if (streamingContent) {
+              const streamingMsg = newMessages.find(m => m.isStreaming && isActiveStreamingMessage(m));
+              if (streamingMsg) {
+                total += estimateMessageLines(
+                  streamingMsg.content + streamingContent.content,
+                  (streamingMsg.thinking || '') + streamingContent.thinking,
+                  terminalWidthRef.current,
+                  streamingMsg.contentBlocks,
+                );
+              }
+            }
             const vp = Math.max(terminalHeightRef.current - UI_OVERHEAD, 5);
             const maxOff = Math.max(0, total - vp);
             setScrollLineOffset(maxOff);
