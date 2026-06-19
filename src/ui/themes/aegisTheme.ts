@@ -16,7 +16,7 @@ const aegisColors: BaseColors = {
   },
   background: {
     primary: '#04040c',
-    secondary: '#08080f',
+    secondary: '#181828',
     dark: '#0c0c16',
   },
   border: {

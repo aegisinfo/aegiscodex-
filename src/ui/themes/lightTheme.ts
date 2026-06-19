@@ -65,7 +65,7 @@ export const lightTheme: Theme = {
     },
     background: {
       primary: '#ffffff',
-      secondary: '#f9fafb',  // gray-50
+      secondary: '#e5e7eb',  // gray-200
       dark: '#111827',       // gray-900
     },
     border: {

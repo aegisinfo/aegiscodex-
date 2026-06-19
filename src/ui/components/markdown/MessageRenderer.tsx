@@ -135,11 +135,11 @@ export const MessageRenderer: React.FC<MessageRendererProps> = memo(
     // instead of the flat markdown string.
     const shouldUseContentBlocks = contentBlocks && contentBlocks.length > 0;
 
-    // User messages: "You" label + content, clearly separated
+    // User messages: grey background + "You" label + content
     if (role === 'user') {
       return (
-        <Box flexDirection="column" marginBottom={1} marginTop={0}>
-          <Box flexDirection="row">
+        <Box flexDirection="column" marginBottom={0}>
+          <Box backgroundColor={theme.colors.background.secondary} flexDirection="row" paddingX={1}>
             <Box marginRight={1} flexShrink={0}>
               <Text color={theme.colors.primary} bold>You</Text>
               <Text color={theme.colors.border.light}>:</Text>

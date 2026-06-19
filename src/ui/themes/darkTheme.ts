@@ -63,7 +63,7 @@ export const darkTheme: Theme = {
     },
     background: {
       primary: '#111827',    // gray-900
-      secondary: '#1f2937',  // gray-800
+      secondary: '#374151',  // gray-700
       dark: '#030712',       // gray-950
     },
     border: {

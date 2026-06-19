@@ -233,12 +233,42 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       visibleMessages.push(completedMessages[i]);
       linesLeft -= messageLines[i];
     }
+
+    // FIX: When the last completed message was excluded because a large
+    // assistant message consumed the entire viewport budget, the user's
+    // latest message silently disappears. Always guarantee the last
+    // completed message is visible — either via the window itself or
+    // via the pin-below mechanism (showLastMsgOutside). This is especially
+    // critical when streaming, since showLastMsgOutside was previously
+    // disabled during streaming (the !streamingMsg check), leaving the
+    // user's just-sent message completely invisible.
+    const windowReachesEnd = visibleMessages.length > 0 &&
+      visibleMessages[visibleMessages.length - 1].id === completedMessages[completedMessages.length - 1]?.id;
+
+    // Backfill: if the window doesn't reach the end but there's room
+    // (linesLeft went negative from a too-large message), replace the last
+    // visible message with the actual last completed one so the user can
+    // always see their latest message.
+    if (!windowReachesEnd && completedMessages.length > 0) {
+      const lastMsg = completedMessages[completedMessages.length - 1];
+      // If the window is non-empty, swap the last item for the very last
+      // completed message (it's more important than the message at the
+      // window boundary). If empty, just add the last message.
+      if (visibleMessages.length > 0) {
+        // Remove the last item to free its budget, then add the real last message
+        const freedLines = messageLines[completedMessages.indexOf(visibleMessages[visibleMessages.length - 1])];
+        linesLeft += freedLines;
+        visibleMessages[visibleMessages.length - 1] = lastMsg;
+        linesLeft -= messageLines[completedMessages.length - 1];
+      } else {
+        visibleMessages.push(lastMsg);
+      }
+    }
+
     // Pin the latest message below the window when scrolled up, so the user
     // never loses track of "what just happened" while reading history — but
     // only if the window doesn't already end on it, otherwise it'd render twice.
-    const windowReachesEnd = visibleMessages.length > 0 &&
-      visibleMessages[visibleMessages.length - 1].id === completedMessages[completedMessages.length - 1]?.id;
-    showLastMsgOutside = !streamingMsg && !isAtBottom && completedMessages.length > 0 && !windowReachesEnd;
+    showLastMsgOutside = !isAtBottom && completedMessages.length > 0 && !windowReachesEnd;
   }
 
   // ==================== Notify parent about scroll state ====================
