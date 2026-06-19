@@ -81,10 +81,9 @@ export const useCtrlCHandler = (options: CtrlCHandlerOptions): CtrlCHandlerResul
     }
   }, [onInterrupt, forceExitDelay, doExit]);
 
-  // Ctrl+Z = 主退出键 (Kitty-safe, Ctrl+C is copy)
-  // Ctrl+C = 备用退出键
+  // Ctrl+Z = primary exit key (Ctrl+C reserved for terminal copy in Kitty & others)
   useInput((input, key) => {
-    if ((input === 'z' && key.ctrl) || (input === 'c' && key.ctrl)) {
+    if (input === 'z' && key.ctrl) {
       handleExit();
     }
   });

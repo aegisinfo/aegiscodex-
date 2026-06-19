@@ -426,6 +426,14 @@ async function main(): Promise<void> {
               maxFps: 30,
             },
           );
+
+          // Handle EOF (Ctrl+D) on real stdin to allow normal terminal closing
+          if (isTTY && process.stdin.isTTY) {
+            process.stdin.on('end', () => {
+              if (isDebugMode) console.log('[DEBUG] EOF received on stdin');
+              process.exit(0);
+            });
+          }
         } catch (renderError) {
           // Ink rendering failed, fall back to simple text mode
           if (isDebugMode) console.log('[DEBUG] Ink rendering failed:', (renderError as Error).message, '- falling back to text mode');
