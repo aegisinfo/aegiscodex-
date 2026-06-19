@@ -101,6 +101,8 @@ export interface PipelineExecutionContext {
   onProgress?: (progress: ToolProgress) => void;
   confirmationHandler?: ConfirmationHandler;
   messageId?: string;
+  /** Per-model setting: false skips confirmation prompts entirely. Defaults to true. */
+  requireConfirmation?: boolean;
 }
 
 /**

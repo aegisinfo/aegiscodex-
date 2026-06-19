@@ -23,6 +23,11 @@ export class ConfirmationStage implements PipelineStage {
       return;
     }
 
+    // 模型级设置：禁用确认提示时直接放
+    if (execution.context.requireConfirmation === false) {
+      return;
+    }
+
     const tool = execution._internal.tool;
     if (!tool) {
       execution.abort('Tool not found in execution context');

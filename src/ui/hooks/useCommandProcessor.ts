@@ -188,6 +188,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
               apiKey: targetModel.apiKey!,
               baseURL: targetModel.baseURL,
               model: targetLabel!,
+              requireConfirmation: targetModel.requireConfirmation,
             });
             routerAgentCacheRef.current.set(targetId, agent);
           }

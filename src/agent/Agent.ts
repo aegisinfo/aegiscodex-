@@ -583,6 +583,7 @@ export class Agent {
       signal: context.signal,
       confirmationHandler: context.confirmationHandler,
       messageId: toolCall.id,
+      requireConfirmation: this.config.requireConfirmation !== false,
     };
 
     // 通过执行管道执行工

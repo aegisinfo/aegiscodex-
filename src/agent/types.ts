@@ -247,6 +247,9 @@ export interface AgentConfig {
 
   /** Request timeout in ms (default 60000) */
   timeout?: number;
+
+  /** Show confirmation prompts before sensitive tool calls (default true) */
+  requireConfirmation?: boolean;
 }
 
 /**

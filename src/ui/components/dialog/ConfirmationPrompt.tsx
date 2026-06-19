@@ -43,7 +43,7 @@ export const ConfirmationPrompt: React.FC<ConfirmationPromptProps> = ({
     } else if (input === 'a' || input === 'A') {
       onResponse({ approved: true, scope: 'session' });
     } else if (input === 'n' || input === 'N') {
-      onResponse({ approved: false, reason: 'denied' });
+      onResponse({ approved: false, scope: 'once', reason: 'denied' });
     } else if (input === 'd' || input === 'D') {
       onResponse({ approved: false, scope: 'session', reason: 'denied for this session' });
     }

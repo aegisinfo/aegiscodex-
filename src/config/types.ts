@@ -47,6 +47,9 @@ export const ModelConfigSchema = z.object({
   // 模型级工具过滤：只在当前模型生效
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
+
+  // 是否需要确认提示（默认 true，保持原有行为）
+  requireConfirmation: z.boolean().optional(),
 });
 
 /**
@@ -388,6 +391,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-fable-5',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
   },
   {
     id: 'claude-sonnet-4',
@@ -396,6 +400,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-sonnet-4-6',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
   },
   {
     id: 'claude-opus-4',
@@ -404,6 +409,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-opus-4-8',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
   },
   {
     id: 'claude-haiku-4',
@@ -412,6 +418,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-haiku-4-5-20251001',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
   },
   {
     id: 'deepseek-chat',
