@@ -52,6 +52,7 @@ export {
   useShowAllThinking,
   useAutoRouterActiveModel,
   useRouterEnabled,
+  useWorkflow,
   // Focus
   useCurrentFocus,
   usePreviousFocus,

@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AEGIS: Private AI with semantic memory. Run Claude, DeepSeek, Llama with permanent cross-session memory.">
+    <meta name="theme-color" content="#534AB7">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;">
+    <link rel="canonical" href="https://aegiscloud.org/">
+    <title>My Site — Private AI with Semantic Memory</title>
+    <style>
+        /* Source reference: https://aegiscloud.org/ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        :root {
+            --bg: #ffffff;
+            --surface: #f8f8f6;
+            --surface2: #f2f2ef;
+            --border: #e8e8e4;
+            --border2: #d8d8d4;
+            --text: #111110;
+            --muted: #6b6b68;
+            --muted2: #9b9b98;
+            --accent: #534AB7;
+            --accent2: #0F6E56;
+            --coral: #993C1D;
+            --blue: #185FA5;
+            --mono: 'DM Mono', monospace;
+            --display: 'Syne', sans-serif;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--mono);
+            overflow-x: hidden;
+        }
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            padding: 22px 40px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255, 255, 255, .92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-logo {
+            font-family: var(--display);
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--accent);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            margin-left: auto;
+            align-items: center;
+        }
+        .nav-link {
+            font-size: 13px;
+            color: var(--muted);
+            text-decoration: none;
+            letter-spacing: 0.5px;
+            transition: color .15s;
+        }
+        .nav-link:hover {
+            color: var(--text);
+        }
+        .nav-cta {
+            padding: 8px 18px;
+            background: var(--accent);
+            border: none;
+            border-radius: 7px;
+            color: #fff;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            letter-spacing: 0.5px;
+            transition: opacity .15s;
+        }
+        .nav-cta:hover {
+            opacity: .85;
+        }
+
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 24px 80px;
+            text-align: center;
+            background: var(--bg);
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 10px;
+            color: var(--muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+        .hero-badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: .4;
+                transform: scale(.7);
+            }
+        }
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .hero-title {
+            font-family: var(--display);
+            font-size: clamp(40px, 8vw, 88px);
+            font-weight: 800;
+            line-height: 1.0;
+            letter-spacing: -3px;
+            margin-bottom: 16px;
+            color: var(--text);
+            animation: fadeUp .6s ease both;
+        }
+        .hero-tagline {
+            font-family: var(--display);
+            font-size: clamp(16px, 2.5vw, 24px);
+            font-weight: 700;
+            color: var(--muted);
+            margin-bottom: 28px;
+            letter-spacing: -0.5px;
+            animation: fadeUp .6s ease .1s both;
+        }
+        .hero-sub {
+            font-size: 15px;
+            color: var(--muted);
+            max-width: 520px;
+            line-height: 1.8;
+            margin-bottom: 40px;
+            animation: fadeUp .6s ease .2s both;
+        }
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeUp .6s ease .3s both;
+        }
+        .btn-primary {
+            padding: 13px 28px;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: var(--mono);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all .2s;
+        }
+        .btn-primary:hover {
+            opacity: .88;
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            padding: 13px 28px;
+            background: transparent;
+            border: 1px solid var(--border2);
+            border-radius: 8px;
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all .2s;
+        }
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .hero-note {
+            margin-top: 20px;
+            font-size: 11px;
+            color: var(--muted2);
+            animation: fadeUp .6s ease .4s both;
+        }
+        .hero-quote {
+            margin-top: 40px;
+            font-size: 13px;
+            color: var(--muted);
+            border-left: 2px solid var(--accent);
+            padding-left: 16px;
+            text-align: left;
+            max-width: 480px;
+            animation: fadeUp .6s ease .5s both;
+            font-style: italic;
+        }
+
+        .section-label {
+            font-size: 9px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--muted2);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-label::before {
+            content: '';
+            width: 24px;
+            height: 1px;
+            background: var(--border2);
+        }
+        .section-title {
+            font-family: var(--display);
+            font-size: clamp(22px, 4vw, 38px);
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        .section-sub {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.8;
+            max-width: 520px;
+            margin-bottom: 48px;
+        }
+
+        .products-section {
+            padding: 80px 40px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .product-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 28px;
+            transition: all .2s;
+            cursor: default;
+            display: block;
+        }
+        .product-card:hover {
+            border-color: var(--border2);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .06);
+        }
+        .product-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 18px;
+            font-size: 18px;
+        }
+        .product-name {
+            font-family: var(--display);
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        .product-desc {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.8;
+            margin-bottom: 16px;
+        }
+        .product-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .pill {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 9px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            letter-spacing: 0.3px;
+        }
+
+        .flow-section {
+            padding: 60px 40px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .flow-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .flow-steps {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 32px;
+        }
+        .flow-step {
+            font-size: 12px;
+            color: var(--muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .flow-step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .flow-arrow {
+            color: var(--muted2);
+            font-size: 18px;
+        }
+
+        .compare-section {
+            padding: 80px 40px;
+            max-width: 860px;
+            margin: 0 auto;
+        }
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 32px;
+        }
+        .compare-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .compare-card.featured {
+            border: 2px solid var(--accent);
+        }
+        .compare-name {
+            font-family: var(--display);
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 18px;
+            color: var(--muted);
+        }
+        .compare-name.ours {
+            color: var(--accent);
+        }
+        .compare-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+        .compare-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 11px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .compare-row:last-child {
+            border: none;
+        }
+        .compare-row>span:first-child {
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .compare-row>span:last-child {
+            text-align: right;
+        }
+        .val-bad {
+            color: var(--muted2);
+        }
+        .val-good {
+            color: var(--accent2);
+        }
+        .val-great {
+            color: var(--accent);
+        }
+
+        .platform-strip {
+            padding: 32px 0;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+        }
+        .platform-label {
+            font-size: 9px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--muted2);
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .platform-scroll {
+            display: flex;
+            gap: 10px;
+            animation: scroll 28s linear infinite;
+            width: max-content;
+        }
+        @keyframes scroll {
+            from {
+                transform: translateX(0);
+            }
+            to {
+                transform: translateX(-50%);
+            }
+        }
+        .platform-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 11px;
+            color: var(--muted);
+            white-space: nowrap;
+            padding: 5px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            flex-shrink: 0;
+        }
+        .pdot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .pricing-section {
+            padding: 80px 40px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+        }
+        .pricing-inner {
+            max-width: 680px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .pricing-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            text-align: left;
+            margin-top: 40px;
+        }
+        .p-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px;
+        }
+        .p-card.featured {
+            border: 2px solid var(--accent);
+        }
+        .p-name {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .p-price {
+            font-family: var(--display);
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .p-period {
+            font-size: 11px;
+            color: var(--muted2);
+            margin-bottom: 16px;
+        }
+        .p-features {
+            list-style: none;
+            font-size: 11px;
+            color: var(--muted);
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            line-height: 1.5;
+        }
+        .p-features li {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+        .check {
+            color: var(--accent2);
+        }
+        .dash {
+            color: var(--muted2);
+        }
+        .p-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border-radius: 7px;
+            font-family: var(--mono);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            margin-top: 18px;
+            transition: all .15s;
+            letter-spacing: 0.3px;
+        }
+        .p-btn-free {
+            background: transparent;
+            border: 1px solid var(--border2);
+            color: var(--muted);
+        }
+        .p-btn-free:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .p-btn-pro {
+            background: var(--accent);
+            border: none;
+            color: #fff;
+        }
+        .p-btn-pro:hover {
+            opacity: .88;
+        }
+
+        .cta-section {
+            padding: 100px 24px;
+            text-align: center;
+            background: var(--bg);
+        }
+        .cta-title {
+            font-family: var(--display);
+            font-size: clamp(28px, 5vw, 52px);
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.05;
+            margin-bottom: 20px;
+            color: var(--text);
+        }
+        .cta-sub {
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 36px;
+            line-height: 1.8;
+        }
+
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--muted2);
+        }
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+        .footer-links a {
+            color: var(--muted2);
+            text-decoration: none;
+            transition: color .15s;
+        }
+        .footer-links a:hover {
+            color: var(--text);
+        }
+
+        @media (max-width: 640px) {
+            nav {
+                padding: 12px 16px;
+            }
+            .nav-links .nav-link {
+                display: none;
+            }
+            .hero {
+                padding: 100px 20px 60px;
+            }
+            .hero-title {
+                font-size: 36px;
+                letter-spacing: -1.5px;
+            }
+            .hero-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-primary,
+            .btn-secondary {
+                text-align: center;
+            }
+            .products-section,
+            .compare-section,
+            .pricing-section,
+            .cta-section {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+            .compare-grid,
+            .pricing-cards {
+                grid-template-columns: 1fr;
+            }
+            .flow-section {
+                padding: 40px 20px;
+            }
+            .flow-steps {
+                flex-direction: column;
+                align-items: flex-start;
+                max-width: 300px;
+                margin: 24px auto 0;
+            }
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+            .section-title {
+                font-size: 24px;
+            }
+            .cta-title {
+                font-size: 28px;
+                letter-spacing: -1px;
+            }
+            footer {
+                flex-direction: column;
+                text-align: center;
+            }
+            .footer-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+
+        .hero-image-placeholder {
+            margin-top: 60px;
+            width: 100%;
+            max-width: 900px;
+        }
+        .hero-image-placeholder img {
+            width: 100%;
+            border-radius: 16px;
+            border: 1px solid rgba(108, 99, 255, 0.25);
+            box-shadow: 0 0 60px rgba(0, 229, 192, 0.08), 0 0 120px rgba(108, 99, 255, 0.06);
+            display: block;
+            background: var(--surface);
+            min-height: 200px;
+        }
+
+        .featured-platform-tiles {
+            padding: 40px 40px 0;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .tile-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .tile {
+            flex: 1;
+            min-width: 220px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+        }
+        .tile-label {
+            font-size: 9px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--muted2);
+            margin-bottom: 8px;
+        }
+        .tile-headline {
+            font-family: var(--display);
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+        .tile-desc {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .tile-desc a {
+            text-decoration: none;
+        }
+
+        .dark-section {
+            padding: 80px 40px;
+            background: #0a0e1a;
+            color: white;
+            overflow: hidden;
+            position: relative;
+            border-top: 1px solid rgba(108, 99, 255, 0.15);
+        }
+        .dark-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        .dark-label {
+            font-size: 9px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: rgba(0, 229, 192, 0.7);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .dark-label::before {
+            content: '';
+            width: 24px;
+            height: 1px;
+            background: rgba(0, 229, 192, 0.4);
+            display: inline-block;
+        }
+        .dark-title {
+            font-family: var(--display);
+            font-size: clamp(28px, 5vw, 50px);
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.05;
+            margin-bottom: 20px;
+            color: white;
+        }
+        .dark-desc {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.55);
+            max-width: 580px;
+            line-height: 1.85;
+            margin-bottom: 52px;
+        }
+        .dark-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 14px;
+            margin-bottom: 44px;
+        }
+        .dark-grid-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .dark-grid-item.border-green {
+            border: 1px solid rgba(0, 229, 192, 0.18);
+        }
+        .dark-grid-item.border-purple {
+            border: 1px solid rgba(108, 99, 255, 0.25);
+        }
+        .dark-icon {
+            font-size: 22px;
+            margin-bottom: 14px;
+        }
+        .dark-item-title {
+            font-family: var(--display);
+            font-size: 15px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+        }
+        .dark-item-desc {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.45);
+            line-height: 1.75;
+        }
+        .dark-cta-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .dark-cta-btn {
+            display: inline-block;
+            padding: 13px 28px;
+            background: #00e5c0;
+            border-radius: 8px;
+            color: #060810;
+            font-family: var(--mono);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+        .dark-cta-btn:hover {
+            opacity: .85;
+        }
+        .dark-note {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        .dark-glow-right {
+            position: absolute;
+            right: -80px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 480px;
+            height: 480px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(108, 99, 255, 0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .dark-glow-left {
+            position: absolute;
+            left: -60px;
+            bottom: -60px;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 229, 192, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <a class="nav-logo" href="/">My Site</a>
+        <div class="nav-links">
+            <a class="nav-link" href="#products">Features</a>
+            <a class="nav-link" href="#compare">Compare</a>
+            <a class="nav-link" href="#pricing">Pricing</a>
+            <a class="nav-link" href="#">Extension</a>
+            <a class="nav-link" href="#">CLI</a>
+            <a class="nav-link" href="#">Tool</a>
+            <a class="nav-link" href="#">Sign in</a>
+            <a class="nav-cta" href="#">Get started free →</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-badge"><span class="hero-badge-dot"></span>Private AI · Semantic Memory</div>
+        <h1 class="hero-title">Your AI, your data,<br>your empire.</h1>
+        <p class="hero-tagline">The AI that never forgets you.</p>
+        <p class="hero-sub">Run Llama 3.2, Claude, DeepSeek or any model with permanent cross-session memory. Stop re-explaining yourself — our CLI remembers everything across every session, automatically.</p>
+        <div class="hero-actions">
+            <a class="btn-primary" href="#">⬡ Get CLI free →</a>
+            <a class="btn-secondary" href="#">Try the platform</a>
+            <a class="btn-secondary" href="#">🦊 Get the extension</a>
+        </div>
+        <p class="hero-note">100% free · No credit card · BYOK — your keys, your data, your machine</p>
+        <p class="hero-quote">No other terminal agent gives your AI permanent semantic memory across every session. We do.</p>
+
+        <div class="hero-image-placeholder">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='400' viewBox='0 0 900 400'%3E%3Crect width='900' height='400' fill='%23f0f0ee'/%3E%3Ctext x='450' y='200' font-family='monospace' font-size='20' fill='%239b9b98' text-anchor='middle' dominant-baseline='middle'%3EYour Brand Preview Image%3C/text%3E%3C/svg%3E"
+                 alt="Your Brand Preview Image">
+        </div>
+    </section>
+
+    <section class="featured-platform-tiles">
+        <div class="tile-row">
+            <div class="tile">
+                <p class="tile-label">Terminal AI Agent</p>
+                <h2 style="color:var(--accent)" class="tile-headline">My CLI</h2>
+                <p class="tile-desc">Claude Code alternative · works with Claude, DeepSeek, Groq &amp; Ollama · cross-session memory · BYOK · <a href="#" style="color:var(--accent);">learn more →</a></p>
+            </div>
+            <div class="tile">
+                <p class="tile-label">Browser Extension</p>
+                <h2 style="color:var(--accent2)" class="tile-headline">My Extractor</h2>
+                <p class="tile-desc">Extract &amp; save AI conversations from Claude, ChatGPT, Gemini &amp; 22+ platforms · cloud sync · semantic memory · <a href="#" style="color:var(--accent2);">get the extension →</a></p>
+            </div>
+        </div>
+    </section>
+
+    <section class="products-section" id="products">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything you need</h2>
+        <p class="section-sub">Five tools that work together — or independently. Start with the extension. Add the CLI. Secure your machine.</p>
+
+        <div class="products-grid">
+            <div class="product-card">
+                <div class="product-icon" style="background:#E1F5EE">⬡</div>
+                <p class="product-name">My Extractor</p>
+                <p class="product-desc">Browser extension that extracts and saves conversations from Claude, ChatGPT, Gemini, Perplexity and 22+ AI platforms directly to your account. Feed your models with context they'd otherwise forget. Everything searchable, permanent, yours.</p>
+                <div class="product-pills">
+                    <span class="pill">Claude</span>
+                    <span class="pill">ChatGPT</span>
+                    <span class="pill">Gemini</span>
+                    <span class="pill">Perplexity</span>
+                    <span class="pill">+more</span>
+                </div>
+            </div>
+
+            <div class="product-card">
+                <div class="product-icon" style="background:#EEEDFE">⬡⬡</div>
+                <p class="product-name">My CLI</p>
+                <p class="product-desc">A terminal AI agent that works with Claude, DeepSeek, Groq and Ollama. Switch models mid-session. Build custom skills and apps. Remembers everything across sessions — automatically.</p>
+                <div class="product-pills">
+                    <span class="pill">Claude</span>
+                    <span class="pill">Gemini</span>
+                    <span class="pill">OpenAI</span>
+                    <span class="pill">DeepSeek</span>
+                    <span class="pill">Groq</span>
+                    <span class="pill">Ollama</span>
+                </div>
+            </div>
+
+            <div class="product-card">
+                <div class="product-icon" style="background:#FAECE7">⚖</div>
+                <p class="product-name">Council</p>
+                <p class="product-desc">Send your question to a council of AI agents — Claude, DeepSeek and Llama deliberate and vote. Get grounded decisions instead of a single perspective. For strategy, architecture, and important choices.</p>
+                <div class="product-pills">
+                    <span class="pill">Deliberation</span>
+                    <span class="pill">Voting</span>
+                    <span class="pill">Consensus</span>
+                    <span class="pill">Multi-agent</span>
+                </div>
+            </div>
+
+            <div class="product-card">
+                <div class="product-icon" style="background:#E6F1FB">◈</div>
+                <p class="product-name">Orchestration</p>
+                <p class="product-desc">Delegate complex tasks to specialized agents working in parallel or in sequence. The architect designs, the implementer builds, the reviewer refines. Build skills, automate workflows, create your own AI-powered tools.</p>
+                <div class="product-pills">
+                    <span class="pill">Parallel</span>
+                    <span class="pill">Chain</span>
+                    <span class="pill">Skills</span>
+                    <span class="pill">Workflows</span>
+                </div>
+            </div>
+
+            <a class="product-card" href="#" style="text-decoration:none;color:inherit;cursor:pointer">
+                <div class="product-icon" style="background:#EDF2EC">🛡</div>
+                <p class="product-name">My Security Tool</p>
+                <p class="product-desc">Local security audit tool. Scans your system across 14 categories — open ports, SSH config, SUID files, sudo privileges, firewall, scheduled tasks and more. AI-powered fix suggestions via Ollama. No cloud. No telemetry. Open source.</p>
+                <div class="product-pills">
+                    <span class="pill">Linux</span>
+                    <span class="pill">macOS</span>
+                    <span class="pill">Windows</span>
+                    <span class="pill">Ollama AI</span>
+                    <span class="pill">Open source</span>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <section class="dark-section">
+        <div class="dark-inner">
+            <div class="dark-label">The gap no one else fills</div>
+            <h2 class="dark-title">100% local.<br>Zero amnesia.</h2>
+            <p class="dark-desc">You run Ollama or DeepSeek locally because you don't trust the cloud with your data. But every session starts blank — no context, no history, no memory of what you built last week. Our CLI fixes exactly that. Your local model gets cross-session semantic memory without a single byte leaving your machine.</p>
+
+            <div class="dark-grid">
+                <div class="dark-grid-item border-green">
+                    <p class="dark-icon">🦙</p>
+                    <p class="dark-item-title">Ollama</p>
+                    <p class="dark-item-desc">llama3, mistral, phi3, gemma2 — any local model gets a memory that persists across every session, automatically.</p>
+                </div>
+                <div class="dark-grid-item border-purple">
+                    <p class="dark-icon">🧠</p>
+                    <p class="dark-item-title">DeepSeek R1</p>
+                    <p class="dark-item-desc">The most capable open-source reasoning model, running locally. Feed it everything you've ever worked on — it knows your whole context.</p>
+                </div>
+                <div class="dark-grid-item border-green">
+                    <p class="dark-icon">🔐</p>
+                    <p class="dark-item-title">100% private</p>
+                    <p class="dark-item-desc">Memory index runs on your machine. Your data never hits any server. Not ours, not OpenAI's, not anyone's.</p>
+                </div>
+                <div class="dark-grid-item border-purple">
+                    <p class="dark-icon">⚡</p>
+                    <p class="dark-item-title">Switch models</p>
+                    <p class="dark-item-desc">Claude for reasoning, Ollama for privacy, Groq for speed — mid-session. The memory follows, whichever model you use.</p>
+                </div>
+            </div>
+
+            <div class="dark-cta-row">
+                <a href="#" class="dark-cta-btn">Get CLI free →</a>
+                <p class="dark-note">Ollama · DeepSeek · Claude · Groq · BYOK</p>
+            </div>

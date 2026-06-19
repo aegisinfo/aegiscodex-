@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, user-scalable=1">
+  <title>AEGIS — Products</title>
+  <style>
+    @font-face {
+      font-family: 'D-DIN';
+      src: url('../www-spacex-com/fonts/D-DIN.woff2') format('woff2'),
+           url('../www-spacex-com/fonts/D-DIN.woff') format('woff'),
+           url('../www-spacex-com/fonts/D-DIN.otf') format('opentype');
+      font-weight: 400; font-style: normal; font-display: block;
+    }
+    :root {
+      --white-100: rgba(240, 240, 250, 1);
+      --white-90: rgba(240, 240, 250, 0.9);
+      --white-80: rgba(240, 240, 250, 0.8);
+      --white-70: rgba(240, 240, 250, 0.7);
+      --white-60: rgba(240, 240, 250, 0.6);
+      --white-50: rgba(240, 240, 250, 0.5);
+      --white-35: rgba(240, 240, 250, 0.35);
+      --white-30: rgba(240, 240, 250, 0.3);
+      --white-25: rgba(255, 255, 255, 0.25);
+      --white-15: rgba(240, 240, 250, 0.15);
+      --white-10: rgba(240, 240, 250, 0.1);
+      --accent: #534AB7;
+      --accent2: #0F6E56;
+      --green-accent: #00e5c0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font: 16px/1.5rem 'D-DIN', Arial, Verdana, sans-serif;
+      background-color: #000; color: var(--white-100);
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    @media (max-width: 961px) { body { font-size: 0.625rem; line-height: 0.75rem; } }
+    .app-root { flex: 1; display: flex; flex-direction: column; }
+    header {
+      padding: 1.5rem 2rem;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--white-15);
+    }
+    .logo {
+      font-size: 1.8rem; font-weight: 700; letter-spacing: 0.08em;
+      color: var(--white-100); text-transform: uppercase;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      color: var(--white-70); text-decoration: none;
+      font-size: 0.9rem; letter-spacing: 0.1em; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white-100); }
+    .page-hero {
+      padding: 5rem 2rem 3rem;
+      border-bottom: 1px solid var(--white-10);
+    }
+    .page-hero h1 {
+      font-size: 3rem; font-weight: 400; letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+    .page-hero p {
+      color: var(--white-60); font-size: 1.1rem;
+      max-width: 600px; line-height: 1.6;
+    }
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem; padding: 3rem 2rem;
+    }
+    .product-card {
+      background: #111; border: 1px solid var(--white-10);
+      padding: 2.5rem 2rem;
+      transition: border-color 0.3s, transform 0.3s;
+      display: flex; flex-direction: column;
+    }
+    .product-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-4px);
+    }
+    .product-icon {
+      font-size: 2rem; margin-bottom: 1rem;
+    }
+    .product-name {
+      font-size: 1.6rem; font-weight: 400; letter-spacing: 0.03em;
+      color: var(--white-90); margin-bottom: 0.5rem;
+    }
+    .product-desc {
+      color: var(--white-50); font-size: 0.95rem;
+      line-height: 1.6; flex: 1;
+    }
+    .product-pills {
+      display: flex; flex-wrap: wrap; gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+    .pill {
+      font-size: 0.7rem; padding: 3px 12px;
+      border: 1px solid var(--white-15); border-radius: 12px;
+      color: var(--white-50); letter-spacing: 0.05em;
+    }
+    .product-cta {
+      display: inline-block; margin-top: 1.5rem;
+      padding: 0.6rem 1.8rem; border: 1px solid var(--accent);
+      color: var(--accent); text-decoration: none; letter-spacing: 0.15em;
+      font-size: 0.8rem; transition: all 0.2s; width: fit-content;
+    }
+    .product-cta:hover { background: var(--accent); color: #fff; }
+    .featured-tiles {
+      padding: 2rem; display: flex; gap: 1.5rem; flex-wrap: wrap;
+    }
+    .tile {
+      flex: 1; min-width: 260px;
+      background: #0a0a0a; border: 1px solid var(--white-10);
+      padding: 1.5rem 2rem;
+    }
+    .tile-label {
+      font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--white-35); margin-bottom: 0.5rem;
+    }
+    .tile-headline {
+      font-size: 1.4rem; font-weight: 400; margin-bottom: 0.4rem;
+    }
+    .tile-desc {
+      font-size: 0.85rem; color: var(--white-50); line-height: 1.6;
+    }
+    footer {
+      border-top: 1px solid var(--white-15); padding: 2rem;
+      text-align: center; color: var(--white-35);
+      font-size: 0.8rem; letter-spacing: 0.05em;
+    }
+    footer a { color: var(--white-60); text-decoration: none; }
+    footer a:hover { color: var(--white-100); }
+    @media (max-width: 768px) {
+      header { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+      .nav-links { flex-wrap: wrap; justify-content: center; gap: 1rem; }
+      .page-hero h1 { font-size: 2rem; }
+      .products-grid { padding: 2rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-root">
+    <header>
+      <div class="logo">AEGIS</div>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="#">Docs</a></li>
+        <li><a href="#">Sign in</a></li>
+      </ul>
+    </header>
+
+    <section class="page-hero">
+      <h1>Products</h1>
+      <p>Five tools that work together — or independently. Start with the extension. Add the CLI. Secure your machine.</p>
+    </section>
+
+    <div class="featured-tiles">
+      <div class="tile">
+        <p class="tile-label">Terminal AI Agent</p>
+        <h2 class="tile-headline" style="color: var(--accent);">My CLI</h2>
+        <p class="tile-desc">Claude Code alternative · works with Claude, DeepSeek, Groq &amp; Ollama · cross-session memory · BYOK</p>
+      </div>
+      <div class="tile">
+        <p class="tile-label">Browser Extension</p>
+        <h2 class="tile-headline" style="color: var(--green-accent);">My Extractor</h2>
+        <p class="tile-desc">Extract &amp; save AI conversations from Claude, ChatGPT, Gemini &amp; 22+ platforms · cloud sync · semantic memory</p>
+      </div>
+    </div>
+
+    <div class="products-grid">
+      <div class="product-card">
+        <div class="product-icon">⬡</div>
+        <p class="product-name">My Extractor</p>
+        <p class="product-desc">Browser extension that extracts and saves conversations from Claude, ChatGPT, Gemini, Perplexity and 22+ AI platforms directly to your account. Feed your models with context they'd otherwise forget. Everything searchable, permanent, yours.</p>
+        <div class="product-pills">
+          <span class="pill">Claude</span>
+          <span class="pill">ChatGPT</span>
+          <span class="pill">Gemini</span>
+          <span class="pill">Perplexity</span>
+          <span class="pill">+22 more</span>
+        </div>
+        <a href="#" class="product-cta">GET EXTENSION</a>
+      </div>
+
+      <div class="product-card">
+        <div class="product-icon">⬡⬡</div>
+        <p class="product-name">My CLI</p>
+        <p class="product-desc">A terminal AI agent that works with Claude, DeepSeek, Groq and Ollama. Switch models mid-session. Build custom skills and apps. Remembers everything across sessions — automatically.</p>
+        <div class="product-pills">
+          <span class="pill">Claude</span>
+          <span class="pill">Gemini</span>
+          <span class="pill">OpenAI</span>
+          <span class="pill">DeepSeek</span>
+          <span class="pill">Groq</span>
+          <span class="pill">Ollama</span>
+        </div>
+        <a href="#" class="product-cta">INSTALL CLI</a>
+      </div>
+
+      <div class="product-card">
+        <div class="product-icon">⚖</div>
+        <p class="product-name">Council</p>
+        <p class="product-desc">Send your question to a council of AI agents — Claude, DeepSeek and Llama deliberate and vote. Get grounded decisions instead of a single perspective. For strategy, architecture, and important choices.</p>
+        <div class="product-pills">
+          <span class="pill">Deliberation</span>
+          <span class="pill">Voting</span>
+          <span class="pill">Consensus</span>
+          <span class="pill">Multi-agent</span>
+        </div>
+        <a href="#" class="product-cta">TRY COUNCIL</a>
+      </div>
+
+      <div class="product-card">
+        <div class="product-icon">◈</div>
+        <p class="product-name">Orchestration</p>
+        <p class="product-desc">Delegate complex tasks to specialized agents working in parallel or in sequence. The architect designs, the implementer builds, the reviewer refines. Build skills, automate workflows, create your own AI-powered tools.</p>
+        <div class="product-pills">
+          <span class="pill">Parallel</span>
+          <span class="pill">Chain</span>
+          <span class="pill">Skills</span>
+          <span class="pill">Workflows</span>
+        </div>
+        <a href="#" class="product-cta">EXPLORE</a>
+      </div>
+
+      <div class="product-card">
+        <div class="product-icon">🛡</div>
+        <p class="product-name">My Security Tool</p>
+        <p class="product-desc">Local security audit tool. Scans your system across 14 categories — open ports, SSH config, SUID files, sudo privileges, firewall, scheduled tasks and more. AI-powered fix suggestions via Ollama. No cloud. No telemetry. Open source.</p>
+        <div class="product-pills">
+          <span class="pill">Linux</span>
+          <span class="pill">macOS</span>
+          <span class="pill">Windows</span>
+          <span class="pill">Ollama AI</span>
+          <span class="pill">Open source</span>
+        </div>
+        <a href="#" class="product-cta">RUN SCAN</a>
+      </div>
+    </div>
+
+    <footer>
+      <p>© 2026 AEGIS — Products designed for private, persistent AI.</p>
+      <p style="margin-top:0.3rem;">
+        <a href="index.html">Home</a> · <a href="pricing.html">Pricing</a> ·
+        <a href="#">GitHub</a> · <a href="#">Docs</a>
+      </p>
+    </footer>
+  </div>
+  <script>console.log('AEGIS — Products page');</script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, user-scalable=1">
+  <title>AEGIS — Pricing</title>
+  <style>
+    @font-face {
+      font-family: 'D-DIN';
+      src: url('../www-spacex-com/fonts/D-DIN.woff2') format('woff2'),
+           url('../www-spacex-com/fonts/D-DIN.woff') format('woff'),
+           url('../www-spacex-com/fonts/D-DIN.otf') format('opentype');
+      font-weight: 400; font-style: normal; font-display: block;
+    }
+    :root {
+      --white-100: rgba(240, 240, 250, 1);
+      --white-90: rgba(240, 240, 250, 0.9);
+      --white-80: rgba(240, 240, 250, 0.8);
+      --white-70: rgba(240, 240, 250, 0.7);
+      --white-60: rgba(240, 240, 250, 0.6);
+      --white-50: rgba(240, 240, 250, 0.5);
+      --white-35: rgba(240, 240, 250, 0.35);
+      --white-30: rgba(240, 240, 250, 0.3);
+      --white-25: rgba(255, 255, 255, 0.25);
+      --white-15: rgba(240, 240, 250, 0.15);
+      --white-10: rgba(240, 240, 250, 0.1);
+      --accent: #534AB7;
+      --accent2: #0F6E56;
+      --green-accent: #00e5c0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font: 16px/1.5rem 'D-DIN', Arial, Verdana, sans-serif;
+      background-color: #000; color: var(--white-100);
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    @media (max-width: 961px) { body { font-size: 0.625rem; line-height: 0.75rem; } }
+    .app-root { flex: 1; display: flex; flex-direction: column; }
+    header {
+      padding: 1.5rem 2rem;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--white-15);
+    }
+    .logo {
+      font-size: 1.8rem; font-weight: 700; letter-spacing: 0.08em;
+      color: var(--white-100); text-transform: uppercase;
+    }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      color: var(--white-70); text-decoration: none;
+      font-size: 0.9rem; letter-spacing: 0.1em; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white-100); }
+    .page-hero {
+      padding: 5rem 2rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--white-10);
+    }
+    .page-hero h1 {
+      font-size: 3rem; font-weight: 400; letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+    .page-hero p {
+      color: var(--white-60); font-size: 1.1rem;
+      max-width: 500px; margin: 0 auto; line-height: 1.6;
+    }
+    .cycle-toggle {
+      display: flex; justify-content: center; gap: 0.5rem;
+      margin: 2rem 0 1rem;
+    }
+    .cycle-btn {
+      padding: 0.4rem 1.5rem;
+      border: 1px solid var(--white-15); background: transparent;
+      color: var(--white-50); cursor: pointer; letter-spacing: 0.1em;
+      font-size: 0.8rem; font-family: inherit; transition: all 0.2s;
+    }
+    .cycle-btn.active {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+    }
+    .cycle-btn:hover:not(.active) { border-color: var(--white-50); color: var(--white-80); }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem; padding: 2rem 2rem 4rem;
+      max-width: 900px; margin: 0 auto;
+    }
+    .p-card {
+      background: #111; border: 1px solid var(--white-10);
+      padding: 2.5rem 2rem;
+      display: flex; flex-direction: column;
+      transition: border-color 0.3s, transform 0.3s;
+      position: relative;
+    }
+    .p-card:hover { transform: translateY(-4px); }
+    .p-card.featured {
+      border: 2px solid var(--accent);
+      transform: scale(1.05);
+    }
+    .p-card.featured:hover { transform: scale(1.05) translateY(-4px); }
+    .p-badge {
+      position: absolute; top: -12px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent); color: #fff;
+      padding: 4px 16px; font-size: 0.65rem;
+      letter-spacing: 0.15em; text-transform: uppercase;
+    }
+    .p-name {
+      font-size: 0.8rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--white-50); margin-bottom: 0.5rem;
+    }
+    .p-price {
+      font-size: 3rem; font-weight: 400; line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+    .p-price span { font-size: 1rem; color: var(--white-50); }
+    .p-desc {
+      font-size: 0.85rem; color: var(--white-50);
+      margin-bottom: 1.5rem; line-height: 1.5;
+    }
+    .p-features {
+      list-style: none; flex: 1;
+    }
+    .p-features li {
+      font-size: 0.85rem; color: var(--white-60);
+      padding: 0.5rem 0; border-bottom: 1px solid var(--white-10);
+      display: flex; gap: 0.6rem; align-items: flex-start;
+    }
+    .p-features li::before {
+      content: '✓'; color: var(--green-accent);
+    }
+    .p-features li.missing::before {
+      content: '—'; color: var(--white-30);
+    }
+    .p-features li.missing { color: var(--white-30); }
+    .p-btn {
+      display: block; width: 100%; margin-top: 2rem;
+      padding: 0.8rem; text-align: center;
+      border: 1px solid var(--white-30);
+      color: var(--white-80); text-decoration: none;
+      letter-spacing: 0.15em; font-size: 0.85rem;
+      transition: all 0.2s; background: transparent;
+    }
+    .p-btn:hover { background: var(--white-100); color: #000; border-color: var(--white-100); }
+    .p-btn.featured-btn {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+    }
+    .p-btn.featured-btn:hover { opacity: 0.88; }
+    .faq-section {
+      padding: 3rem 2rem 4rem;
+      border-top: 1px solid var(--white-10);
+      max-width: 700px; margin: 0 auto;
+    }
+    .faq-section h2 {
+      font-size: 1.8rem; font-weight: 400; letter-spacing: 0.03em;
+      margin-bottom: 2rem; text-align: center;
+    }
+    .faq-item { margin-bottom: 1.5rem; }
+    .faq-item h4 {
+      font-size: 1rem; color: var(--white-80);
+      margin-bottom: 0.3rem; font-weight: 400;
+    }
+    .faq-item p {
+      font-size: 0.85rem; color: var(--white-50); line-height: 1.5;
+    }
+    footer {
+      border-top: 1px solid var(--white-15); padding: 2rem;
+      text-align: center; color: var(--white-35);
+      font-size: 0.8rem; letter-spacing: 0.05em;
+    }
+    footer a { color: var(--white-60); text-decoration: none; }
+    footer a:hover { color: var(--white-100); }
+    @media (max-width: 768px) {
+      header { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+      .nav-links { flex-wrap: wrap; justify-content: center; gap: 1rem; }
+      .page-hero h1 { font-size: 2rem; }
+      .p-card.featured { transform: none; }
+      .p-card.featured:hover { transform: translateY(-4px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-root">
+    <header>
+      <div class="logo">AEGIS</div>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="#">Docs</a></li>
+        <li><a href="#">Sign in</a></li>
+      </ul>
+    </header>
+
+    <section class="page-hero">
+      <h1>Pricing</h1>
+      <p>100% free to start. No credit card required. BYOK — bring your own keys, your data, your machine.</p>
+    </section>
+
+    <div class="pricing-grid">
+      <div class="p-card">
+        <p class="p-name">Free</p>
+        <p class="p-price">$0 <span>/ mo</span></p>
+        <p class="p-desc">Everything you need to get started with private AI. No limits on memory.</p>
+        <ul class="p-features">
+          <li>Cross-session semantic memory</li>
+          <li>Multi-model support (Claude, DeepSeek, Groq, Ollama)</li>
+          <li>My Extractor — 50 saves / month</li>
+          <li>My CLI — full terminal agent</li>
+          <li class="missing">Council (multi-agent deliberation)</li>
+          <li class="missing">Orchestration (parallel agents)</li>
+          <li class="missing">Security audit tool</li>
+        </ul>
+        <a href="#" class="p-btn">GET STARTED FREE</a>
+      </div>
+
+      <div class="p-card featured">
+        <div class="p-badge">Most Popular</div>
+        <p class="p-name">Pro</p>
+        <p class="p-price">$12 <span>/ mo</span></p>
+        <p class="p-desc">Unlock the full platform. Council, orchestration, security scanning — all included.</p>
+        <ul class="p-features">
+          <li>Everything in Free</li>
+          <li>My Extractor — unlimited saves</li>
+          <li>Council — multi-agent deliberation</li>
+          <li>Orchestration — parallel agent workflows</li>
+          <li>My Security Tool — full system audit</li>
+          <li>Custom skills &amp; automation</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#" class="p-btn featured-btn">SUBSCRIBE TO PRO</a>
+      </div>
+
+      <div class="p-card">
+        <p class="p-name">Enterprise</p>
+        <p class="p-price">Custom</p>
+        <p class="p-desc">Self-hosted, SSO, dedicated support, custom integrations, and audit logging.</p>
+        <ul class="p-features">
+          <li>Everything in Pro</li>
+          <li>Self-hosted deployment</li>
+          <li>SAML / OIDC SSO</li>
+          <li>Dedicated support SLA</li>
+          <li>Custom integrations</li>
+          <li>Audit logging &amp; compliance</li>
+          <li>Team management</li>
+        </ul>
+        <a href="#" class="p-btn">CONTACT SALES</a>
+      </div>
+    </div>
+
+    <section class="faq-section">
+      <h2>Frequently Asked</h2>
+
+      <div class="faq-item">
+        <h4>Is it really free?</h4>
+        <p>Yes. The Free tier includes full cross-session semantic memory, multi-model support, the CLI, and 50 saves/month on the Extractor. No credit card needed — ever.</p>
+      </div>
+      <div class="faq-item">
+        <h4>What does BYOK mean?</h4>
+        <p>Bring Your Own Key. You use your own API keys for Claude, OpenAI, Groq, etc. Your data never touches our servers. Memory index runs entirely on your machine.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Can I switch between models mid-session?</h4>
+        <p>Yes. Start with Claude for reasoning, switch to Groq for speed, drop to Ollama for privacy — your memory follows whichever model you use. Seamlessly.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Where is my data stored?</h4>
+        <p>Locally. Your memory index, conversations, and extracted data stay on your machine. Nothing is sent to the cloud unless you explicitly choose to sync.</p>
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2026 AEGIS — Private AI. Fair pricing. Zero lock-in.</p>
+      <p style="margin-top:0.3rem;">
+        <a href="index.html">Home</a> · <a href="products.html">Products</a> ·
+        <a href="#">Privacy</a> · <a href="#">Terms</a>
+      </p>
+    </footer>
+  </div>
+  <script>console.log('AEGIS — Pricing page');</script>
+</body>
+</html>

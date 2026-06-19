@@ -7,7 +7,7 @@
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { vanillaStore } from './vanilla.js';
-import type { ClawdStore, SessionMessage, TodoItem, FocusId } from './types.js';
+import type { ClawdStore, SessionMessage, TodoItem, FocusId, WorkflowState } from './types.js';
 import type { ModelConfig, PermissionMode } from '../config/types.js';
 
 // ========== 基
@@ -111,6 +111,9 @@ export const useAutoRouterActiveModel = () =>
 
 export const useRouterEnabled = () =>
   useClawdStore((state) => state.config.config?.autoRouter?.enabled ?? false);
+
+export const useWorkflow = () =>
+  useClawdStore((state) => state.app.workflow);
 
 // ========== Focus 选择
 

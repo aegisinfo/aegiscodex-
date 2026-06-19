@@ -153,6 +153,7 @@ export interface AppState {
   manualModelOverride: boolean;
   /** Display label of the model the auto-router picked for the in-flight/last turn, or null if none */
   autoRouterActiveModel: string | null;
+  workflow: WorkflowState;
 }
 
 export interface AppActions {
@@ -167,6 +168,7 @@ export interface AppActions {
   toggleShowAllThinking: () => void;
   setManualModelOverride: (value: boolean) => void;
   setAutoRouterActiveModel: (label: string | null) => void;
+  workflow: WorkflowActions;
 }
 
 export interface AppSlice extends AppState {
@@ -224,7 +226,36 @@ export interface CommandSlice extends CommandState {
   actions: CommandActions;
 }
 
-// ========== 完
+// ========== Workflow State (for context bar)
+
+export interface WorkflowStep {
+  label: string;
+  status: 'pending' | 'active' | 'done';
+}
+
+export interface WorkflowState {
+  visible: boolean;
+  phase: string;         // "Building", "Refactoring", "Debugging" etc.
+  target: string;        // what's being worked on, e.g. "auth system"
+  steps: WorkflowStep[];
+  currentStepIndex: number;
+  totalSteps: number;
+}
+
+export const initialWorkflowState: WorkflowState = {
+  visible: false,
+  phase: '',
+  target: '',
+  steps: [],
+  currentStepIndex: 0,
+  totalSteps: 0,
+};
+
+export interface WorkflowActions {
+  setWorkflow: (opts: { phase: string; target: string; steps: string[] }) => void;
+  advanceStep: () => void;
+  clearWorkflow: () => void;
+}
 
 // ========== Todo support (for progress tracking in tasks)
 export interface TodoItem {

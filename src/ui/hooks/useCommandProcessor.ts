@@ -59,8 +59,14 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
 
   // Auto-router: lazily-created Agent instances per model id, keyed by config
   // model id, reused across turns so picking the same tier twice in a row
-  // doesn't pay an Agent.create() again.
-  const routerAgentCacheRef = useRef<Map<string, Agent>>(new Map());
+  // doesn't pay an Agent.create() again. Each entry also stores the settings
+  // snapshot it was built with — requireConfirmation/allowedTools/
+  // disallowedTools are frozen into the Agent at creation time, so if the
+  // user toggles e.g. /confirm for that model after it's cached, the stale
+  // Agent would keep prompting forever. Comparing the snapshot before reuse
+  // (mirrors the same fix already applied to the main agentRef in
+  // useAgent.ts's model-switch subscription) catches that drift.
+  const routerAgentCacheRef = useRef<Map<string, { agent: Agent; settingsSnapshot: string }>>(new Map());
   // Which model id the auto-router last swapped agentRef.current to (or
   // undefined if it's still whatever /model or initial setup left it as).
   const routerActiveModelIdRef = useRef<string | undefined>(undefined);
@@ -181,7 +187,13 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
         const targetLabel = targetModel ? (targetModel.model || targetId) : undefined;
 
         if (targetModel && targetId && targetId !== activeModelId) {
-          let agent = routerAgentCacheRef.current.get(targetId);
+          const settingsSnapshot = JSON.stringify({
+            requireConfirmation: targetModel.requireConfirmation,
+            allowedTools: targetModel.allowedTools,
+            disallowedTools: targetModel.disallowedTools,
+          });
+          const cached = routerAgentCacheRef.current.get(targetId);
+          let agent = cached && cached.settingsSnapshot === settingsSnapshot ? cached.agent : undefined;
           if (!agent) {
             const { Agent } = await import('../../agent/Agent.js');
             agent = await Agent.create({
@@ -190,7 +202,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
               model: targetLabel!,
               requireConfirmation: targetModel.requireConfirmation,
             });
-            routerAgentCacheRef.current.set(targetId, agent);
+            routerAgentCacheRef.current.set(targetId, { agent, settingsSnapshot });
           }
           agentRef.current = agent;
           modelRef.current = targetLabel;

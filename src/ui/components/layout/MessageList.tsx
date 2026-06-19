@@ -95,6 +95,10 @@ interface MessageListProps {
   onRenderLatency?: (ms: number) => void;
   /** Number of queued commands shown below the message list (adjusts viewport budget) */
   pendingCommandCount?: number;
+  /** Measured height (rows) of whatever renders below the message list besides the
+   *  fixed UI_OVERHEAD (e.g. ContextBar, QueuedCommands) — keeps the viewport budget
+   *  in sync with variable-height elements instead of clipping/dropping messages. */
+  extraOverheadLines?: number;
 }
 
 const RAF_INTERVAL_MS = 30;   // ~33fps redraws
@@ -109,6 +113,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   onScrolledUpChange,
   onRenderLatency,
   pendingCommandCount = 0,
+  extraOverheadLines = 0,
 }) => {
   // ==================== Internal Scroll State ====================
   const [messages, setMessages] = useState(() => getState().session.messages);
@@ -148,7 +153,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   const maxLineOffsetRef = useRef(0);
 
   // ==================== Computed values ====================
-  const viewportLines = Math.max(terminalHeight - UI_OVERHEAD, 5);
+  const viewportLines = Math.max(terminalHeight - UI_OVERHEAD - extraOverheadLines, 5);
   const allCompleted = messages.filter(msg => !msg.isStreaming);
   const completedMessages = allCompleted.length > MAX_HISTORY_MESSAGES
     ? allCompleted.slice(-MAX_HISTORY_MESSAGES)

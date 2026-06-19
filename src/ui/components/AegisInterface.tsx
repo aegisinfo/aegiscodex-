@@ -5,8 +5,8 @@
  * Previously 977 lines — now ~450 lines of orchestration, with logic in focused hooks.
  */
 
-import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useEffect, useCallback, useRef, useState, useLayoutEffect } from 'react';
+import { Box, Text, useInput, measureElement, type DOMElement } from 'ink';
 
 // Store
 import {
@@ -16,6 +16,7 @@ import {
   usePendingCommands,
   useAutoRouterActiveModel,
   useRouterEnabled,
+  useWorkflow,
   sessionActions,
   configActions,
   commandActions,
@@ -36,6 +37,7 @@ import { InputArea } from './input/InputArea.js';
 import { ChatStatusBar } from './layout/ChatStatusBar.js';
 import { WelcomeMessage } from './layout/WelcomeMessage.js';
 import { MessageList } from './layout/MessageList.js';
+import { ContextBar } from './layout/ContextBar.js';
 import { ConfirmationPrompt } from './dialog/ConfirmationPrompt.js';
 import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSelector.js';
 import { SetupWizard } from './dialog/SetupWizard.js';
@@ -137,6 +139,25 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   const autoRouterActiveModel = useAutoRouterActiveModel();
   const routerEnabled = useRouterEnabled();
+  const workflow = useWorkflow();
+
+  // ==================== Below-MessageList overhead measurement ====================
+  // MessageList budgets its viewport with a fixed UI_OVERHEAD constant that only
+  // accounts for the input area/status bar. ContextBar (workflow indicator) and
+  // QueuedCommands render below it and can take a variable number of extra rows
+  // (e.g. ContextBar only appears at all when workflow.visible) — without telling
+  // MessageList about that, its row budget and what's actually left on screen drift
+  // apart, which looks like messages getting clipped/disappearing. Measuring the
+  // actual rendered height post-layout keeps the two in sync regardless of what
+  // gets added below the message list in the future.
+  const belowMessageListRef = useRef<DOMElement>(null);
+  const [belowOverheadLines, setBelowOverheadLines] = useState(0);
+  const pendingCommandsForOverhead = usePendingCommands();
+  useLayoutEffect(() => {
+    if (!belowMessageListRef.current) return;
+    const { height } = measureElement(belowMessageListRef.current);
+    setBelowOverheadLines(height);
+  }, [workflow, pendingCommandsForOverhead.length]);
 
   // ==================== Stable Refs ====================
   const debugRef = useRef(debug);
@@ -404,11 +425,15 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
                   terminalHeight={terminalHeight}
                   onScrolledUpChange={handleScrolledUpChange}
                   onRenderLatency={handleRenderLatency}
+                  extraOverheadLines={belowOverheadLines}
                 />
               </Box>
             </ErrorBoundary>
           )}
-          <QueuedCommands />
+          <Box ref={belowMessageListRef} flexDirection="column">
+            <ContextBar workflow={workflow} />
+            <QueuedCommands />
+          </Box>
 
           {confirmationState.isVisible && confirmationState.details && (
             <ErrorBoundary name="ConfirmationPrompt" fallback={null}>

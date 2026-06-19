@@ -424,6 +424,16 @@ async function main(): Promise<void> {
               // in most terminal emulators. Real Claude Code renders inline instead.
               alternateScreen: false,
               maxFps: 30,
+              // Without this, Ink's default log-update mode erases and rewrites the
+              // ENTIRE terminal output on every re-render, even when only a single
+              // line changed (e.g. the input cursor blink, every ~530ms, forever).
+              // That full erase+rewrite invalidates any in-progress mouse text
+              // selection in terminals like Kitty — selecting a message becomes
+              // impossible because the screen keeps getting wiped out from under it.
+              // incrementalRendering does real line-level diffing and only rewrites
+              // lines that actually changed, leaving untouched lines (and any
+              // selection on them) alone.
+              incrementalRendering: true,
             },
           );
 
