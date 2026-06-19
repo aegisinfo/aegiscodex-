@@ -2603,6 +2603,84 @@ const cloudCommand: SlashCommand = {
 };
 
 
+const confirmCommand: SlashCommand = {
+  name: 'confirm',
+  aliases: ['confirmations'],
+  description: 'Toggle the tool-call confirmation prompt for a model',
+  category: 'config',
+  usage: '/confirm [on|off] [model-id|claude|deepseek|all]',
+  fullDescription:
+    'Controls whether tool calls (Edit/Write/Bash) pause for your approval. ' +
+    'No args shows status for the current model. Target can be a model id, ' +
+    '`claude` (all anthropic-provider models), `deepseek` (all deepseek models), ' +
+    'or `all`. Defaults to the current model.',
+  examples: ['/confirm', '/confirm off', '/confirm off claude', '/confirm on all'],
+
+  async handler(args: string): Promise<SlashCommandResult> {
+    const { getState, configActions } = await import('../store/index.js');
+    const state = getState();
+    const config = state.config.config;
+    const models = config?.models || [];
+    const currentModelId = config?.currentModelId;
+
+    const parts = args.trim().split(/\s+/).filter(Boolean);
+    const arg = parts[0]?.toLowerCase();
+    const target = parts[1]?.toLowerCase();
+
+    // ── no args — show status for current model ──
+    if (!arg) {
+      const current = models.find(m => m.id === currentModelId);
+      const enabled = current?.requireConfirmation !== false;
+      return {
+        success: true,
+        type: 'info',
+        content: `confirmation prompts for \`${currentModelId || 'current model'}\`: ${enabled ? 'on' : 'off'}\n\nuse \`/confirm on|off [model-id|claude|deepseek|all]\` to change`,
+      };
+    }
+
+    if (arg !== 'on' && arg !== 'off') {
+      return { success: false, type: 'error', content: 'usage: /confirm [on|off] [model-id|claude|deepseek|all]' };
+    }
+    const requireConfirmation = arg === 'on';
+
+    const matchesTarget = (m: typeof models[number]): boolean => {
+      if (!target) return m.id === currentModelId;
+      if (target === 'all') return true;
+      if (target === 'claude' || target === 'anthropic') return m.provider === 'anthropic';
+      if (target === 'deepseek') return /deepseek/i.test(m.id || '') || /deepseek/i.test(m.baseURL || '');
+      return m.id === target || m.model === target || m.name?.toLowerCase() === target;
+    };
+
+    const matched = models.filter(matchesTarget);
+    if (matched.length === 0) {
+      return { success: false, type: 'error', content: `no model matched \`${target || currentModelId}\`` };
+    }
+
+    const matchedIds = new Set(matched.map(m => m.id));
+    const updatedModels = models.map(m =>
+      matchedIds.has(m.id) ? { ...m, requireConfirmation } : m
+    );
+
+    configActions().updateConfig({ models: updatedModels });
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+      const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      cfg.models = updatedModels;
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    } catch { /* non-fatal */ }
+
+    const names = matched.map(m => m.id).join(', ');
+    return {
+      success: true,
+      type: 'success',
+      message: `confirmation prompts ${requireConfirmation ? 'enabled' : 'disabled'} for ${names}`,
+    };
+  },
+};
+
 const yoloCommand: SlashCommand = {
   name: 'yolo',
   description: 'Toggle YOLO mode — auto-approve all tool executions',
@@ -2752,6 +2830,7 @@ export const builtinCommands: SlashCommand[] = [
   councilCommand,
   billingCommand,
   yoloCommand,
+  confirmCommand,
   multiCommand,
   multiYoloCommand,
   researchCommand,
