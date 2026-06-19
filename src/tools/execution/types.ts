@@ -126,6 +126,15 @@ export interface ToolExecutionInternal {
   confirmationReason?: string;
   permissionSignature?: string;
   hookToolUseId?: string;
+  /**
+   * Set when the command pilots another terminal session (tmux send-keys,
+   * screen -X stuff, etc.) — a vector for a model to mutate shared state
+   * (config.json, files) by typing into a second instance's stdin as if it
+   * were a real user, bypassing both per-model requireConfirmation and any
+   * session "always allow" approval. When true, ConfirmationStage must show
+   * the prompt regardless of either.
+   */
+  forceConfirmation?: boolean;
 }
 
 /**

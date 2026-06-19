@@ -107,7 +107,9 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
   return (
     <Box
       flexDirection="column"
-      paddingX={0}
+      borderStyle="round"
+      borderColor={theme.colors.border.dark}
+      paddingX={1}
       marginY={0}
     >
       <Box>

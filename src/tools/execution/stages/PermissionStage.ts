@@ -111,6 +111,41 @@ export class PermissionStage implements PipelineStage {
 
     // 7. 额外安全检查：敏感文
     this.checkSensitiveFiles(execution);
+
+    // 8. 额外安全检查：终端操纵（tmux/screen 注入按键到另一个会话
+    this.checkTerminalPiloting(execution);
+  }
+
+  /**
+   * Detects Bash commands that pilot another terminal session by injecting
+   * keystrokes (tmux send-keys, screen -X stuff, etc.). This is the same
+   * vector a model used to mutate ~/.aegiscode/config.json via a second
+   * live aegis instance while looping unattended — the injected keystrokes
+   * are indistinguishable from real user input to the receiving process, so
+   * the only place to catch this is here, before the command runs. Forces
+   * confirmation regardless of requireConfirmation or session approvals.
+   */
+  private checkTerminalPiloting(execution: ToolExecution): void {
+    const tool = execution._internal.tool;
+    if (!tool || tool.name !== 'Bash') return;
+
+    const command = execution.params.command;
+    if (typeof command !== 'string') return;
+
+    const PILOTING_PATTERNS = [
+      /\btmux\s+send-keys\b/,
+      /\btmux\s+(?:run-shell|wait-for)\b/,
+      /\bscreen\s+-S\s+\S+\s+-X\s+stuff\b/,
+      /\bexpect\s+-c\b/,
+    ];
+
+    if (PILOTING_PATTERNS.some((re) => re.test(command))) {
+      execution._internal.needsConfirmation = true;
+      execution._internal.forceConfirmation = true;
+      execution._internal.confirmationReason =
+        'This command injects input into another terminal session — it can mutate shared ' +
+        'config/files exactly like a real user typing, bypassing normal confirmation settings.';
+    }
   }
 
   /**

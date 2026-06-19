@@ -247,22 +247,59 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   }, [useWindowing, isAtBottom]);
 
   // ==================== Keyboard Scrolling ====================
+  // RAF-batched scroll commits — same fix as the streaming RAF loop above:
+  // every setState() here forces a full Ink reconciliation (visible blink).
+  // Held keys / terminal key-repeat can fire many discrete events per second;
+  // without batching, each one triggers its own redraw. Coalescing into a
+  // single commit per animation frame makes fast/held scrolling smooth
+  // instead of strobing.
+  const pendingScrollOffsetRef = useRef<number | null>(null);
+  const pendingAutoFollowRef = useRef<boolean | null>(null);
+  const scrollFlushScheduledRef = useRef(false);
+
+  function flushScroll() {
+    scrollFlushScheduledRef.current = false;
+    if (pendingScrollOffsetRef.current !== null) {
+      setScrollLineOffset(pendingScrollOffsetRef.current);
+      pendingScrollOffsetRef.current = null;
+    }
+    if (pendingAutoFollowRef.current !== null) {
+      setAutoFollow(pendingAutoFollowRef.current);
+      pendingAutoFollowRef.current = null;
+    }
+  }
+
+  function scheduleScrollFlush() {
+    if (scrollFlushScheduledRef.current) return;
+    scrollFlushScheduledRef.current = true;
+    requestAnimationFrame(flushScroll);
+  }
+
   // Manual scroll-up moves: leave autoFollow, basing the new offset on the
   // live bottom (maxLineOffsetRef) if we were following, or the stored
-  // offset otherwise.
+  // offset otherwise. Reads/writes the pending ref (not state) so repeated
+  // calls within the same frame accumulate correctly before the flush.
   function scrollUpBy(amount: number) {
-    const base = autoFollowRef.current ? maxLineOffsetRef.current : scrollLineOffsetRef.current;
-    setAutoFollow(false);
-    setScrollLineOffset(Math.max(0, base - amount));
+    const wasFollowing = pendingAutoFollowRef.current ?? autoFollowRef.current;
+    const base = wasFollowing
+      ? maxLineOffsetRef.current
+      : pendingScrollOffsetRef.current ?? scrollLineOffsetRef.current;
+    pendingAutoFollowRef.current = false;
+    pendingScrollOffsetRef.current = Math.max(0, base - amount);
+    scheduleScrollFlush();
   }
 
   // Manual scroll-down moves: re-enable autoFollow once we reach the bottom.
   function scrollDownBy(amount: number) {
-    const base = autoFollowRef.current ? maxLineOffsetRef.current : scrollLineOffsetRef.current;
+    const wasFollowing = pendingAutoFollowRef.current ?? autoFollowRef.current;
+    const base = wasFollowing
+      ? maxLineOffsetRef.current
+      : pendingScrollOffsetRef.current ?? scrollLineOffsetRef.current;
     const max = maxLineOffsetRef.current;
     const next = Math.min(max, base + amount);
-    setScrollLineOffset(next);
-    setAutoFollow(next >= max);
+    pendingScrollOffsetRef.current = next;
+    pendingAutoFollowRef.current = next >= max;
+    scheduleScrollFlush();
   }
 
   useInput((_input, key) => {
@@ -294,12 +331,14 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       return;
     }
     if (key.home) {
-      setAutoFollow(false);
-      setScrollLineOffset(0);
+      pendingAutoFollowRef.current = false;
+      pendingScrollOffsetRef.current = 0;
+      scheduleScrollFlush();
       return;
     }
     if (key.end) {
-      setAutoFollow(true);
+      pendingAutoFollowRef.current = true;
+      scheduleScrollFlush();
       return;
     }
   });

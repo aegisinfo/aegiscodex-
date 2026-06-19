@@ -23,8 +23,10 @@ export class ConfirmationStage implements PipelineStage {
       return;
     }
 
-    // 模型级设置：禁用确认提示时直接放
-    if (execution.context.requireConfirmation === false) {
+    const forceConfirmation = execution._internal.forceConfirmation === true;
+
+    // 模型级设置：禁用确认提示时直接放行（除非该操作被标记为强制确认
+    if (!forceConfirmation && execution.context.requireConfirmation === false) {
       return;
     }
 
@@ -41,8 +43,8 @@ export class ConfirmationStage implements PipelineStage {
       return;
     }
 
-    // 检查是否已在会话中批
-    if (signature && this.sessionApprovals.has(signature)) {
+    // 检查是否已在会话中批准（强制确认的操作不允许通过"永远允许"跳过
+    if (!forceConfirmation && signature && this.sessionApprovals.has(signature)) {
       return;
     }
 
