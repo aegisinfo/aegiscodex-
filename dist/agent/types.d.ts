@@ -94,6 +94,8 @@ export interface LoopOptions {
     }) => void;
     /** 内容回调（完整内容，用于非流式场景） */
     onContent?: (content: string) => void;
+    /** Unified Anthropic-format stream event (preferred over individual delta callbacks) */
+    onStreamEvent?: (event: import('../services/streaming/types.js').AnthropicStreamEvent) => void;
     /** 内容增量回调（流式） */
     onContentDelta?: (delta: string) => void;
     /** 思考内容回调（完整内容） */
@@ -214,12 +216,18 @@ export interface ChatResponse {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        /** Tokens served from the prompt cache (~0.1x cost) — native Anthropic transport only. */
+        cacheReadTokens?: number;
+        /** Tokens written to the prompt cache this request (~1.25x cost) — native Anthropic transport only. */
+        cacheCreationTokens?: number;
     };
 }
 /**
  *
  */
 export interface StreamCallbacks {
+    /** Unified Anthropic-format stream event (preferred over the individual callbacks below) */
+    onStreamEvent?: (event: import('../services/streaming/types.js').AnthropicStreamEvent) => void;
     /** 内容增量回调 */
     onContentDelta?: (delta: string) => void;
     /** 思考内容增量回调 */

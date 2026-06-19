@@ -276,6 +276,10 @@ export interface ChatResponse {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    /** Tokens served from the prompt cache (~0.1x cost) — native Anthropic transport only. */
+    cacheReadTokens?: number;
+    /** Tokens written to the prompt cache this request (~1.25x cost) — native Anthropic transport only. */
+    cacheCreationTokens?: number;
   };
 }
 

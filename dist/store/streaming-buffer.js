@@ -10,6 +10,8 @@
  *
  * Supports Content Block model (Claude-style): text, thinking, tool_use, tool_result.
  */
+import { TranscriptBuffer } from '../services/streaming/TranscriptBuffer.js';
+import { parseStreamEvent } from '../services/streaming/StreamEventParser.js';
 const streamingState = {
     messageId: null,
     content: '',
@@ -17,6 +19,9 @@ const streamingState = {
     currentBlockType: null,
     currentBlockAccumulator: '',
     toolCalls: new Map(),
+    transcriptBuffer: new TranscriptBuffer({ showToolResults: false }),
+    blockIndexToToolId: new Map(),
+    lastWriteTimestamp: 0,
 };
 /**
  * Check if a message IS the currently active streaming message (by ref).
@@ -38,22 +43,102 @@ export function getStreamingContent() {
     };
 }
 /**
+ * Get streaming content blocks synthesized from the current buffer state.
+ * Returns TextBlock and ThinkingBlock objects representing in-flight content,
+ * plus any accumulated tool_use blocks.
+ *
+ * These are merged with store content blocks in MessageList for structured rendering.
+ */
+export function getStreamingContentBlocks() {
+    const blocks = [];
+    if (streamingState.thinking) {
+        blocks.push({ type: 'thinking', thinking: streamingState.thinking });
+    }
+    if (streamingState.content) {
+        blocks.push({ type: 'text', text: streamingState.content });
+    }
+    return blocks;
+}
+/**
+ * Apply a raw Anthropic-format streaming event.
+ *
+ * This is the primary entry point for the main chat path. It feeds the
+ * TranscriptBuffer (rich segment model) and simultaneously updates the
+ * mutable content/thinking strings (for drain/flush compat) and the
+ * toolCalls map (for arg accumulation before store flush).
+ *
+ * Legacy paths (slash commands) continue using appendToBuffer /
+ * appendThinkingToBuffer directly and bypass the TranscriptBuffer.
+ */
+export function applyStreamEvent(event) {
+    const parsed = parseStreamEvent(event);
+    for (const e of parsed) {
+        streamingState.transcriptBuffer.apply(e);
+        if ((e.type === 'text_delta' || e.type === 'text_chunk') && e.text) {
+            streamingState.content += e.text;
+            streamingState.lastWriteTimestamp = Date.now();
+            streamingState.currentBlockType = 'text';
+            streamingState.currentBlockAccumulator += e.text;
+        }
+        if ((e.type === 'thinking_delta' || e.type === 'thinking_chunk') && e.text) {
+            streamingState.thinking += e.text;
+            streamingState.lastWriteTimestamp = Date.now();
+            streamingState.currentBlockType = 'thinking';
+            streamingState.currentBlockAccumulator += e.text;
+        }
+        if (e.type === 'tool_use_start' && e.id && e.name) {
+            if (!streamingState.toolCalls.has(e.id)) {
+                streamingState.toolCalls.set(e.id, { name: e.name, arguments: '', status: 'running' });
+            }
+            if (e.index !== undefined && e.index >= 0) {
+                streamingState.blockIndexToToolId.set(e.index, e.id);
+            }
+        }
+        if (e.type === 'tool_use_delta' && e.partial_json && e.index !== undefined) {
+            const toolId = streamingState.blockIndexToToolId.get(e.index);
+            if (toolId) {
+                const tc = streamingState.toolCalls.get(toolId);
+                if (tc)
+                    tc.arguments += e.partial_json;
+            }
+        }
+    }
+}
+/**
  * Initialize buffer for a new streaming message.
+ * When called with the same ID as the current message (flush cycle),
+ * only the content/thinking strings are reset — tool calls are preserved
+ * so arg accumulation survives mid-stream flushes.
  */
 export function initStreamingBuffer(messageId) {
+    const isNewMessage = streamingState.messageId !== messageId;
     streamingState.messageId = messageId;
     streamingState.content = '';
     streamingState.thinking = '';
     streamingState.currentBlockType = null;
     streamingState.currentBlockAccumulator = '';
-    streamingState.toolCalls.clear();
+    if (isNewMessage) {
+        streamingState.toolCalls.clear();
+        streamingState.transcriptBuffer.clear();
+        streamingState.blockIndexToToolId.clear();
+    }
 }
 /**
  * Append content delta to the mutable buffer (NO store update).
  * Tracks as 'text' content block if we're in a text block.
  */
+/**
+ * Get the time (ms) since the last content was written to the buffer.
+ * Returns 0 if no streaming is active.
+ */
+export function getStreamingLatencyMs() {
+    if (!streamingState.messageId || streamingState.lastWriteTimestamp === 0)
+        return 0;
+    return Date.now() - streamingState.lastWriteTimestamp;
+}
 export function appendToBuffer(contentDelta) {
     streamingState.content += contentDelta;
+    streamingState.lastWriteTimestamp = Date.now();
     // Track as text block
     streamingState.currentBlockType = 'text';
     streamingState.currentBlockAccumulator += contentDelta;
@@ -64,6 +149,7 @@ export function appendToBuffer(contentDelta) {
  */
 export function appendThinkingToBuffer(thinkingDelta) {
     streamingState.thinking += thinkingDelta;
+    streamingState.lastWriteTimestamp = Date.now();
     streamingState.currentBlockType = 'thinking';
     streamingState.currentBlockAccumulator += thinkingDelta;
 }
@@ -101,7 +187,7 @@ export function getBufferedToolCalls() {
     }));
 }
 /**
- * Clear the buffer (e.g., on error/abort).
+ * Clear the buffer (e.g., on error/abort or after finishStreamingMessage).
  */
 export function clearBuffer() {
     streamingState.messageId = null;
@@ -110,10 +196,10 @@ export function clearBuffer() {
     streamingState.currentBlockType = null;
     streamingState.currentBlockAccumulator = '';
     streamingState.toolCalls.clear();
+    streamingState.transcriptBuffer.clear();
+    streamingState.blockIndexToToolId.clear();
+    streamingState.lastWriteTimestamp = 0;
 }
-// Global consumer position — tracks how much of the buffer the RAF loop has consumed.
-// This prevents the RAF loop from re-inserting old content that was flushed to the store.
-let consumerPosition = { content: 0, thinking: 0 };
 /**
  * Check if buffer has content.
  */
@@ -133,7 +219,7 @@ export function peekBuffer() {
     };
 }
 /**
- * Drain the accumulated content block from the buffer.
+ * Drain accumulated content block from the buffer.
  * Returns the block data and resets the accumulator.
  */
 export function drainContentBlock() {
@@ -157,21 +243,31 @@ export function drainToolCalls() {
     return calls;
 }
 /**
- * Get the consumer position (used by RAF loop to track consumed content).
+ * Drain ALL content from the buffer and return it.
+ * Clears the buffer entirely. Used by flushStreamBuffer and finishStreamingMessage.
+ *
+ * This is the SINGLE function that removes content from the buffer.
+ * After calling it, the buffer is empty and ready for new content.
+ *
+ * Returns null if buffer is empty (no messageId set or no content).
  */
-export function getConsumerPosition() {
-    return { ...consumerPosition };
-}
-/**
- * Reset the consumer position to the current buffer length.
- * Called after flushStreamBuffer to prevent the RAF loop from
- * re-inserting content that was just flushed to the store.
- */
-export function resetConsumerPosition() {
-    consumerPosition = {
-        content: streamingState.content.length,
-        thinking: streamingState.thinking.length,
+export function drainBuffer() {
+    if (!streamingState.messageId)
+        return null;
+    if (!streamingState.content && !streamingState.thinking && streamingState.toolCalls.size === 0)
+        return null;
+    const result = {
+        content: streamingState.content,
+        thinking: streamingState.thinking,
+        toolCalls: getBufferedToolCalls(),
     };
+    // Clear content but KEEP messageId (so isActiveStreamingMessage still works)
+    // and KEEP toolCalls (they're still in-flight; cleared by clearBuffer after finish).
+    streamingState.content = '';
+    streamingState.thinking = '';
+    streamingState.currentBlockType = null;
+    streamingState.currentBlockAccumulator = '';
+    return result;
 }
 let pendingBatch = null;
 /**

@@ -43,25 +43,26 @@ function doHighlightAst(line, language) {
     }
 }
 // ── Diff rendering ──────────────────────────────────────────────────────────
+// VS Code Dark+ exact hex colors
+const VS_DIFF = {
+    add: '#3fb950', // additions
+    del: '#f85149', // deletions
+    hunk: '#79c0ff', // @@ hunk headers
+    header: '#e3b341', // --- +++ file headers
+};
 const DIFF_HEADER_RE = /^(diff --git |index |--- |\+\+\+ )/;
 const DIFF_HUNK_RE = /^@@ /;
 const DIFF_ADD_RE = /^\+/;
 const DIFF_DEL_RE = /^\-/;
-const DIFF_NBSP_RE = /^ /; // non-breaking space used by some diff outputs
 function getDiffLineStyle(line) {
-    if (DIFF_HEADER_RE.test(line)) {
-        return { prefix: ' ', color: 'yellow' };
-    }
-    if (DIFF_HUNK_RE.test(line)) {
-        return { prefix: ' ', color: 'cyan' };
-    }
-    if (DIFF_ADD_RE.test(line)) {
-        return { prefix: '+', color: 'green' };
-    }
-    if (DIFF_DEL_RE.test(line)) {
-        return { prefix: '-', color: 'red' };
-    }
-    // context lines
+    if (DIFF_HEADER_RE.test(line))
+        return { prefix: ' ', color: VS_DIFF.header, bold: true };
+    if (DIFF_HUNK_RE.test(line))
+        return { prefix: ' ', color: VS_DIFF.hunk };
+    if (DIFF_ADD_RE.test(line))
+        return { prefix: '+', color: VS_DIFF.add };
+    if (DIFF_DEL_RE.test(line))
+        return { prefix: '-', color: VS_DIFF.del };
     return { prefix: ' ', color: '' };
 }
 export const CodeHighlighter = ({ content, language, filePath, showLineNumbers = true, terminalWidth = 80, startLine = 1, }) => {
@@ -71,7 +72,7 @@ export const CodeHighlighter = ({ content, language, filePath, showLineNumbers =
     const totalLines = startLine + lines.length - 1;
     const lineNumberWidth = showLineNumbers ? String(totalLines).length + 1 : 0;
     const isDiff = language === 'diff' || language === 'patch';
-    return (_jsxs(Box, { flexDirection: "column", borderStyle: "round", borderColor: theme.colors.border.light, paddingX: 1, marginY: 1, children: [_jsxs(Box, { marginBottom: 1, justifyContent: "space-between", children: [_jsx(Box, { children: filePath ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.info, children: filePath }), language && (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" ", language] }))] })) : language ? (_jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: language })) : null }), _jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: "/copy" }) })] }), isDiff ? (_jsx(DiffRenderer, { lines: lines })) : (lines.map((line, index) => {
+    return (_jsxs(Box, { flexDirection: "column", paddingX: 0, marginY: 0, children: [_jsxs(Box, { children: [_jsx(Box, { children: filePath ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.info, children: filePath }), language && (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" ", language] }))] })) : language ? (_jsx(_Fragment, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: language }) })) : null }), _jsx(Box, { marginLeft: 1, children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: "/copy" }) })] }), isDiff ? (_jsx(DiffRenderer, { lines: lines })) : (lines.map((line, index) => {
                 const lineNumber = startLine + index;
                 return (_jsxs(Box, { flexDirection: "row", children: [showLineNumbers && (_jsx(Box, { width: lineNumberWidth, marginRight: 1, children: _jsx(Text, { dimColor: true, children: String(lineNumber).padStart(lineNumberWidth - 1, ' ') }) })), _jsx(Box, { flexShrink: 1, children: _jsx(CachedHighlightedLine, { line: line, language: language, syntaxColors: syntaxColors }) })] }, index));
             }))] }));

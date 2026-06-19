@@ -8,6 +8,7 @@ import { execSync } from 'node:child_process';
 import { defaultTheme } from './defaultTheme.js';
 import { darkTheme } from './darkTheme.js';
 import { lightTheme } from './lightTheme.js';
+import { aegisTheme } from './aegisTheme.js';
 import { configManager } from '../../config/ConfigManager.js';
 /**
  *
@@ -79,6 +80,12 @@ const presetThemes = [
         name: 'Default',
         description: 'Balanced theme (works on most terminals)',
         theme: defaultTheme,
+    },
+    {
+        id: 'aegis',
+        name: 'ÆGIS',
+        description: 'ÆGIS teal — the signature brand theme',
+        theme: aegisTheme,
     },
     {
         id: 'light',
@@ -272,26 +279,26 @@ export class ThemeManager {
         switch (role) {
             case 'user':
                 return {
-                    color: colors.success,
-                    prefix: '› ',
+                    color: colors.text.muted,
+                    prefix: '',
                     bold: false,
                 };
             case 'assistant':
                 return {
                     color: colors.primary,
-                    prefix: '□ ',
+                    prefix: '',
                     bold: false,
                 };
             case 'system':
                 return {
                     color: colors.warning,
-                    prefix: '! ',
+                    prefix: '!',
                     bold: true,
                 };
             case 'tool':
                 return {
                     color: colors.info,
-                    prefix: '→ ',
+                    prefix: '',
                     bold: false,
                 };
             default:

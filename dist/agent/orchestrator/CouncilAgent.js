@@ -40,7 +40,7 @@ export class CouncilAgent {
     /**
      * Register a council member with a specific role and vote weight
      */
-    addMember(name, role, systemPrompt, weight = 1, config) {
+    addMember(name, role, systemPrompt, weight = 1, config, tools) {
         const colorIndex = this.agentRoles.size % COLORS.length;
         const color = COLORS[colorIndex];
         const subConfig = {
@@ -48,6 +48,7 @@ export class CouncilAgent {
             role,
             systemPrompt,
             config,
+            tools,
         };
         this.orchestrator.registerAgent(subConfig);
         this.agentRoles.set(name, { role, weight, color });
@@ -72,7 +73,7 @@ export class CouncilAgent {
     /**
      * Convene the council to deliberate on a question
      */
-    async deliberate(question) {
+    async deliberate(question, sessionId) {
         const members = this.getMembers();
         if (members.length === 0) {
             throw new Error('CouncilAgent: No members registered. Add members before deliberating.');
@@ -91,7 +92,7 @@ export class CouncilAgent {
                     ? `Question: "${question}"\n\nPrevious round votes:\n${previousContext}\n\nBased on the discussion, state your FINAL VOTE and reasoning.\nRespond with:\nVOTE: approve, reject, or abstain\nREASONING: 1-3 sentences explaining your position.`
                     : `Question: "${question}"\n\nState your vote and reasoning.\nRespond with:\nVOTE: approve, reject, or abstain\nREASONING: 1-3 sentences explaining your position.`;
             }
-            const orchestration = await this.orchestrator.orchestrate(question, subTasks, members[0]?.name);
+            const orchestration = await this.orchestrator.orchestrate(question, subTasks, members[0]?.name, sessionId);
             // Parse votes from responses
             allResults = orchestration.responses.map(r => {
                 const info = this.agentRoles.get(r.agentName);

@@ -64,12 +64,12 @@ export declare const getConfig: () => RuntimeConfig | null;
  *
  */
 export declare const getCurrentModel: () => {
-    apiKey?: string | undefined;
-    baseURL?: string | undefined;
     name?: string | undefined;
     id?: string | undefined;
-    model?: string | undefined;
     provider?: "openai-compatible" | "anthropic" | undefined;
+    apiKey?: string | undefined;
+    baseURL?: string | undefined;
+    model?: string | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     topP?: number | undefined;

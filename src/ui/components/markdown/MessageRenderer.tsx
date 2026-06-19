@@ -292,7 +292,11 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = React.memo(({
     <>
       {contentBlocks.map((block, idx) => {
         if (block.type === 'thinking') {
-          const isActive = isStreaming && idx === contentBlocks.length - 1;
+          // A thinking block is "active" during streaming — the buffer's thinking
+          // content is still being accumulated. Using idx === last-block check
+          // fails when text blocks are merged before tool blocks (thinking is always
+          // the first synthesized block, never the last).
+          const isActive = isStreaming && block.thinking.length > 0;
           const filtered = parseMarkdown(block.thinking).filter(b => b.type !== 'empty');
 
           return (
@@ -375,8 +379,14 @@ const ContentBlockRenderer: React.FC<ContentBlockRendererProps> = React.memo(({
       })}
 
       {/* Render any remaining text content from the message's content prop
-          (not duplicated in contentBlocks as text blocks) */}
-      {content && contentBlocks.every(b => b.type !== 'text') && (
+          (not duplicated in contentBlocks as text blocks).
+          During streaming, MessageList synthesizes text/thinking blocks into
+          contentBlocks so they render inline. After finishStreamingMessage the
+          store message's contentBlocks only has tool_use/tool_result blocks
+          (no text block) — the text lives in the `content` prop and needs
+          this fallback. The null guard prevents crashes if contentBlocks is
+          somehow undefined when shouldUseContentBlocks was true. */}
+      {content && (!contentBlocks || contentBlocks.every(b => b.type !== 'text')) && (
         <Box key="remaining-text" flexDirection="column">
           {emitPrefix()}
           {parseMarkdown(content)
@@ -559,6 +569,13 @@ function getToolSummary(name: string, input: string): string {
         return `${name}(${args.pattern || ''})`
       case 'Grep':
         return `${name}(${args.pattern || ''}${args.path ? ` in ${shortenPath(args.path)}` : ''})`
+      case 'Task': {
+        const tasks = Array.isArray(args.tasks) ? args.tasks : []
+        if (tasks.length === 0) return name
+        const first = String(tasks[0]?.description || '')
+        const summary = tasks.length > 1 ? `${first} +${tasks.length - 1} more` : first
+        return `${name}(${summary.length > 45 ? summary.slice(0, 42) + '…' : summary})`
+      }
       default: {
         const entries = Object.entries(args)
         if (entries.length === 0) return name

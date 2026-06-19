@@ -11,7 +11,7 @@
  * Supports Content Block model (Claude-style): text, thinking, tool_use, tool_result.
  */
 
-import type { SessionMessage, ToolCallStatus } from './types.js';
+import type { SessionMessage, ToolCallStatus, ContentBlock } from './types.js';
 import { TranscriptBuffer } from '../services/streaming/TranscriptBuffer.js';
 import { parseStreamEvent } from '../services/streaming/StreamEventParser.js';
 import type { AnthropicStreamEvent } from '../services/streaming/types.js';
@@ -63,6 +63,27 @@ export function getStreamingContent(): { content: string; thinking: string } | n
     content: streamingState.content,
     thinking: streamingState.thinking,
   };
+}
+
+/**
+ * Get streaming content blocks synthesized from the current buffer state.
+ * Returns TextBlock and ThinkingBlock objects representing in-flight content,
+ * plus any accumulated tool_use blocks.
+ *
+ * These are merged with store content blocks in MessageList for structured rendering.
+ */
+export function getStreamingContentBlocks(): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+
+  if (streamingState.thinking) {
+    blocks.push({ type: 'thinking', thinking: streamingState.thinking });
+  }
+
+  if (streamingState.content) {
+    blocks.push({ type: 'text', text: streamingState.content });
+  }
+
+  return blocks;
 }
 
 /**

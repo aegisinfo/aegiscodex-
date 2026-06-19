@@ -17,6 +17,9 @@ function mergeRuntimeConfig(baseConfig, props) {
         runtimeConfig.resumeSessionId = props.resumeSessionId;
     if (props.permissionMode)
         runtimeConfig.defaultPermissionMode = props.permissionMode;
+    if (props.routerEnabled) {
+        runtimeConfig.autoRouter = { ...runtimeConfig.autoRouter, enabled: true };
+    }
     if (props.model) {
         // Try to map model name to model ID first
         const models = baseConfig.models || [];
@@ -27,9 +30,10 @@ function mergeRuntimeConfig(baseConfig, props) {
 }
 function initializeStoreState(config) {
     configActions().setConfig(config);
-    const hasDefaultConfig = config.default?.apiKey;
-    const hasModelsConfig = config.models && config.models.length > 0;
-    if (!hasDefaultConfig && !hasModelsConfig) {
+    const isRealKey = (key) => !!key && !key.startsWith('YOUR_');
+    const hasRealDefault = isRealKey(config.default?.apiKey);
+    const hasRealModel = config.models?.some(m => isRealKey(m.apiKey));
+    if (!hasRealDefault && !hasRealModel) {
         appActions().setInitializationStatus('needsSetup');
     }
     else {

@@ -1,6 +1,8 @@
 /**
- * useCtrlCHandler - Ctrl+C 处理
+ * useCtrlCHandler - Ctrl+Z / Ctrl+C 处理
  *
+ * Ctrl+Z 主退出键 (Kitty 中 Ctrl+C 用于复制)
+ * Ctrl+C 备用退出键
  *
  * - 有任务运行时：请求中断
  * - 无任务时：退出应用
@@ -17,15 +19,16 @@ interface CtrlCHandlerOptions {
     forceExitDelay?: number;
 }
 interface CtrlCHandlerResult {
-    /** 处理 Ctrl+C */
-    handleCtrlC: () => void;
+    /** 处理退出信号 (Ctrl+Z / Ctrl+C) */
+    handleExit: () => void;
     /** 重置强制退出状态 */
     resetForceExit: () => void;
 }
 /**
- * Ctrl+C 处理 Hook
+ * 退出处理 Hook
  *
- *
+ * Ctrl+Z = 主退出 (Kitty 中 Ctrl+C 用于复制)
+ * Ctrl+C = 备用退出
  */
 export declare const useCtrlCHandler: (options: CtrlCHandlerOptions) => CtrlCHandlerResult;
 export {};

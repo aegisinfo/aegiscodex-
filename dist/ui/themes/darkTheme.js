@@ -2,9 +2,46 @@
  *
  */
 import { defaultTheme } from './defaultTheme.js';
+const darkTokens = {
+    elevation: {
+        flat: 'rgba(0,0,0,0)',
+        raised: 'rgba(96, 165, 250, 0.08)',
+        overlay: 'rgba(0, 0, 0, 0.4)',
+        sticky: 'rgba(96, 165, 250, 0.12)',
+    },
+    radius: {
+        sm: 0,
+        md: 1,
+        lg: 2,
+        full: 0,
+    },
+    animation: {
+        fast: 80,
+        normal: 150,
+        slow: 300,
+        easing: 'ease-out',
+    },
+    semantic: {
+        interactive: {
+            idle: '#60a5fa',
+            hover: '#93c5fd',
+            active: '#3b82f6',
+            disabled: '#9ca3af',
+        },
+        focus: {
+            ring: '#60a5fa',
+            glow: 'rgba(96, 165, 250, 0.3)',
+        },
+        code: {
+            background: '#1f2937',
+            border: '#374151',
+        },
+    },
+};
 export const darkTheme = {
     ...defaultTheme,
     name: 'dark',
+    tokens: darkTokens,
     colors: {
         ...defaultTheme.colors,
         primary: '#60a5fa', // blue-400

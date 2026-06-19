@@ -16,6 +16,7 @@ export class ContextManager {
     cache;
     options;
     currentSessionId = null;
+    pendingSaves = [];
     constructor(options = {}) {
         // 默认配
         this.options = {
@@ -141,8 +142,8 @@ export class ContextManager {
         if (contextData && this.shouldCompress(contextData)) {
             await this.compressCurrentContext();
         }
-        // 异步保存到持久化存储（不阻塞主流
-        this.saveMessageAsync(message);
+        // 持久化保存到 JSONL 文件
+        await this.saveMessagePersist(message);
     }
     /**
      *
@@ -151,20 +152,25 @@ export class ContextManager {
         return contextData.metadata.totalTokens > this.options.compressionThreshold;
     }
     /**
-     *
+     * Persist message to JSONL synchronously (awaited by the caller).
+     * The promise is tracked so cleanup() can flush before exit.
      */
-    saveMessageAsync(message) {
+    async saveMessagePersist(message) {
         if (!this.currentSessionId)
             return;
-        // 使用 setImmediate 避免阻
-        setImmediate(async () => {
-            try {
-                await this.persistent.saveMessage(this.currentSessionId, message.role, message.content, null, message.metadata);
-            }
-            catch (error) {
-                console.error('[ContextManager] 保存消息失败:', error);
-            }
+        const promise = this.persistent.saveMessage(this.currentSessionId, message.role, message.content, null, message.metadata).catch(error => {
+            console.error('[ContextManager] 保存消息失败:', error);
         });
+        this.pendingSaves.push(promise);
+        await promise;
+    }
+    /**
+     * Flush all pending saves — call before exit to ensure no data loss.
+     */
+    async flush() {
+        const pending = [...this.pendingSaves];
+        this.pendingSaves.length = 0;
+        await Promise.all(pending);
     }
     /**
      *
@@ -358,7 +364,8 @@ export class ContextManager {
     /**
      *
      */
-    cleanup() {
+    async cleanup() {
+        await this.flush();
         this.memory.clear();
         this.cache.clear();
         TokenCounter.clearCache();

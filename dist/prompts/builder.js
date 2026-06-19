@@ -5,7 +5,7 @@
  * 1. 环境上下文 - 动态生成
  * 2. 基础提示词 - DEFAULT_SYSTEM_PROMPT 或 PLAN_MODE_SYSTEM_PROMPT
  * 3. 可用 Skills 列表 - 渐进式披露的"发现阶段"
- * 4. 项目配置 - CLAWDCODE.md
+ * 4. 项目配置 - AEGIS.md
  * 5. 追加内容 - 用户自定义
  */
 import fs from 'fs/promises';
@@ -95,7 +95,7 @@ When a user request matches a skill's description, use the Skill tool to load it
             });
         }
     }
-    // 4. 项目配置（CLAWDCODE.md）- 始终尝试加
+    // 4. 项目配置（AEGIS.md）- 始终尝试加
     const projectConfig = await loadProjectConfig(projectPath);
     if (projectConfig) {
         parts.push(`# Project Configuration\n\n${projectConfig}`);

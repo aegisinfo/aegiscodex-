@@ -15,6 +15,7 @@ import {
   useMessages,
   usePendingCommands,
   useAutoRouterActiveModel,
+  useRouterEnabled,
   sessionActions,
   configActions,
   commandActions,
@@ -67,10 +68,14 @@ const QueuedCommands: React.FC = React.memo(() => {
   if (pendingCommands.length === 0) return null;
 
   return (
-    <Box flexDirection="column" marginTop={0}>
-      <Text color={theme.colors.text.muted} dimColor>
-        queued: {pendingCommands.length}
-      </Text>
+    <Box flexDirection="column" marginTop={0} marginBottom={0}>
+      {pendingCommands.map((cmd, i) => (
+        <Box key={i} flexDirection="row" marginLeft={1}>
+          <Text color={theme.colors.text.muted} dimColor>
+            <Text color={theme.colors.primary}>#{i+1}</Text> {cmd.length > 60 ? cmd.slice(0, 60) + '...' : cmd}
+          </Text>
+        </Box>
+      ))}
     </Box>
   );
 });
@@ -131,6 +136,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
   } = useAgent({ apiKey, baseURL, model, debug, resumeSessionId });
 
   const autoRouterActiveModel = useAutoRouterActiveModel();
+  const routerEnabled = useRouterEnabled();
 
   // ==================== Stable Refs ====================
   const debugRef = useRef(debug);
@@ -235,6 +241,14 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
           } else if (platform === 'win32') execSync('clip', { input: plain });
         } catch {}
       }).catch(() => {});
+    }
+  });
+
+  // ==================== Alt+R: Toggle auto-router ====================
+  useInput((_input, key) => {
+    if (key.meta && _input === 'r') {
+      const isEnabled = getState().config.config?.autoRouter?.enabled ?? false;
+      handleSubmit(isEnabled ? '/router off' : '/router on');
     }
   });
 
@@ -413,6 +427,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
             modelIsAuto={!!autoRouterActiveModel}
             isScrolledUp={messages.length > 0 && isScrolledUp}
             renderLatency={renderLatency}
+            routerEnabled={routerEnabled}
           />
         </>
       )}

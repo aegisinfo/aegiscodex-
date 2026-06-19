@@ -201,7 +201,14 @@ async function installOllama() {
 // ── Start server ─────────────────────────────────────────────────────────────
 async function startOllamaServer() {
     log('Starting Ollama server...');
-    spawn('ollama', ['serve'], { stdio: 'ignore', detached: true }).unref();
+    try {
+        spawn('ollama', ['serve'], { stdio: 'ignore', detached: true })
+            .on('error', () => { })
+            .unref();
+    }
+    catch {
+        return false;
+    }
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));

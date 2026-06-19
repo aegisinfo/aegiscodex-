@@ -16,6 +16,7 @@ export { ThrottledRenderer } from './ThrottledRenderer.js';
 export { TERMINAL_FORMATTING, PLAIN_TEXT_FORMATTING, buildRenderContext, } from './renderFormatting.js';
 export { TERMINAL_PROFILE, PLAIN_TEXT_PROFILE, COMPACT_TERMINAL_PROFILE, buildRenderingProfile, } from './RenderingProfile.js';
 export { getStatusForEvent, STATUS_MESSAGE_PREFIXES } from './eventStatusMap.js';
+export { OpenAIEventAdapter } from './OpenAIEventAdapter.js';
 export type { AnthropicStreamEvent, ContentBlockStartEvent, ContentBlockDeltaEvent, ContentBlockStopEvent, MessageStartEvent, MessageDeltaEvent, MessageStopEvent, ParsedEvent, ParsedEventType, StreamSegment, SegmentKind, RenderContext, RenderFormatting, RenderingProfile, } from './types.js';
 export { TRANSCRIPT_EVENT_TYPES } from './types.js';
 //# sourceMappingURL=index.d.ts.map

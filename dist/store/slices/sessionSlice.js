@@ -1,8 +1,30 @@
 /**
  * Session Slice - 会话状态管理
+ *
+ * Streaming Architecture (Buffer + Store):
+ *
+ * During streaming, content deltas arrive at high frequency (per-character).
+ * Writing each delta to the zustand store triggers cascading re-renders
+ * across ALL subscribers — causing visible terminal "blink".
+ *
+ * Solution: External mutable buffer (streaming-buffer.ts).
+ *   - deltas → appendToBuffer() — O(1), no store update
+ *   - MessageList RAF loop polls buffer directly — only MessageList re-renders
+ *   - Store updated only at: start, flush (tool calls), finish
+ *
+ * flushStreamBuffer → drainBuffer() → store.set() → initStreamingBuffer()
+ *   Used mid-streaming (e.g., before a tool call) to persist content to store
+ *   while keeping the buffer alive for subsequent deltas.
+ *
+ * finishStreamingMessage → drainBuffer() → store.set() (isStreaming=false)
+ *   Finalizes the message. No re-init — streaming is done.
  */
-import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, clearBuffer, peekBuffer, resetConsumerPosition } from '../streaming-buffer.js';
+import { appendToBuffer, appendThinkingToBuffer, initStreamingBuffer, drainBuffer, clearBuffer } from '../streaming-buffer.js';
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+// Mutable buffer for in-progress tool inputs.
+// updateToolCallInput accumulates here without touching the store;
+// setToolCallInput flushes the final value in a single set() call.
+const _toolInputBuffer = new Map(); // toolCallId → partial JSON
 const initialSessionState = {
     sessionId: generateId(),
     messages: [],
@@ -16,13 +38,14 @@ const initialSessionState = {
         outputTokens: 0,
         totalTokens: 0,
         maxContextTokens: 200000,
+        modelBreakdown: {},
     },
 };
 export const createSessionSlice = (set, get) => ({
     ...initialSessionState,
     actions: {
         /**
-         *
+         * Append a fully-formed message (no streaming).
          */
         addMessage: (message) => {
             set((state) => ({
@@ -34,7 +57,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Create and append a user message from plain text.
          */
         addUserMessage: (content) => {
             const message = {
@@ -46,7 +69,7 @@ export const createSessionSlice = (set, get) => ({
             get().session.actions.addMessage(message);
         },
         /**
-         *
+         * Create and append a fully-formed assistant message.
          */
         addAssistantMessage: (content) => {
             const message = {
@@ -58,7 +81,9 @@ export const createSessionSlice = (set, get) => ({
             get().session.actions.addMessage(message);
         },
         /**
-         *
+         * Start a new streaming assistant message.
+         * Creates an empty placeholder in the store and initializes the buffer.
+         * Returns the message ID for subsequent delta/flush/finish calls.
          */
         startStreamingMessage: () => {
             const id = `assistant-${generateId()}`;
@@ -77,28 +102,19 @@ export const createSessionSlice = (set, get) => ({
                     error: null,
                 },
             }));
-            // Initialize the streaming buffer for this message
             initStreamingBuffer(id);
             return id;
         },
         /**
-         * Append content delta WITHOUT calling set() on the store.
-         *
-         * Instead of notifying all store subscribers on every delta (which causes
-         * cascading React re-renders and terminal flickering), we write directly
-         * to an external mutable buffer. The MessageList RAF/throttled loop reads
-         * from this buffer directly, bypassing the store entirely.
-         *
-         * The store is only updated when streaming starts/finishes or when a
-         * forced flush is needed (tool calls, explicit flushes).
+         * Append content delta to the mutable buffer ONLY.
+         * No store update — the RAF loop picks up content from the buffer.
          */
         appendToStreamingMessage: (_id, contentDelta) => {
             appendToBuffer(contentDelta);
         },
         /**
-         * Append thinking delta WITHOUT calling set() on the store.
-         * Same reasoning as appendToStreamingMessage — writes go only to the
-         * mutable streaming buffer, not to the store.
+         * Append thinking delta to the mutable buffer ONLY.
+         * No store update — same reasoning as appendToStreamingMessage.
          */
         appendThinkingToStreamingMessage: (_id, thinkingDelta) => {
             if (thinkingDelta) {
@@ -106,38 +122,37 @@ export const createSessionSlice = (set, get) => ({
             }
         },
         /**
-         * Force-flush the streaming buffer to the store.
-         * This syncs the mutable buffer content to the actual message object
-         * and notifies store subscribers, then clears the buffer.
-         * Used by tool call handlers to show content before a tool invocation.
+         * Force-flush buffer content to the store, then re-init the buffer.
+         *
+         * Used before tool calls so preceding text is persisted to the message
+         * while the buffer stays alive for tool call arguments and subsequent text.
+         *
+         * drainBuffer() atomically reads + clears the buffer (but keeps messageId).
+         * Then initStreamingBuffer() re-initializes with the same ID so
+         * isActiveStreamingMessage() still resolves correctly.
          */
         flushStreamBuffer: (id) => {
-            const bufferContent = peekBuffer();
-            if (!bufferContent.content && !bufferContent.thinking)
+            const drained = drainBuffer();
+            if (!drained || (!drained.content && !drained.thinking && drained.toolCalls.length === 0))
                 return;
-            clearBuffer();
             set((state) => ({
                 session: {
                     ...state.session,
                     messages: state.session.messages.map(msg => msg.id === id
                         ? {
                             ...msg,
-                            content: msg.content + bufferContent.content,
-                            thinking: (msg.thinking || '') + bufferContent.thinking,
+                            content: msg.content + drained.content,
+                            thinking: (msg.thinking || '') + drained.thinking,
                         }
                         : msg),
                 },
             }));
-            // Reset RAF consumer position so the MessageList RAF loop doesn't
-            // re-append old buffer content that was just flushed to the store.
-            resetConsumerPosition();
-            // Re-init buffer with the same messageId so subsequent streaming
-            // deltas (after tool calls) are picked up by the RAF loop.
+            // Re-init so subsequent deltas are tracked under the same message ID.
             initStreamingBuffer(id);
         },
         /**
-         * Write directly to the store message, bypassing the streaming buffer.
-         * Used for tool call events that must appear immediately.
+         * Write directly to the store message, bypassing the buffer.
+         * Used for immediate content (errors, forced updates) during streaming.
          */
         forceAppendToMessage: (id, contentDelta) => {
             set((state) => ({
@@ -150,16 +165,19 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         * Finalize streaming: sync all buffer content to the store and mark
-         * message as no longer streaming.
+         * Finalize streaming: drain buffer to store, mark message as complete.
          *
-         * The RAF loop in MessageList now reads the buffer directly and does
-         * NOT write to the store during streaming. This means the store's
-         * message.content is still the initial empty string (plus any
-         * flushStreamBuffer calls). We must write ALL buffer content here.
+         * drainBuffer() reads and clears the buffer atomically. The content
+         * is appended to the store message and isStreaming is set to false.
+         * The RAF loop stops polling this message (isStreaming check fails).
+         *
+         * No re-init needed — streaming is done.
          */
         finishStreamingMessage: (id) => {
-            const bufferContent = peekBuffer();
+            const drained = drainBuffer();
+            // Clear messageId so getStreamingContent() returns null immediately.
+            // Without this, the stale React state window sees a non-null buffer
+            // and keeps rendering the streaming cursor.
             clearBuffer();
             set((state) => ({
                 session: {
@@ -167,8 +185,8 @@ export const createSessionSlice = (set, get) => ({
                     messages: state.session.messages.map(msg => msg.id === id
                         ? {
                             ...msg,
-                            content: msg.content + bufferContent.content,
-                            thinking: (msg.thinking || '') + bufferContent.thinking,
+                            content: msg.content + (drained ? drained.content : ''),
+                            thinking: (msg.thinking || '') + (drained ? drained.thinking : ''),
                             isStreaming: false,
                         }
                         : msg),
@@ -189,22 +207,13 @@ export const createSessionSlice = (set, get) => ({
                 },
             }));
         },
-        updateToolCallInput: (messageId, toolCallId, partialJson) => {
-            set((state) => ({
-                session: {
-                    ...state.session,
-                    messages: state.session.messages.map(msg => msg.id === messageId && msg.contentBlocks
-                        ? {
-                            ...msg,
-                            contentBlocks: msg.contentBlocks.map(block => block.type === 'tool_use' && block.id === toolCallId
-                                ? { ...block, input: block.input + partialJson }
-                                : block),
-                        }
-                        : msg),
-                },
-            }));
+        updateToolCallInput: (_messageId, toolCallId, partialJson) => {
+            // Accumulate in mutable buffer only — no store update per character.
+            // setToolCallInput flushes the final value in a single set() call.
+            _toolInputBuffer.set(toolCallId, (_toolInputBuffer.get(toolCallId) ?? '') + partialJson);
         },
         setToolCallInput: (messageId, toolCallId, fullInput) => {
+            _toolInputBuffer.delete(toolCallId);
             set((state) => ({
                 session: {
                     ...state.session,
@@ -251,7 +260,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Set thinking state indicator.
          */
         setThinking: (isThinking) => {
             set((state) => ({
@@ -259,7 +268,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Set compacting indicator (context compaction in progress).
          */
         setCompacting: (isCompacting) => {
             set((state) => ({
@@ -267,7 +276,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Set the current command being processed.
          */
         setCurrentCommand: (command) => {
             set((state) => ({
@@ -275,7 +284,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Set error state.
          */
         setError: (error) => {
             set((state) => ({
@@ -283,7 +292,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Set session ID.
          */
         setSessionId: (sessionId) => {
             set((state) => ({
@@ -294,7 +303,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Restore a session with messages from persistence.
          */
         restoreSession: (sessionId, messages) => {
             set((state) => ({
@@ -308,7 +317,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Update token usage counters.
          */
         updateTokenUsage: (usage) => {
             set((state) => ({
@@ -319,7 +328,19 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Remove the last N messages from the store.
+         * Used to rollback messages added before discovering a selector result.
+         */
+        removeLastMessages: (count) => {
+            set((state) => ({
+                session: {
+                    ...state.session,
+                    messages: state.session.messages.slice(0, -count),
+                },
+            }));
+        },
+        /**
+         * Clear all messages (new session within same session ID).
          */
         clearMessages: () => {
             set((state) => ({
@@ -331,7 +352,7 @@ export const createSessionSlice = (set, get) => ({
             }));
         },
         /**
-         *
+         * Full session reset with a new session ID.
          */
         resetSession: () => {
             set((state) => ({

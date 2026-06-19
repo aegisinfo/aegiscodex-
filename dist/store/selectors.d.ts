@@ -18,30 +18,29 @@ export declare const useCurrentCommand: () => string | null;
 export declare const useTokenUsage: () => import("./types.js").TokenUsage;
 export declare const useConfig: () => {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     } | undefined;
-    timeout?: number | undefined;
-    allowedTools?: string[] | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     theme?: string | undefined;
     env?: Record<string, string> | undefined;
+    timeout?: number | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -53,23 +52,23 @@ export declare const useConfig: () => {
     } | undefined;
     permissions?: {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -79,6 +78,11 @@ export declare const useConfig: () => {
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -90,22 +94,29 @@ export declare const useConfig: () => {
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
     maxOutputTokens?: number | undefined;
     stream?: boolean | undefined;
     language?: string | undefined;
     debug?: string | boolean | undefined;
+    autoRouter?: {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    } | undefined;
+    thinking?: {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    } | undefined;
     maxTurns?: number | undefined;
     systemPrompt?: string | undefined;
     appendSystemPrompt?: string | undefined;
     initialMessage?: string | undefined;
     resumeSessionId?: string | undefined;
     forkSession?: boolean | undefined;
+    allowedTools?: string[] | undefined;
     disallowedTools?: string[] | undefined;
     mcpConfigPaths?: string[] | undefined;
     strictMcpConfig?: boolean | undefined;
@@ -117,12 +128,12 @@ export declare const useConfig: () => {
 export declare const useTheme: () => string;
 export declare const usePermissionMode: () => PermissionMode;
 export declare const useAllModels: () => {
-    apiKey?: string | undefined;
-    baseURL?: string | undefined;
     name?: string | undefined;
     id?: string | undefined;
-    model?: string | undefined;
     provider?: "openai-compatible" | "anthropic" | undefined;
+    apiKey?: string | undefined;
+    baseURL?: string | undefined;
+    model?: string | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     topP?: number | undefined;
@@ -132,12 +143,12 @@ export declare const useAllModels: () => {
  *
  */
 export declare const useCurrentModel: () => {
-    apiKey?: string | undefined;
-    baseURL?: string | undefined;
     name?: string | undefined;
     id?: string | undefined;
-    model?: string | undefined;
     provider?: "openai-compatible" | "anthropic" | undefined;
+    apiKey?: string | undefined;
+    baseURL?: string | undefined;
+    model?: string | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     topP?: number | undefined;
@@ -149,6 +160,8 @@ export declare const useActiveModal: () => import("./types.js").ActiveModal;
 export declare const useTodos: () => TodoItem[];
 export declare const useAwaitingSecondCtrlC: () => boolean;
 export declare const useShowAllThinking: () => boolean;
+export declare const useAutoRouterActiveModel: () => string | null;
+export declare const useRouterEnabled: () => boolean;
 export declare const useCurrentFocus: () => FocusId;
 export declare const usePreviousFocus: () => FocusId | null;
 export declare const useIsProcessing: () => boolean;

@@ -79,7 +79,13 @@ export const globalOptions = {
     },
     'max-turns': {
         type: 'number',
-        describe: 'Maximum conversation turns (default: 100)',
+        describe: 'Maximum conversation turns (-1 = unlimited, default: -1)',
+        group: 'AI Options:',
+    },
+    router: {
+        type: 'boolean',
+        describe: 'Start with the auto-router on — picks a model per message based on task complexity',
+        default: false,
         group: 'AI Options:',
     },
     // ========== Security Options ==========

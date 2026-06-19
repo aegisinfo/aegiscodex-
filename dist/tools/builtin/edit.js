@@ -156,10 +156,17 @@ export const editTool = createTool({
             await fs.writeFile(file_path, newContent, 'utf8');
             // 9. 计算替换数
             const replacements = replace_all ? matchCount : 1;
+            // Render as a unified-style diff: old_string lines removed, new_string lines
+            // added. The renderer (MessageRenderer's ToolUseBlock) detects +/- prefixed
+            // lines and colors them, deriving the "+N -M lines" tally from the counts.
+            const diffLines = [
+                ...old_string.split('\n').map(l => `-${l}`),
+                ...new_string.split('\n').map(l => `+${l}`),
+            ];
             return {
                 success: true,
                 llmContent: `Successfully edited ${file_path} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
-                displayContent: `${path.basename(file_path)}  ${replacements} edit${replacements > 1 ? 's' : ''}`,
+                displayContent: diffLines.join('\n'),
                 metadata: {
                     file_path,
                     replacements,

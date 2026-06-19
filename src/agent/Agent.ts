@@ -134,11 +134,14 @@ export class Agent {
 
       // 2. 创
       const defaultPermissionMode = configManager.getDefaultPermissionMode();
+      const thinkingBudget = configManager.getThinkingBudget();
       this.chatService = createChatService({
         apiKey: this.config.apiKey,
         baseURL: this.config.baseURL,
         model: this.config.model,
         permissionMode: defaultPermissionMode,
+        thinkingBudget,
+        maxOutputTokens: this.config.maxOutputTokens,
       });
 
       // Set Ollama base URL for cross-semantic memory embeddings
@@ -155,6 +158,8 @@ export class Agent {
           baseURL: this.config.baseURL,
           model: this.config.model,
           permissionMode: defaultPermissionMode,
+          thinkingBudget,
+          maxOutputTokens: this.config.maxOutputTokens,
         });
       }
 

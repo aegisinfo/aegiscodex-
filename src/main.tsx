@@ -403,7 +403,6 @@ async function main(): Promise<void> {
 
         try {
           const { render } = await import('ink');
-          const isGui = process.env.AEGIS_GUI === '1';
           render(
             <App
               apiKey={modelConfig.apiKey}
@@ -421,7 +420,9 @@ async function main(): Promise<void> {
               patchConsole: true,
               stdin: renderStdin,
               stdout: process.stdout,
-              alternateScreen: !isGui,
+              // Disabled: the alt screen buffer blocks normal mouse text selection/copy
+              // in most terminal emulators. Real Claude Code renders inline instead.
+              alternateScreen: false,
               maxFps: 30,
             },
           );

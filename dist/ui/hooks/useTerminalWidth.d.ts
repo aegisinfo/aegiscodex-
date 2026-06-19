@@ -1,21 +1,5 @@
 /**
- * useTerminalWidth - Terminal width hook with RAF debounce to prevent render storms
+ * Re-export from consolidated useTerminalSize hook for backward compatibility.
  */
-/**
- * Returns terminal width, updated with requestAnimationFrame debounce on resize
- * @returns number Terminal width in columns
- */
-export declare const useTerminalWidth: () => number;
-/**
- * useTerminalHeight - Terminal height hook with RAF debounce
- * @returns number Terminal height in rows
- */
-export declare const useTerminalHeight: () => number;
-/**
- * useTerminalSize - Combined terminal size hook
- */
-export declare const useTerminalSize: () => {
-    width: number;
-    height: number;
-};
+export { useTerminalWidth, useTerminalHeight, useTerminalSize } from './useTerminalSize.js';
 //# sourceMappingURL=useTerminalWidth.d.ts.map

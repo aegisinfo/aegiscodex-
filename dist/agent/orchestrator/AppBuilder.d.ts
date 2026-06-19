@@ -44,6 +44,12 @@ export interface AppRunOptions {
     sessionId?: string;
     /** Abort signal */
     signal?: AbortSignal;
+    /** Permission mode for tool execution */
+    permissionMode?: string;
+    /** Confirmation handler for interactive tool approval */
+    confirmationHandler?: {
+        requestConfirmation: (details: any) => Promise<any>;
+    };
 }
 export interface AppRunResult {
     /** Per-agent responses */

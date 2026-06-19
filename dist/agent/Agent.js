@@ -21,8 +21,8 @@ import { syncSessionToDrive } from '../memory/DriveSync.js';
 import { ensureOllama } from '../services/OllamaInstaller.js';
 import { TokenCounter } from '../context/TokenCounter.js';
 // ========== 常
-/** 硬性轮次上限，防止无限循环 */
-const TURN_LIMIT = 100;
+/** 轮次上限（Infinity = 无限制） */
+const TURN_LIMIT = Infinity;
 /** 意图未完成检测模式 */
 const INCOMPLETE_INTENT_PATTERNS = [
     /：\s*$/, // 中文冒号结
@@ -92,10 +92,15 @@ export class Agent {
                 this.systemPrompt = promptResult.prompt;
             }
             // 2. 创
+            const defaultPermissionMode = configManager.getDefaultPermissionMode();
+            const thinkingBudget = configManager.getThinkingBudget();
             this.chatService = createChatService({
                 apiKey: this.config.apiKey,
                 baseURL: this.config.baseURL,
                 model: this.config.model,
+                permissionMode: defaultPermissionMode,
+                thinkingBudget,
+                maxOutputTokens: this.config.maxOutputTokens,
             });
             // Set Ollama base URL for cross-semantic memory embeddings
             setOllamaBaseUrl(this.config.baseURL);
@@ -109,6 +114,9 @@ export class Agent {
                     apiKey: this.config.apiKey,
                     baseURL: this.config.baseURL,
                     model: this.config.model,
+                    permissionMode: defaultPermissionMode,
+                    thinkingBudget,
+                    maxOutputTokens: this.config.maxOutputTokens,
                 });
             }
             // 3. 初始化工具系
@@ -124,7 +132,7 @@ export class Agent {
             }
             // 5. 创建执行管道（使用 settings.json 中的权限配
             const permissionConfig = configManager.getPermissionConfig();
-            const defaultMode = configManager.getDefaultPermissionMode();
+            const defaultMode = defaultPermissionMode;
             this.executionPipeline = new ExecutionPipeline(this.toolRegistry, {
                 permissions: permissionConfig,
                 defaultMode: this.mapPermissionMode(defaultMode),
@@ -257,6 +265,7 @@ export class Agent {
             options?.onTurnStart?.({ turn: turnsCount, maxTurns });
             // 3.4 构建流式回调（onToolCallStart 在执行阶段单独触发，此处不
             const streamCallbacks = {
+                onStreamEvent: options?.onStreamEvent,
                 onContentDelta: options?.onContentDelta,
                 onThinkingDelta: options?.onThinkingDelta,
                 onToolCallDelta: options?.onToolCallDelta,

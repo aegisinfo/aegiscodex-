@@ -55,6 +55,8 @@ export const useActiveModal = () => useClawdStore((state) => state.app.activeMod
 export const useTodos = () => useClawdStore((state) => state.app.todos);
 export const useAwaitingSecondCtrlC = () => useClawdStore((state) => state.app.awaitingSecondCtrlC);
 export const useShowAllThinking = () => useClawdStore((state) => state.app.showAllThinking);
+export const useAutoRouterActiveModel = () => useClawdStore((state) => state.app.autoRouterActiveModel);
+export const useRouterEnabled = () => useClawdStore((state) => state.config.config?.autoRouter?.enabled ?? false);
 // ========== Focus 选择
 export const useCurrentFocus = () => useClawdStore((state) => state.focus.currentFocus);
 export const usePreviousFocus = () => useClawdStore((state) => state.focus.previousFocus);

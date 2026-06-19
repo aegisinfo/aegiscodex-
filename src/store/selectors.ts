@@ -109,6 +109,9 @@ export const useShowAllThinking = () =>
 export const useAutoRouterActiveModel = () =>
   useClawdStore((state) => state.app.autoRouterActiveModel);
 
+export const useRouterEnabled = () =>
+  useClawdStore((state) => state.config.config?.autoRouter?.enabled ?? false);
+
 // ========== Focus 选择
 
 export const useCurrentFocus = () =>

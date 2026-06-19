@@ -47,7 +47,7 @@ export declare class CouncilAgent {
     /**
      * Register a council member with a specific role and vote weight
      */
-    addMember(name: string, role: string, systemPrompt: string, weight: number | undefined, config: AgentConfig): void;
+    addMember(name: string, role: string, systemPrompt: string, weight: number | undefined, config: AgentConfig, tools?: string[]): void;
     /**
      * Remove a council member
      */
@@ -63,7 +63,7 @@ export declare class CouncilAgent {
     /**
      * Convene the council to deliberate on a question
      */
-    deliberate(question: string): Promise<DeliberationResult>;
+    deliberate(question: string, sessionId?: string): Promise<DeliberationResult>;
     private evaluateDecision;
     private buildSummary;
 }

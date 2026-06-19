@@ -13,6 +13,7 @@ import type {
 } from '../agent/types.js';
 import { OpenAIEventAdapter } from './streaming/OpenAIEventAdapter.js';
 import { ClaudeCliChatService } from './ClaudeCliChatService.js';
+import { AnthropicChatService } from './AnthropicChatService.js';
 
 // For local Ollama models, only include tools when the query looks like a coding task.
 // This avoids sending 350+ tokens of tool schemas on every conversational message,
@@ -30,6 +31,9 @@ export interface ChatServiceConfig {
   timeout?: number;
   /** aegiscode's own permission mode; only consulted for OAuth (claude CLI) transport. */
   permissionMode?: string;
+  /** Extended-thinking budget tier — only honored on the native Anthropic transport. */
+  thinkingBudget?: 'off' | 'low' | 'medium' | 'high' | 'max';
+  maxOutputTokens?: number;
 }
 
 export class OpenAIChatService implements IChatService {
@@ -334,6 +338,11 @@ export function createChatService(config: ChatServiceConfig): IChatService {
   // from anything else. Same model selection, different transport.
   if (config.apiKey?.startsWith('sk-ant-oat')) {
     return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode });
+  }
+  // Native Anthropic transport — required for cache_control, thinking, and
+  // citations, none of which the OpenAI-compatible shim below can carry.
+  if (config.baseURL?.includes('anthropic.com')) {
+    return new AnthropicChatService(config);
   }
   return new OpenAIChatService(config);
 }

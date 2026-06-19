@@ -5,6 +5,7 @@
  *
  */
 import type { ConfirmationHandler, ConfirmationDetails, ConfirmationResponse } from '../../tools/execution/types.js';
+export type { ConfirmationHandler, ConfirmationDetails, ConfirmationResponse };
 /**
  *
  */
@@ -29,5 +30,4 @@ interface UseConfirmationResult {
  *
  */
 export declare const useConfirmation: () => UseConfirmationResult;
-export {};
 //# sourceMappingURL=useConfirmation.d.ts.map

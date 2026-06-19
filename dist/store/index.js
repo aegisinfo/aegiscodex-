@@ -14,7 +14,7 @@ useSessionId, useMessages, useIsThinking, useIsCompacting, useSessionError, useC
 // Config
 useConfig, useTheme, usePermissionMode, useAllModels, useCurrentModel, 
 // App
-useInitializationStatus, useInitializationError, useActiveModal, useTodos, useAwaitingSecondCtrlC, useShowAllThinking, 
+useInitializationStatus, useInitializationError, useActiveModal, useTodos, useAwaitingSecondCtrlC, useShowAllThinking, useAutoRouterActiveModel, useRouterEnabled, 
 // Focus
 useCurrentFocus, usePreviousFocus, 
 // Command

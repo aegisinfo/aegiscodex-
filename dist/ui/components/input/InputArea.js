@@ -7,28 +7,26 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  */
 import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
 import { Box, Text, useInput } from 'ink';
-// Ink-nib glyph that pulses between filled/hollow when AI is working
-const InkNib = memo(({ isProcessing, color, idleColor }) => {
-    const FRAMES = ['□', '▪', '□', '▪'];
-    const [frame, setFrame] = useState(0);
-    useEffect(() => {
-        if (!isProcessing) {
-            setFrame(0);
-            return;
-        }
-        const id = setInterval(() => setFrame(f => (f + 1) % FRAMES.length), 300);
-        return () => clearInterval(id);
-    }, [isProcessing]);
-    return (_jsx(Text, { color: isProcessing ? color : idleColor, bold: true, children: isProcessing ? FRAMES[frame] : '□' }));
+const PromptGlyph = memo(({ isProcessing, lockedIn, glowPhase, color, idleColor }) => {
+    const displayColor = (isProcessing && lockedIn)
+        ? ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]
+        : idleColor;
+    return _jsx(Text, { color: displayColor, bold: true, children: "\u25A1" });
 });
-InkNib.displayName = 'InkNib';
-import Spinner from 'ink-spinner';
+PromptGlyph.displayName = 'PromptGlyph';
 import { CustomTextInput } from './CustomTextInput.js';
 import { CommandSuggestions } from './CommandSuggestions.js';
 import { themeManager } from '../../themes/index.js';
 import { FocusId, focusManager } from '../../focus/index.js';
-import { getState, useIsThinking, usePendingCommands } from '../../../store/index.js';
+import { getState, useIsThinking, usePendingCommands, useCurrentCommand } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
+import { getStreamingContent } from '../../../store/streaming-buffer.js';
+// Electric blue color ramp — cycles fast to simulate voltage/energy
+const ELECTRIC_COLORS = [
+    '#0055FF', '#0077FF', '#0099FF', '#00AAFF',
+    '#00CCFF', '#00EEFF', '#00FFFF', '#00EEFF',
+    '#00CCFF', '#00AAFF', '#0099FF', '#0077FF',
+];
 /**
  *
  *
@@ -76,14 +74,22 @@ export const InputArea = React.memo(({ onSubmit, }) => {
     // 自己订阅需要的状
     const isProcessing = useIsThinking();
     const pendingCommands = usePendingCommands();
-    // Elapsed-time counter — increments every second while processing.
-    // Only displayed after 2s to avoid flicker on fast cloud responses.
+    const currentCommand = useCurrentCommand();
+    const [pasteNotification, setPasteNotification] = useState(null);
+    const pasteNotifRef = useRef(null);
     const [thinkingSeconds, setThinkingSeconds] = useState(0);
+    const [streamingTokens, setStreamingTokens] = useState(0);
     const thinkingTimerRef = useRef(null);
     useEffect(() => {
         if (isProcessing) {
             setThinkingSeconds(0);
-            thinkingTimerRef.current = setInterval(() => setThinkingSeconds(s => s + 1), 1000);
+            setStreamingTokens(0);
+            thinkingTimerRef.current = setInterval(() => {
+                setThinkingSeconds(s => s + 1);
+                const buf = getStreamingContent();
+                if (buf)
+                    setStreamingTokens(Math.ceil(buf.content.length / 4));
+            }, 1000);
         }
         else {
             if (thinkingTimerRef.current) {
@@ -91,18 +97,19 @@ export const InputArea = React.memo(({ onSubmit, }) => {
                 thinkingTimerRef.current = null;
             }
             setThinkingSeconds(0);
+            setStreamingTokens(0);
         }
         return () => { if (thinkingTimerRef.current) {
             clearInterval(thinkingTimerRef.current);
             thinkingTimerRef.current = null;
         } };
     }, [isProcessing]);
-    // hasStreamingMessage via store subscription to avoid re-render on every delta
     const [hasStreamingMessage, setHasStreamingMessage] = useState(() => getState().session.messages.some(m => m.isStreaming));
     useEffect(() => {
         let prev = hasStreamingMessage;
         const unsubscribe = vanillaStore.subscribe((state) => {
-            const newVal = state.session.messages.some(m => m.isStreaming);
+            const msgs = state.session.messages;
+            const newVal = msgs[msgs.length - 1]?.isStreaming ?? false;
             if (newVal !== prev) {
                 prev = newVal;
                 setHasStreamingMessage(newVal);
@@ -110,6 +117,58 @@ export const InputArea = React.memo(({ onSubmit, }) => {
         });
         return unsubscribe;
     }, []);
+    // Electric glow animation — 200ms ticks, only active while processing
+    const [glowPhase, setGlowPhase] = useState(0);
+    const glowTimerRef = useRef(null);
+    useEffect(() => {
+        if (isProcessing) {
+            setGlowPhase(0);
+            glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
+        }
+        else {
+            if (glowTimerRef.current) {
+                clearInterval(glowTimerRef.current);
+                glowTimerRef.current = null;
+            }
+            setGlowPhase(0);
+        }
+        return () => { if (glowTimerRef.current) {
+            clearInterval(glowTimerRef.current);
+            glowTimerRef.current = null;
+        } };
+    }, [isProcessing]);
+    // Cursor blink at idle (530 ms on/off), piggybacks on glowPhase during generation
+    const [idleBlink, setIdleBlink] = useState(true);
+    const idleBlinkRef = useRef(null);
+    useEffect(() => {
+        if (!isProcessing) {
+            setIdleBlink(true);
+            idleBlinkRef.current = setInterval(() => setIdleBlink(v => !v), 530);
+        }
+        else {
+            if (idleBlinkRef.current) {
+                clearInterval(idleBlinkRef.current);
+                idleBlinkRef.current = null;
+            }
+            setIdleBlink(true);
+        }
+        return () => { if (idleBlinkRef.current) {
+            clearInterval(idleBlinkRef.current);
+            idleBlinkRef.current = null;
+        } };
+    }, [isProcessing]);
+    const cursorOn = isProcessing ? Math.floor(glowPhase / 5) % 2 === 0 : idleBlink;
+    const thinkingLabel = useMemo(() => {
+        if (!isProcessing)
+            return null;
+        const cmd = currentCommand?.slice(0, 80);
+        const cmdStr = cmd ? ` · locked: ${cmd}` : '';
+        const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
+        const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
+        if (hasStreamingMessage)
+            return `generating${tokens}${elapsed}${cmdStr}`;
+        return `thinking${elapsed}${cmdStr}`;
+    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens, currentCommand]);
     // 计
     const placeholder = useMemo(() => {
         if (isProcessing) {
@@ -117,7 +176,7 @@ export const InputArea = React.memo(({ onSubmit, }) => {
                 ? `Queued: ${pendingCommands.length} command(s). Type to add more...`
                 : 'Processing... Type to queue next command';
         }
-        return 'Type a message... (Ctrl+C to exit)';
+        return 'Type a message...';
     }, [isProcessing, pendingCommands.length]);
     // 自管理的输入状
     const [input, setInput] = useState('');
@@ -131,7 +190,7 @@ export const InputArea = React.memo(({ onSubmit, }) => {
     const handleChange = useCallback((newValue) => {
         inputRef.current.value = newValue;
         setInput(newValue);
-        setCursorPosition(prev => Math.min(prev, newValue.length));
+        // cursor is always set immediately after via onChangeCursorPosition — no guard needed
     }, []);
     // 设置光标位
     const handleChangeCursorPosition = useCallback((pos) => {
@@ -139,8 +198,8 @@ export const InputArea = React.memo(({ onSubmit, }) => {
         inputRef.current.cursorPosition = newPos;
         setCursorPosition(newPos);
     }, []);
-    // 计算是否显示命令建议
     const showSuggestions = input.startsWith('/') && input.length > 0 && !isProcessing;
+    const showPromptSuggestions = false; // Suggestions disabled
     // 选择建议回
     const handleSelectSuggestion = useCallback((newValue) => {
         handleChange(newValue);
@@ -152,15 +211,18 @@ export const InputArea = React.memo(({ onSubmit, }) => {
         setCursorPosition(0);
         inputRef.current = { value: '', cursorPosition: 0 };
     }, []);
-    // 大段文本粘贴处
+    // Paste — mimic Claude Code: show paste size notification
+    // Trimming is handled in CustomTextInput.tsx's handlePasteStable
     const handlePaste = useCallback((text) => {
-        const lineCount = text.split('\n').length;
-        const charCount = text.length;
-        if (charCount > 500 || lineCount > 10) {
-            const preview = text.slice(0, 30).replace(/\n/g, ' ');
-            return { prompt: `[Pasted: ${charCount} chars, ${lineCount} lines] ${preview}...` };
+        const lines = text.split('\n').length;
+        const chars = text.length;
+        if (lines > 1 || chars > 200) {
+            const msg = lines > 1 ? `pasted ${lines} lines (${chars} chars)` : `pasted ${chars} chars`;
+            setPasteNotification(msg);
+            if (pasteNotifRef.current)
+                clearTimeout(pasteNotifRef.current);
+            pasteNotifRef.current = setTimeout(() => setPasteNotification(null), 2000);
         }
-        return {};
     }, []);
     // 提交处
     const handleSubmit = useCallback((_value) => {
@@ -197,18 +259,7 @@ export const InputArea = React.memo(({ onSubmit, }) => {
         // Tab is handled by CommandSuggestions; just swallow it here
         // to prevent default browser-like behavior
     });
-    // 计算 thinking 状态文
-    const thinkingLabel = useMemo(() => {
-        if (!isProcessing)
-            return null;
-        const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
-        if (hasStreamingMessage)
-            return `generating${elapsed}`;
-        return `thinking${elapsed}`;
-    }, [isProcessing, hasStreamingMessage, thinkingSeconds]);
-    // Rubik's cube for /multi (non-streaming thinking), dots for streaming
-    const isMultiMode = isProcessing && !hasStreamingMessage;
-    return (_jsxs(Box, { flexDirection: "column", children: [showSuggestions && (_jsx(CommandSuggestions, { input: input, cursorPosition: cursorPosition, onSelectSuggestion: handleSelectSuggestion, visible: showSuggestions })), thinkingLabel && (_jsxs(Box, { paddingX: 1, marginBottom: 0, children: [_jsx(Text, { color: theme.colors.info, children: _jsx(Spinner, { type: "dots" }) }), _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [' ', thinkingLabel] }), pendingCommands.length > 0 && (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" \u00B7 queued: ", pendingCommands.length] }))] })), _jsxs(Box, { flexDirection: "row", paddingX: 1, paddingY: 0, borderStyle: "single", borderColor: isProcessing ? theme.colors.warning : theme.colors.border.light, children: [_jsx(Box, { marginRight: 1, children: _jsx(InkNib, { isProcessing: isProcessing, color: theme.colors.warning, idleColor: theme.colors.primary }) }), _jsx(Box, { flexGrow: 1, children: _jsx(CustomTextInput, { value: input, cursorPosition: cursorPosition, onChange: handleChange, onChangeCursorPosition: handleChangeCursorPosition, onSubmit: handleSubmit, onPaste: handlePaste, onArrowUp: handleArrowUpInternal, onArrowDown: handleArrowDownInternal, placeholder: placeholder, focusId: FocusId.MAIN_INPUT, disabled: false }) })] })] }));
+    return (_jsxs(Box, { flexDirection: "column", children: [pasteNotification && (_jsx(Box, { paddingX: 0, marginBottom: 0, children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: pasteNotification }) })), _jsx(Box, { paddingX: 0, marginBottom: 0, children: thinkingLabel ? (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [thinkingLabel, pendingCommands.length > 0 && _jsxs(Text, { dimColor: true, children: [" \u00B7 queued: ", pendingCommands.length] })] })) : null }), _jsxs(Box, { flexDirection: "row", paddingX: 0, paddingY: 0, children: [_jsx(Box, { marginRight: 1, children: _jsx(PromptGlyph, { isProcessing: isProcessing, lockedIn: currentCommand !== null, glowPhase: glowPhase, color: theme.colors.primary, idleColor: theme.colors.primary }) }), _jsx(Box, { flexGrow: 1, children: _jsx(CustomTextInput, { value: input, cursorPosition: cursorPosition, onChange: handleChange, onChangeCursorPosition: handleChangeCursorPosition, onSubmit: handleSubmit, onPaste: handlePaste, onArrowUp: handleArrowUpInternal, onArrowDown: handleArrowDownInternal, placeholder: placeholder, focusId: FocusId.MAIN_INPUT, disabled: false, cursorOn: cursorOn }) })] }), showSuggestions && (_jsx(CommandSuggestions, { input: input, cursorPosition: cursorPosition, onSelectSuggestion: handleSelectSuggestion, visible: showSuggestions }))] }));
 }, 
 // 自定义比较函数：始终返回 true，因为回调通过 ref 访
 // 这样 props 变化不会触发重新渲

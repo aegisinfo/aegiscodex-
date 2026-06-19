@@ -120,7 +120,7 @@ export class ConfigManager {
                     continue;
                 const k = line.slice(0, eq).trim();
                 const v = line.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-                if (k && v && !process.env[k])
+                if (k && v && !v.startsWith('YOUR_') && !process.env[k])
                     process.env[k] = v;
             }
         }
@@ -135,7 +135,16 @@ export class ConfigManager {
         const allModels = this.config.models || [];
         for (const m of allModels) {
             const bu = m.baseURL || m.baseUrl || '';
-            if (bu.includes('anthropic') && process.env.ANTHROPIC_API_KEY) {
+            // Claude Code Pro/Max subscription OAuth token (from `claude setup-token`,
+            // or `aegis login --claude-pro`) works as a drop-in for ANTHROPIC_API_KEY
+            // against the same model — it does not change which model is selected.
+            // It takes priority over ANTHROPIC_API_KEY: logging in with --claude-pro
+            // is a deliberate choice and shouldn't be shadowed by a stale/out-of-credit
+            // API key still sitting in the environment.
+            if (bu.includes('anthropic') && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+                m.apiKey = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+            }
+            else if (bu.includes('anthropic') && process.env.ANTHROPIC_API_KEY) {
                 m.apiKey = process.env.ANTHROPIC_API_KEY;
             }
             else if (bu.includes('deepseek') && process.env.DEEPSEEK_API_KEY) {
@@ -179,10 +188,15 @@ export class ConfigManager {
                 else if (!defaultConfig.model)
                     defaultConfig.model = 'gpt-4o';
             }
+            else if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+                defaultConfig.apiKey = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+                defaultConfig.baseURL = 'https://api.anthropic.com/v1';
+                defaultConfig.model = defaultConfig.model || 'claude-sonnet-4-6';
+            }
             else if (process.env.ANTHROPIC_API_KEY) {
                 defaultConfig.apiKey = process.env.ANTHROPIC_API_KEY;
                 defaultConfig.baseURL = 'https://api.anthropic.com/v1';
-                defaultConfig.model = 'claude-sonnet-4-6';
+                defaultConfig.model = defaultConfig.model || 'claude-sonnet-4-6';
             }
         }
     }
@@ -352,6 +366,13 @@ export class ConfigManager {
      */
     isMcpEnabled() {
         return this.config.mcpEnabled !== false;
+    }
+    /**
+     * Extended-thinking budget tier — drives `thinking`/`output_config.effort`
+     * on the native Anthropic request path. Defaults to 'off'.
+     */
+    getThinkingBudget() {
+        return this.config.thinking?.budget || 'off';
     }
     /**
      *

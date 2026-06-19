@@ -1,0 +1,1 @@
+{"version":3,"file":"PromptSuggestions.d.ts","sourceRoot":"","sources":["../../../../src/ui/components/input/PromptSuggestions.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAc1B,UAAU,sBAAsB;IAC9B,QAAQ,EAAE,CAAC,IAAI,EAAE,MAAM,KAAK,IAAI,CAAC;IACjC,OAAO,EAAE,OAAO,CAAC;CAClB;AAED,eAAO,MAAM,iBAAiB,EAAE,KAAK,CAAC,EAAE,CAAC,sBAAsB,CA4C9D,CAAC;AAEF,eAAe,iBAAiB,CAAC"}

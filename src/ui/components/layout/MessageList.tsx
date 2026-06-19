@@ -2,7 +2,7 @@
  * MessageList - renders messages with RAF-throttled streaming content.
  *
  * Owns scroll state internally — no split state with parent.
- * Handles PgUp/PgDn/Ctrl+Up/Down/Home/End via useInput.
+ * Handles PgUp/PgDn/Ctrl+W/Ctrl+S/Ctrl+Up/Down/Home/End via useInput.
  * No auto-scroll; user controls position fully via keyboard.
  *
  * Why the RAF loop?
@@ -17,7 +17,7 @@ import { Box, Text, useInput } from 'ink';
 import { MessageRenderer } from '../markdown/MessageRenderer.js';
 import { getState } from '../../../store/index.js';
 import { vanillaStore } from '../../../store/vanilla.js';
-import { getStreamingContent, isActiveStreamingMessage, getStreamingLatencyMs } from '../../../store/streaming-buffer.js';
+import { getStreamingContent, isActiveStreamingMessage, getStreamingLatencyMs, getBufferedToolCalls } from '../../../store/streaming-buffer.js';
 import { themeManager } from '../../themes/index.js';
 import type { ContentBlock } from '../../../store/types.js';
 
@@ -93,6 +93,8 @@ interface MessageListProps {
   onScrolledUpChange?: (isScrolledUp: boolean) => void;
   /** Called with render latency (ms) during streaming — for status bar display */
   onRenderLatency?: (ms: number) => void;
+  /** Number of queued commands shown below the message list (adjusts viewport budget) */
+  pendingCommandCount?: number;
 }
 
 const RAF_INTERVAL_MS = 30;   // ~33fps redraws
@@ -106,6 +108,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   terminalHeight,
   onScrolledUpChange,
   onRenderLatency,
+  pendingCommandCount = 0,
 }) => {
   // ==================== Internal Scroll State ====================
   const [messages, setMessages] = useState(() => getState().session.messages);
@@ -263,20 +266,31 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
   }
 
   useInput((_input, key) => {
+    // Page Up — also handle Ctrl+W since terminals often intercept
+    // PageUp/PageDown for their own scrollback buffer.
+    if (key.pageUp || (key.ctrl && _input === '\x17')) {
+      scrollUpBy(viewportLines);
+      return;
+    }
+    if (key.pageDown || (key.ctrl && _input === '\x13')) {
+      scrollDownBy(viewportLines);
+      return;
+    }
+    // Half-page scroll (vim Ctrl+U / Ctrl+D)
+    if (key.ctrl && _input === '\x15') {
+      scrollUpBy(Math.max(1, Math.floor(viewportLines / 2)));
+      return;
+    }
+    if (key.ctrl && _input === '\x04') {
+      scrollDownBy(Math.max(1, Math.floor(viewportLines / 2)));
+      return;
+    }
     if (key.upArrow && key.ctrl) {
       scrollUpBy(1);
       return;
     }
     if (key.downArrow && key.ctrl) {
       scrollDownBy(1);
-      return;
-    }
-    if (key.pageUp) {
-      scrollUpBy(viewportLines);
-      return;
-    }
-    if (key.pageDown) {
-      scrollDownBy(viewportLines);
       return;
     }
     if (key.home) {
@@ -474,19 +488,60 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
       ))}
 
       {/* Streaming message */}
-      {streamingMsg && (
-        <MessageRenderer
-          key={streamingMsg.id}
-          content={buffer ? streamingMsg.content + buffer.content : streamingMsg.content}
-          role={streamingMsg.role}
-          terminalWidth={terminalWidth}
-          showPrefix={true}
-          thinking={buffer ? (streamingMsg.thinking || '') + buffer.thinking : streamingMsg.thinking}
-          isStreaming={true}
-          showAllThinking={showAllThinking}
-          contentBlocks={streamingMsg.contentBlocks}
-        />
-      )}
+      {streamingMsg && (() => {
+        // Merge content from store + buffer into a single render surface.
+        // During streaming, text/thinking live in the mutable buffer as raw strings
+        // but the store's contentBlocks array doesn't get text/thinking blocks in
+        // real-time (only tool_use blocks are added via addContentBlock).
+        //
+        // To give ContentBlockRenderer the full picture, we:
+        // 1. Keep store tool_use/tool_result blocks (with buffer-merged tool args)
+        // 2. Synthesize ONE text block from the entire combined text content
+        // 3. Synthesize ONE thinking block from the entire combined thinking
+        const combinedContent = buffer ? streamingMsg.content + buffer.content : streamingMsg.content;
+        const combinedThinking = buffer ? (streamingMsg.thinking || '') + buffer.thinking : streamingMsg.thinking;
+        const storeBlocks = streamingMsg.contentBlocks || [];
+        const bufferToolCalls = buffer ? getBufferedToolCalls() : [];
+
+        // Merge buffer tool call arguments into store tool_use blocks
+        // (buffer accumulates args via input_json_delta, store block starts as '')
+        const enhancedBlocks = storeBlocks.map(b => {
+          if (b.type === 'tool_use') {
+            const buffered = bufferToolCalls.find(tc => tc.id === b.id);
+            if (buffered && buffered.arguments) {
+              return { ...b, input: buffered.arguments };
+            }
+          }
+          return b;
+        });
+
+        // Filter out store text/thinking blocks — replace with combined versions
+        const nonTextBlocks = enhancedBlocks.filter(b => b.type !== 'text' && b.type !== 'thinking');
+        const mergedBlocks: ContentBlock[] = [];
+
+        // Natural block order: thinking → text → tool_use → tool_result
+        if (combinedThinking) {
+          mergedBlocks.push({ type: 'thinking', thinking: combinedThinking });
+        }
+        if (combinedContent) {
+          mergedBlocks.push({ type: 'text', text: combinedContent });
+        }
+        mergedBlocks.push(...nonTextBlocks);
+
+        return (
+          <MessageRenderer
+            key={streamingMsg.id}
+            content={combinedContent}
+            role={streamingMsg.role}
+            terminalWidth={terminalWidth}
+            showPrefix={true}
+            thinking={combinedThinking}
+            isStreaming={true}
+            showAllThinking={showAllThinking}
+            contentBlocks={mergedBlocks}
+          />
+        );
+      })()}
 
       {/* Last completed message pinned at bottom when scrolled up — divider makes
           clear this jumps past whatever's between the window and the latest

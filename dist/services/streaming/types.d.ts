@@ -34,6 +34,14 @@ export interface ContentBlockDeltaEvent {
     } | {
         type: 'input_json_delta';
         partial_json: string;
+    } | {
+        type: 'citations_delta';
+        citation: {
+            type: string;
+            cited_text: string;
+            document_index: number;
+            document_title?: string | null;
+        };
     };
 }
 export interface ContentBlockStopEvent {

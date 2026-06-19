@@ -298,9 +298,12 @@ export class AgentMemoryBus {
     entryToMessage(entry) {
         try {
             const content = entry.content;
-            // Parse: [AgentBus:channel] [sourceAgent] → targetAgent?: content
+            // Two stored formats:
+            //   normal:   [AgentBus:channel] [sourceAgent] → targetAgent?: body
+            //   decision: [AgentBus:channel] [DECISION] sourceAgent: body
             const channelMatch = content.match(/^\[AgentBus:(\w+)\]/);
-            const sourceMatch = content.match(/\] \[(\w+)\]/);
+            const decisionMatch = content.match(/\[DECISION\] (\w+):/);
+            const sourceMatch = decisionMatch ?? content.match(/\] \[(\w+)\]/);
             const targetMatch = content.match(/\] → (\w+):/);
             const contentStart = content.indexOf(': ', content.lastIndexOf(']'));
             if (!channelMatch || !sourceMatch)

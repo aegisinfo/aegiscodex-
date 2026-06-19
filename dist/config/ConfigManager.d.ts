@@ -84,6 +84,11 @@ export declare class ConfigManager {
      */
     isMcpEnabled(): boolean;
     /**
+     * Extended-thinking budget tier — drives `thinking`/`output_config.effort`
+     * on the native Anthropic request path. Defaults to 'off'.
+     */
+    getThinkingBudget(): 'off' | 'low' | 'medium' | 'high' | 'max';
+    /**
      *
      */
     createDefaultConfig(): Promise<string>;

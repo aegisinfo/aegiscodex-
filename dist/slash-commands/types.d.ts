@@ -39,6 +39,20 @@ export interface SlashCommandContext {
     }) => void;
     /** 隐藏选择器的回调 */
     hideSelector?: () => void;
+    /** 流式内容回调（增量文本） */
+    onContentDelta?: (delta: string) => void;
+    /** 流式思考回调 */
+    onThinkingDelta?: (delta: string) => void;
+    /** 工具调用开始回调 */
+    onToolCallStart?: (toolCall: {
+        id: string;
+        name: string;
+        input: string;
+    }) => void;
+    /** 确认处理器（供管道交互式批准工具调用） */
+    confirmationHandler?: {
+        requestConfirmation: (details: any) => Promise<any>;
+    };
 }
 /**
  * Slash 命令结果

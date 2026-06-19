@@ -1,8 +1,10 @@
 /**
  * Built-in slash commands
  */
+import { buildCommand } from './build.js';
+import { cloneCommand } from './clone.js';
 import { sessionActions, getState } from '../store/index.js';
-import { OrchestratorAgent, CouncilAgent, requireModelConfig, createBuiltinApps, runApp, getApp, getRegisteredApps, AppBuilder, } from '../agent/orchestrator/index.js';
+import { OrchestratorAgent, CouncilAgent, requireModelConfig, buildSourceContext, createBuiltinApps, runApp, getApp, getRegisteredApps, AppBuilder, } from '../agent/orchestrator/index.js';
 import { getOllamaModels, isLocalOllamaUrl } from '../services/OllamaInstaller.js';
 // ─── Auto-register AppBuilder apps ───
 const BUILTIN_APPS = createBuiltinApps();
@@ -315,8 +317,11 @@ export const modelCommand = {
         if (trimmedArgs && subcommand !== 'add' && subcommand !== 'remove' && subcommand !== 'list') {
             const targetModel = models.find(m => m.id === trimmedArgs || m.model === trimmedArgs || m.name === trimmedArgs);
             if (targetModel) {
-                const { configActions } = await import('../store/index.js');
+                const { configActions, appActions } = await import('../store/index.js');
                 configActions().updateConfig({ currentModelId: targetModel.id });
+                // A manual pick wins over the auto-router for the rest of the session
+                appActions().setManualModelOverride(true);
+                appActions().setAutoRouterActiveModel(null);
                 try {
                     const fs = await import('fs');
                     const path = await import('path');
@@ -345,15 +350,15 @@ export const modelCommand = {
             return { success: false, type: 'error', content: errorContent };
         }
         // ── no args — interactive selector ──
-        if (models.length === 0) {
-            const modelInfo = defaultModel?.model || currentModelId || 'unknown';
-            return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
-        }
-        // Fetch Ollama runtime info for any locally-configured models (non-blocking on failure)
+        const OLLAMA_DEFAULT = 'http://localhost:11434/v1';
+        // Always scan local Ollama (even if no Ollama models are configured yet)
         const ollamaInfoByName = new Map();
-        const ollamaBaseURLs = [...new Set(models
-                .filter((m) => isLocalOllamaUrl(m.baseURL || m.baseUrl))
-                .map((m) => m.baseURL || m.baseUrl))];
+        const ollamaBaseURLs = [...new Set([
+                OLLAMA_DEFAULT,
+                ...models
+                    .filter((m) => isLocalOllamaUrl(m.baseURL || m.baseUrl))
+                    .map((m) => m.baseURL || m.baseUrl),
+            ])];
         await Promise.all(ollamaBaseURLs.map(async (url) => {
             const infos = await getOllamaModels(url).catch(() => []);
             for (const info of infos) {
@@ -361,37 +366,196 @@ export const modelCommand = {
                 ollamaInfoByName.set(info.name.split(':')[0], info);
             }
         }));
+        // Build configured model entries
+        const configuredIds = new Set(models.map((m) => m.model || m.id));
+        const configuredOptions = models.map((m) => {
+            const modelName = m.model || m.id;
+            const ollamaInfo = ollamaInfoByName.get(modelName) ?? ollamaInfoByName.get(modelName.split(':')[0]);
+            let description;
+            if (ollamaInfo) {
+                const p = [];
+                p.push(ollamaInfo.isLoaded ? '● loaded' : '○ cold');
+                if (ollamaInfo.sizeGB !== undefined)
+                    p.push(`${ollamaInfo.sizeGB.toFixed(1)} GB`);
+                if (ollamaInfo.supportsTools)
+                    p.push('[tools]');
+                description = p.join(' · ');
+            }
+            else {
+                description = m.model || m.baseURL || '';
+            }
+            return {
+                value: m.id,
+                label: m.label || m.name || m.model || m.id,
+                description,
+                isCurrent: m.id === currentModelId,
+            };
+        });
+        // Auto-discovered local Ollama models not yet in config
+        const discoveredOptions = [...ollamaInfoByName.values()]
+            .filter(info => !configuredIds.has(info.name) && !configuredIds.has(info.name.split(':')[0]))
+            .filter((info, idx, arr) => arr.findIndex(x => x.name === info.name) === idx)
+            .map(info => {
+            const p = ['○ ollama · not saved'];
+            if (info.sizeGB !== undefined)
+                p.push(`${info.sizeGB.toFixed(1)} GB`);
+            if (info.supportsTools)
+                p.push('[tools]');
+            return {
+                value: `__ollama__${info.name}`,
+                label: info.name,
+                description: p.join(' · '),
+                isCurrent: false,
+            };
+        });
+        const allOptions = [...configuredOptions, ...discoveredOptions];
+        if (allOptions.length === 0) {
+            const modelInfo = defaultModel?.model || currentModelId || 'unknown';
+            return { success: true, type: 'info', content: `## model\n\ncurrent: \`${modelInfo}\`\n\nno models configured. use /model add <id> <name> <model> <baseURL> <apiKey>` };
+        }
         return {
             success: true,
             type: 'selector',
             selector: {
                 title: 'Select model',
-                options: models.map((m) => {
-                    const modelName = m.model || m.id;
-                    const ollamaInfo = ollamaInfoByName.get(modelName) ?? ollamaInfoByName.get(modelName.split(':')[0]);
-                    let description;
-                    if (ollamaInfo) {
-                        const parts = [];
-                        parts.push(ollamaInfo.isLoaded ? '● loaded' : '○ cold');
-                        if (ollamaInfo.sizeGB !== undefined)
-                            parts.push(`${ollamaInfo.sizeGB.toFixed(1)} GB`);
-                        if (ollamaInfo.supportsTools)
-                            parts.push('[tools]');
-                        description = parts.join(' · ');
-                    }
-                    else {
-                        description = m.model || m.baseURL || '';
-                    }
-                    return {
-                        value: m.id,
-                        label: m.label || m.name || m.model || m.id,
-                        description,
-                        isCurrent: m.id === currentModelId,
-                    };
-                }),
+                options: allOptions,
                 handler: 'model',
             },
         };
+    },
+};
+/**
+ * /router - 自动路由：按任务复杂度自动选择模
+ */
+export const routerCommand = {
+    name: 'router',
+    description: 'Auto-pick a model per message based on task complexity',
+    category: 'config',
+    usage: '/router [on|off|set <simple|medium|complex> <modelId>|stats]',
+    examples: ['/router', '/router on', '/router off', '/router set simple deepseek-chat', '/router stats'],
+    fullDescription: 'Classifies each message as simple/medium/complex (cheap heuristics, no extra LLM call) ' +
+        'and picks the cheapest configured model that fits, unless /model has been used this session. ' +
+        'When no tier is set explicitly, learns from outcomes (a model that keeps getting aborted for a ' +
+        'tier loses ground to the next cheapest one over time) — see /router stats for the learned data.',
+    async handler(args) {
+        const { configActions, appActions, getState } = await import('../store/index.js');
+        const state = getState();
+        const config = state.config.config;
+        const autoRouter = config?.autoRouter || { enabled: false, tiers: {} };
+        const models = config?.models || [];
+        const persist = async (next) => {
+            configActions().updateConfig({ autoRouter: next });
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                const os = await import('os');
+                const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+                const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+                cfg.autoRouter = next;
+                fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            }
+            catch { /* non-fatal */ }
+        };
+        const parts = args.trim().split(/\s+/).filter(Boolean);
+        const subcommand = parts[0]?.toLowerCase();
+        if (subcommand === 'on') {
+            await persist({ ...autoRouter, enabled: true });
+            appActions().setManualModelOverride(false);
+            return { success: true, type: 'success', message: 'auto-router: on' };
+        }
+        if (subcommand === 'off') {
+            await persist({ ...autoRouter, enabled: false });
+            appActions().setAutoRouterActiveModel(null);
+            return { success: true, type: 'success', message: 'auto-router: off' };
+        }
+        if (subcommand === 'set') {
+            const tier = parts[1]?.toLowerCase();
+            const modelId = parts[2];
+            if (!tier || !['simple', 'medium', 'complex'].includes(tier) || !modelId) {
+                return {
+                    success: false,
+                    type: 'error',
+                    content: 'usage: /router set <simple|medium|complex> <modelId>',
+                };
+            }
+            if (!models.find(m => m.id === modelId)) {
+                return { success: false, type: 'error', content: `unknown model id: \`${modelId}\` — see /model list` };
+            }
+            await persist({ ...autoRouter, tiers: { ...autoRouter.tiers, [tier]: modelId } });
+            return { success: true, type: 'success', message: `auto-router: ${tier} -> ${modelId}` };
+        }
+        if (subcommand === 'stats') {
+            const { getRouterStats } = await import('../agent/routerStats.js');
+            const stats = getRouterStats();
+            const tierNames = ['simple', 'medium', 'complex'];
+            const lines = ['learned outcomes (success / aborted-or-errored), per tier:'];
+            for (const tier of tierNames) {
+                const tierStats = stats[tier];
+                if (!tierStats || Object.keys(tierStats).length === 0) {
+                    lines.push(`  ${tier.padEnd(8)} no data yet`);
+                    continue;
+                }
+                lines.push(`  ${tier}:`);
+                for (const [modelId, s] of Object.entries(tierStats)) {
+                    const total = s.success + s.failure;
+                    const rate = total > 0 ? Math.round((s.success / total) * 100) : 0;
+                    lines.push(`    ${modelId.padEnd(20)} ${s.success}/${total} (${rate}%)`);
+                }
+            }
+            lines.push('', 'Aborting a response counts against the model that was handling it — this is what nudges future picks.');
+            return { success: true, type: 'info', content: lines.join('\n') };
+        }
+        // ── no args — status ──
+        const tiers = autoRouter.tiers || {};
+        const lines = [
+            `auto-router: ${autoRouter.enabled ? 'on' : 'off'}${state.app.manualModelOverride ? ' (backed off — /model set manually this session)' : ''}`,
+            `  simple   ${tiers.simple || '(auto)'}`,
+            `  medium   ${tiers.medium || '(auto)'}`,
+            `  complex  ${tiers.complex || '(auto)'}`,
+        ];
+        return { success: true, type: 'info', content: lines.join('\n') };
+    },
+};
+/**
+ * /effort - extended-thinking budget tier (native Anthropic transport only)
+ */
+export const effortCommand = {
+    name: 'effort',
+    description: 'Set Claude\'s extended-thinking effort level',
+    category: 'config',
+    usage: '/effort [off|low|medium|high|max]',
+    examples: ['/effort', '/effort high', '/effort off'],
+    fullDescription: 'Controls Claude\'s adaptive thinking depth via output_config.effort. Higher levels reason more ' +
+        'before answering — better for hard problems, slower and more expensive for simple ones. ' +
+        'Only takes effect on the native Anthropic API path (not OpenAI-compatible providers, and not Haiku models).',
+    async handler(args) {
+        const { configActions, getState } = await import('../store/index.js');
+        const state = getState();
+        const config = state.config.config;
+        const current = config?.thinking?.budget || 'off';
+        const persist = async (budget) => {
+            configActions().updateConfig({ thinking: { budget } });
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                const os = await import('os');
+                const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+                const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+                cfg.thinking = { budget };
+                fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            }
+            catch { /* non-fatal */ }
+        };
+        const arg = args.trim().toLowerCase();
+        if (!arg) {
+            return { success: true, type: 'info', content: `thinking effort: ${current}` };
+        }
+        const valid = ['off', 'low', 'medium', 'high', 'max'];
+        if (!valid.includes(arg)) {
+            return { success: false, type: 'error', content: `usage: /effort [${valid.join('|')}]` };
+        }
+        await persist(arg);
+        return { success: true, type: 'success', message: `thinking effort: ${arg}` };
     },
 };
 /**
@@ -471,6 +635,365 @@ export const statusCommand = {
             type: 'info',
             content,
         };
+    },
+};
+// ─── /tokens helpers ────────────────────────────────────────────────
+function tokFmt(n) {
+    if (n >= 1_000_000)
+        return `${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000)
+        return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+}
+function tokBar(ratio, width) {
+    const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
+    return '█'.repeat(filled) + '░'.repeat(width - filled);
+}
+function tokCost(model, inputTok, outputTok) {
+    const m = model.toLowerCase();
+    // per-MTok prices
+    let ip, op;
+    if (m.includes('opus-4')) {
+        ip = 15;
+        op = 75;
+    }
+    else if (m.includes('sonnet-4')) {
+        ip = 3;
+        op = 15;
+    }
+    else if (m.includes('haiku-4')) {
+        ip = 0.8;
+        op = 4;
+    }
+    else if (m.includes('claude')) {
+        ip = 3;
+        op = 15;
+    }
+    else if (m.includes('gpt-4o')) {
+        ip = 2.5;
+        op = 10;
+    }
+    else if (m.includes('gpt-4')) {
+        ip = 30;
+        op = 60;
+    }
+    else if (m.includes('gpt-3.5')) {
+        ip = 0.5;
+        op = 1.5;
+    }
+    else
+        return null;
+    return (inputTok * ip + outputTok * op) / 1_000_000;
+}
+function tokShortModel(model) {
+    const m = model.toLowerCase();
+    if (m.includes('claude-sonnet-4-6'))
+        return 'claude-sonnet-4.6';
+    if (m.includes('claude-sonnet-4'))
+        return 'claude-sonnet-4';
+    if (m.includes('claude-opus-4'))
+        return 'claude-opus-4';
+    if (m.includes('claude-haiku-4'))
+        return 'claude-haiku-4';
+    return model.length > 24 ? model.slice(0, 21) + '...' : model;
+}
+/**
+ * /tokens - token usage graph and estimated cost
+ */
+export const tokensCommand = {
+    name: 'tokens',
+    aliases: ['tok'],
+    description: 'Show token usage graph and estimated spend',
+    category: 'session',
+    usage: '/tokens',
+    fullDescription: 'Visualises token consumption for this session as an ASCII bar chart, including input/output split, context-window usage, estimated USD cost, and a per-turn breakdown.',
+    async handler(_args, context) {
+        const state = getState();
+        const { session, config } = state;
+        const usage = session.tokenUsage;
+        const messages = session.messages.filter(m => !m.isStreaming);
+        const runtimeConfig = config.config;
+        const maxCtx = runtimeConfig?.maxContextTokens ?? 200_000;
+        const model = context.modelName || runtimeConfig?.currentModelId || 'claude-sonnet-4-6';
+        const totalIn = usage.inputTokens || 0;
+        const totalOut = usage.outputTokens || 0;
+        const total = totalIn + totalOut;
+        const BAR = 28;
+        const DIVIDER = `${'─'.repeat(BAR + 12)}`;
+        // shared price lookup
+        const priceFor = (mdl) => {
+            const m = mdl.toLowerCase();
+            if (m.includes('opus-4'))
+                return [15, 75];
+            else if (m.includes('sonnet-4'))
+                return [3, 15];
+            else if (m.includes('haiku-4'))
+                return [0.8, 4];
+            else if (m.includes('fable-5'))
+                return [5, 25];
+            else if (m.includes('claude'))
+                return [3, 15];
+            else if (m.includes('gpt-4o'))
+                return [2.5, 10];
+            else if (m.includes('gpt-4'))
+                return [30, 60];
+            else if (m.includes('gpt-3.5'))
+                return [0.5, 1.5];
+            else if (m.includes('deepseek'))
+                return [0.14, 0.28];
+            else if (m.includes('llama') || m.includes('groq'))
+                return [0.06, 0.06];
+            else if (m.includes('gemini-2.5-pro'))
+                return [1.25, 10];
+            else if (m.includes('gemini-2.5-flash'))
+                return [0.15, 0.6];
+            else
+                return [1, 3];
+        };
+        const fmtCost = (v) => v === 0 ? '$0.0000' :
+            v < 0.00001 ? '<$0.00001' :
+                v < 0.01 ? `$${v.toFixed(5)}` :
+                    `$${v.toFixed(4)}`;
+        // ── context meter ──
+        const ctxTokens = context.contextManager?.getTokenCount?.() ?? 0;
+        const ctxRatio = maxCtx > 0 ? Math.min(1, ctxTokens / maxCtx) : 0;
+        // ── per-turn data ──
+        const turns = messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map((m, i) => ({
+            n: i + 1,
+            role: m.role,
+            est: Math.max(1, Math.ceil((m.content?.length ?? 0) / 4)),
+            ts: m.timestamp,
+        }));
+        // ── session cost ──
+        const [ip, op] = priceFor(model);
+        const sessionCost = (totalIn * ip + totalOut * op) / 1_000_000;
+        // ── build output ──
+        const L = [];
+        L.push('## ◆ token usage');
+        L.push('');
+        if (ctxTokens > 0) {
+            const pct = `${Math.round(ctxRatio * 100)}%`;
+            L.push(`context  ${tokBar(ctxRatio, BAR)}  ${pct} · ${tokFmt(ctxTokens)} / ${tokFmt(maxCtx)}`);
+            L.push('');
+        }
+        const maxIO = Math.max(totalIn, totalOut, 1);
+        L.push(`in       ${tokBar(totalIn / maxIO, BAR)}  ${tokFmt(totalIn)}`);
+        L.push(`out      ${tokBar(totalOut / maxIO, BAR)}  ${tokFmt(totalOut)}`);
+        L.push(`         ${'─'.repeat(BAR + 2)}`);
+        L.push(`total    ${' '.repeat(BAR)}  ${tokFmt(total)}`);
+        if (sessionCost > 0) {
+            L.push(`cost     ${' '.repeat(BAR)}  ~${fmtCost(sessionCost)}  ·  ${tokShortModel(model)}`);
+        }
+        // ─────────────────────────────────────────────────────────────
+        // $ cost over turns — line graph (needs ≥ 4 turns)
+        // ─────────────────────────────────────────────────────────────
+        if (turns.length >= 4) {
+            const shown = turns.slice(-30);
+            const skipped = turns.length - shown.length;
+            let cum = 0;
+            const cumCosts = shown.map(t => {
+                cum += (t.est * (t.role === 'user' ? ip : op)) / 1_000_000;
+                return cum;
+            });
+            const maxCum = cumCosts[cumCosts.length - 1] || 0.000001;
+            const W = 54, H = 10, YW = 9;
+            const colFor = (i) => shown.length < 2 ? 0 : Math.round(i * (W - 1) / (shown.length - 1));
+            const rowFor = (c) => H - 1 - Math.round((c / maxCum) * (H - 1));
+            const grid = Array.from({ length: H }, () => Array(W).fill(' '));
+            for (let i = 0; i < shown.length - 1; i++) {
+                let x0 = colFor(i), y0 = rowFor(cumCosts[i]);
+                const x1 = colFor(i + 1), y1 = rowFor(cumCosts[i + 1]);
+                const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+                const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+                let err = dx + dy;
+                while (true) {
+                    if (grid[y0][x0] === ' ')
+                        grid[y0][x0] = '·';
+                    if (x0 === x1 && y0 === y1)
+                        break;
+                    const e2 = 2 * err;
+                    if (e2 >= dy) {
+                        err += dy;
+                        x0 += sx;
+                    }
+                    if (e2 <= dx) {
+                        err += dx;
+                        y0 += sy;
+                    }
+                }
+            }
+            for (let i = 0; i < shown.length; i++)
+                grid[rowFor(cumCosts[i])][colFor(i)] = '◆';
+            L.push('');
+            L.push(DIVIDER);
+            L.push('');
+            L.push('$ cost over turns  (cumulative)');
+            L.push('');
+            if (skipped > 0)
+                L.push(`  ··· ${skipped} earlier turns not shown`);
+            // 3 y-ticks: top, mid, bottom — │ on all other rows
+            const yTicks = new Map([[0, maxCum], [Math.round((H - 1) / 2), maxCum / 2], [H - 1, 0]]);
+            for (let r = 0; r < H; r++) {
+                const yLabel = yTicks.has(r)
+                    ? fmtCost(yTicks.get(r)).padStart(YW)
+                    : ' '.repeat(YW);
+                const ax = yTicks.has(r) ? (r === H - 1 ? '┴' : '┤') : '│';
+                L.push(`  ${yLabel} ${ax}${grid[r].join('')}`);
+            }
+            L.push(`  ${' '.repeat(YW)} └${'─'.repeat(W + 1)}`);
+            // x-axis: turn numbers every ~6 turns, min 4 chars apart
+            const xChars = Array(W).fill(' ');
+            const xStep = Math.max(2, Math.round(shown.length / 6));
+            for (let i = 0; i < shown.length; i += xStep) {
+                const pos = colFor(i);
+                const num = String(shown[i].n);
+                if (pos + num.length < W) {
+                    for (let j = 0; j < num.length; j++)
+                        xChars[pos + j] = num[j];
+                }
+            }
+            L.push(`  ${' '.repeat(YW + 2)}${xChars.join('')}  turn`);
+        }
+        // ─────────────────────────────────────────────────────────────
+        // stacked bar chart — models with ≥ 5 % of total tokens, max 3
+        // ─────────────────────────────────────────────────────────────
+        const breakdown = usage.modelBreakdown ?? {};
+        const allModels = Object.keys(breakdown);
+        if (allModels.length >= 2) {
+            const totalTok = allModels.reduce((s, m) => s + breakdown[m].inputTokens + breakdown[m].outputTokens, 0);
+            const modelCosts = allModels
+                .filter(mdl => (breakdown[mdl].inputTokens + breakdown[mdl].outputTokens) / Math.max(totalTok, 1) >= 0.05)
+                .map(mdl => {
+                const { inputTokens: iT, outputTokens: oT } = breakdown[mdl];
+                const [mip, mop] = priceFor(mdl);
+                const inCost = (iT * mip) / 1_000_000;
+                const outCost = (oT * mop) / 1_000_000;
+                return { mdl, inCost, outCost, total: inCost + outCost };
+            })
+                .sort((a, b) => b.total - a.total)
+                .slice(0, 3);
+            if (modelCosts.length >= 2) {
+                const maxBar = Math.max(...modelCosts.map(m => m.total), 0.000001);
+                const BAR_H = 8, BAR_W = 12, GAP = 4, LBL_W = 9;
+                const CHART_W = modelCosts.length * (BAR_W + GAP) - GAP;
+                L.push('');
+                L.push(DIVIDER);
+                L.push('');
+                L.push('$ by model  (session, ≥ 5 % usage)');
+                L.push('');
+                const yTicks3 = new Map([
+                    [BAR_H, maxBar],
+                    [Math.ceil(BAR_H / 2), maxBar / 2],
+                    [1, 0],
+                ]);
+                for (let row = BAR_H; row >= 1; row--) {
+                    let line = '';
+                    for (let mi = 0; mi < modelCosts.length; mi++) {
+                        if (mi > 0)
+                            line += ' '.repeat(GAP);
+                        const { inCost, outCost } = modelCosts[mi];
+                        const inRows = Math.round((inCost / maxBar) * BAR_H);
+                        const totRows = Math.min(Math.round(((inCost + outCost) / maxBar) * BAR_H), BAR_H);
+                        if (row <= inRows)
+                            line += '▓'.repeat(BAR_W);
+                        else if (row <= totRows)
+                            line += '░'.repeat(BAR_W);
+                        else
+                            line += ' '.repeat(BAR_W);
+                    }
+                    const yLabel = yTicks3.has(row)
+                        ? fmtCost(yTicks3.get(row)).padStart(LBL_W)
+                        : ' '.repeat(LBL_W);
+                    const ax = yTicks3.has(row) ? (row === 1 ? '┴' : '┤') : '│';
+                    L.push(`  ${yLabel} ${ax} ${line}`);
+                }
+                L.push(`  ${' '.repeat(LBL_W)} └${'─'.repeat(CHART_W + 2)}`);
+                // centered model labels + cost
+                for (let mi = 0; mi < modelCosts.length; mi++) {
+                    if (mi === 0)
+                        process.stdout.write(''); // no-op to set up spacing
+                }
+                let nameRow = '  ' + ' '.repeat(LBL_W + 2);
+                let costRow = '  ' + ' '.repeat(LBL_W + 2);
+                for (let mi = 0; mi < modelCosts.length; mi++) {
+                    if (mi > 0) {
+                        nameRow += ' '.repeat(GAP);
+                        costRow += ' '.repeat(GAP);
+                    }
+                    const short = modelCosts[mi].mdl
+                        .replace(/claude-/, '').replace(/openai-/, '').replace(/-\d{8,}$/, '')
+                        .slice(0, BAR_W);
+                    nameRow += short.padEnd(BAR_W);
+                    costRow += fmtCost(modelCosts[mi].total).padEnd(BAR_W).slice(0, BAR_W);
+                }
+                L.push(nameRow);
+                L.push(costRow);
+                L.push('');
+                L.push(`  ${' '.repeat(LBL_W + 2)}▓ input  ░ output`);
+            }
+        }
+        // ─────────────────────────────────────────────────────────────
+        // performance — response time + benchmark vs claude-sonnet-4.6
+        // ─────────────────────────────────────────────────────────────
+        if (turns.length >= 2) {
+            // pair user → assistant to get response durations
+            const responseTimes = [];
+            const outEstimates = [];
+            for (let i = 1; i < turns.length; i++) {
+                if (turns[i].role === 'assistant' && turns[i - 1].role === 'user') {
+                    const dt = turns[i].ts - turns[i - 1].ts;
+                    if (dt > 0 && dt < 300_000) { // sanity: 0–5 min
+                        responseTimes.push(dt);
+                        outEstimates.push(turns[i].est);
+                    }
+                }
+            }
+            const avgMs = responseTimes.length
+                ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+                : 0;
+            const avgTokPerSec = avgMs > 0 && outEstimates.length
+                ? outEstimates.reduce((a, b) => a + b, 0) / outEstimates.length / (avgMs / 1000)
+                : 0;
+            const turnCount = Math.floor(turns.length / 2);
+            const costPerTurn = turnCount > 0 ? sessionCost / turnCount : 0;
+            // benchmark: claude-sonnet-4.6
+            const [bip, bop] = priceFor('claude-sonnet-4-6');
+            const benchCost = (totalIn * bip + totalOut * bop) / 1_000_000;
+            const ratio = benchCost > 0 ? sessionCost / benchCost : 1;
+            const ratioStr = ratio <= 1
+                ? `${(ratio).toFixed(2)}×  (${Math.round((1 - ratio) * 100)}% cheaper)`
+                : `${(ratio).toFixed(2)}×  (${Math.round((ratio - 1) * 100)}% more expensive)`;
+            const COL1 = 18, COL2 = 16, COL3 = 20;
+            const row = (label, cur, bench) => `  ${label.padEnd(COL1)}${cur.padEnd(COL2)}${bench ?? ''}`;
+            L.push('');
+            L.push(DIVIDER);
+            L.push('');
+            L.push('performance');
+            L.push('');
+            L.push(row('', 'this session', 'vs sonnet-4.6'));
+            L.push(`  ${'─'.repeat(COL1 + COL2 + COL3)}`);
+            if (avgMs > 0) {
+                const secStr = `${(avgMs / 1000).toFixed(1)}s avg`;
+                L.push(row('response time', secStr));
+            }
+            if (avgTokPerSec > 0) {
+                L.push(row('est. tok/sec', `~${Math.round(avgTokPerSec)} t/s`));
+            }
+            L.push(row('turns', `${turnCount}`));
+            L.push(row('cost/turn', `~${fmtCost(costPerTurn)}`));
+            L.push(row('session total', `~${fmtCost(sessionCost)}`, `~${fmtCost(benchCost)}`));
+            L.push(row('vs benchmark', ratioStr));
+        }
+        // Stream into the existing streaming message so everything lands in one
+        // render pass — avoids the empty-streaming-msg + batch-content split that
+        // required two Enter presses to see the full output.
+        if (context.onContentDelta) {
+            context.onContentDelta(L.join('\n'));
+            return { success: true, type: 'silent' };
+        }
+        return { success: true, type: 'info', content: L.join('\n') };
     },
 };
 /**
@@ -792,11 +1315,10 @@ export const copyCommand = {
             try {
                 await copyToClipboard(plainText);
                 const lines = plainText.split('\n').length;
-                const preview = plainText.slice(0, 60);
                 return {
                     success: true,
                     type: 'success',
-                    message: `copied assistant reply (${lines}L) · ${preview}${preview.length >= 60 ? '...' : ''}`,
+                    message: `Copied ${lines} lines from assistant reply`,
                 };
             }
             catch (err) {
@@ -879,15 +1401,14 @@ export const copyCommand = {
                 error: `clipboard: ${err instanceof Error ? err.message : String(err)}`,
             };
         }
-        // Build confirmation
+        // Build confirmation — Claude Code style
         const lines = target.content.split('\n').length;
         const label = target.filePath || target.language || 'code';
-        const preview = target.content.split('\n')[0].slice(0, 50);
-        const hint = codeBlocks.length > 1 ? ` · ${codeBlocks.length} blocks, /copy list` : '';
+        const hint = codeBlocks.length > 1 ? ` · ${codeBlocks.length} blocks total` : '';
         return {
             success: true,
             type: 'success',
-            message: `copied ${label} (${lines}L) · ${preview}${preview.length >= 50 ? '...' : ''}${hint}`,
+            message: `Copied ${lines} lines from ${label}${hint}`,
         };
     },
 };
@@ -931,9 +1452,20 @@ function detectTaskType(task) {
 /**
  * Build agent configs dynamically based on task type.
  * Scaffold mode agents get full Write/Edit/Bash access for building new apps.
+ * Each mode ends with a synthesizer agent for result fusion.
  */
 function buildMultiAgents(type, config) {
     const agentConfig = { ...config, timeout: 180000 };
+    // Shared synthesizer used by all modes
+    const synthesizer = {
+        name: 'synthesizer',
+        role: 'Technical Lead',
+        systemPrompt: `You are a senior technical lead. Given analysis from multiple specialist agents, synthesize their findings into a clear, actionable summary.
+Structure your response as: key findings, recommended approach, top action items.
+Be direct, concrete, and avoid repeating everything the agents said.
+Focus on delivering a decision-ready synthesis.`,
+        config: agentConfig,
+    };
     switch (type) {
         case 'scaffold':
             return [
@@ -974,6 +1506,7 @@ Report issues with specific file paths and fix suggestions. Be concise.`,
                     config: agentConfig,
                     tools: ['Read', 'Grep', 'Glob'],
                 },
+                synthesizer,
             ];
         case 'refactor':
             return [
@@ -1005,6 +1538,7 @@ Run build commands to ensure nothing is broken.`,
                     config: agentConfig,
                     tools: ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'],
                 },
+                synthesizer,
             ];
         case 'review':
             return [
@@ -1035,6 +1569,7 @@ Suggest testing strategies for each risk area.`,
                     config: agentConfig,
                     tools: ['Read', 'Grep', 'Glob', 'Bash'],
                 },
+                synthesizer,
             ];
         default:
             return [
@@ -1075,6 +1610,7 @@ Think about what could go wrong and how to prevent it.`,
                     config: agentConfig,
                     tools: ['Read', 'Grep', 'Glob', 'Bash'],
                 },
+                synthesizer,
             ];
     }
 }
@@ -1111,7 +1647,7 @@ Task types are auto-detected:
 Flags:
   --save-as <name>    Save this agent configuration as a reusable app (e.g. /myapp <task>)
   --template <id>     Start from a template (audit, refactor, test-gen)`,
-    async handler(args, _context) {
+    async handler(args, context) {
         const trimmed = args?.trim();
         if (!trimmed)
             return { success: false, type: 'error', error: 'Usage: /multi <task>' };
@@ -1167,18 +1703,67 @@ Flags:
                 agents = buildMultiAgents(modeType, agentConfig);
                 synthesizerName = agents[agents.length - 1]?.name;
             }
+            // Ask for a single upfront confirmation before any agents run
+            if (context.confirmationHandler) {
+                const agentNames = agents.filter(a => a.name !== 'synthesizer').map(a => a.name);
+                const response = await context.confirmationHandler.requestConfirmation({
+                    title: `Start multi-agent task?`,
+                    message: task,
+                    details: `Agents: ${agentNames.join(', ')}`,
+                });
+                if (!response.approved) {
+                    return { success: false, type: 'info', content: 'Multi-agent task cancelled.' };
+                }
+            }
             // Build orchestrator
             const orchestrator = new OrchestratorAgent(`Multi-${modeType}`, `You are ${orchestratorName}. Coordinate specialist agents to achieve the task.`);
+            // Serialize confirmations so parallel agents don't race on the single dialog slot
+            let confirmQueue = Promise.resolve();
+            const serialHandler = context.confirmationHandler
+                ? { requestConfirmation: (details) => { confirmQueue = confirmQueue.then(() => context.confirmationHandler.requestConfirmation(details)); return confirmQueue; } }
+                : undefined;
             for (const agent of agents) {
-                orchestrator.registerAgent(agent);
+                orchestrator.registerAgent({
+                    ...agent,
+                    confirmationHandler: serialHandler,
+                });
             }
-            // Build sub-tasks
+            // Build workspace source context so agents know what files exist
+            const cwd = context.cwd || process.cwd();
+            const sourceCtx = buildSourceContext(cwd);
+            const codeContext = sourceCtx
+                ? `\n\nWorkspace context (project metadata + file tree + structure summaries + git changes):\n${sourceCtx}\n\nUse Read / Grep / Glob to examine these — structure summaries show exports/classes in each file.`
+                : '\n\nUse Read / Grep / Glob to explore the codebase before responding.';
+            // Build sub-tasks — each agent gets a focused assignment matching their role
             const subTasks = {};
+            // Mapping of agent names to focused sub-task descriptions
+            const subTaskMap = {
+                architect: `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.${codeContext}`,
+                scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.${codeContext}`,
+                reviewer: `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.${codeContext}`,
+                debugger: `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.${codeContext}`,
+                scanner: `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.${codeContext}`,
+                analyzer: `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.${codeContext}`,
+                planner: `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.${codeContext}`,
+                implementer: `Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.${codeContext}`,
+                synthesizer: `Focus on synthesis. You will receive all agent responses and produce a final summary. (Synthesis task is handled separately.)`,
+            };
+            // Exclude the synthesizer from parallel sub-tasks — it only runs during synthesis phase
             for (const agent of agents) {
-                subTasks[agent.name] = agent.systemPrompt.split('\n')[0];
+                if (agent.name === 'synthesizer')
+                    continue;
+                subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.${codeContext}`;
+            }
+            // Stream progress in real-time if context supports it
+            if (context.onContentDelta) {
+                const { icon, label } = modeMeta(modeType);
+                context.onContentDelta(`## ${icon} ${label}\n`);
+                context.onContentDelta(`**Task:** ${task}\n\n`);
+                context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
+                context.onContentDelta(`*Tool calls will require confirmation*\n\n---\n\n`);
             }
             // Run
-            const result = await orchestrator.orchestrate(task, subTasks, synthesizerName);
+            const result = await orchestrator.orchestrate(task, subTasks, synthesizerName, context.sessionId);
             // If --save-as, register as reusable AppBuilder app
             if (saveAs) {
                 const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
@@ -1199,31 +1784,50 @@ Flags:
                 }
                 builder.register();
             }
-            // Format output
+            // Format output — stream each agent result if possible
             const { icon, label } = modeMeta(modeType);
             const lines = [];
-            lines.push(`## ${icon} ${label}`);
-            lines.push(`**Task:** ${task}`);
-            lines.push('');
+            if (!context.onContentDelta) {
+                // Non-streaming: build full text as before
+                lines.push(`## ${icon} ${label}`);
+                lines.push(`**Task:** ${task}`);
+                lines.push('');
+            }
             for (const response of result.responses) {
                 const agentCfg = agents.find(a => a.name === response.agentName);
                 const role = agentCfg?.role || response.agentName;
                 const toolHint = response.metadata?.toolCallsCount
                     ? ` [${response.metadata.toolCallsCount} tool calls]`
                     : '';
-                lines.push(`### ${role}${toolHint}`);
-                if (response.metadata?.durationMs) {
-                    lines.push(`*${(response.metadata.durationMs / 1000).toFixed(1)}s*`);
+                const header = `### ${role}${toolHint}`;
+                const duration = response.metadata?.durationMs
+                    ? `*${(response.metadata.durationMs / 1000).toFixed(1)}s*`
+                    : '';
+                if (context.onContentDelta) {
+                    context.onContentDelta(`\n${header}\n`);
+                    if (duration)
+                        context.onContentDelta(`${duration}\n\n`);
+                    context.onContentDelta(`${response.content || '*No response*'}\n\n`);
                 }
+                else {
+                    lines.push(header);
+                    if (duration)
+                        lines.push(duration);
+                    lines.push('');
+                    lines.push(response.content || '*No response*');
+                    lines.push('');
+                }
+            }
+            if (!context.onContentDelta) {
+                lines.push('---');
+                lines.push('### Synthesized Summary');
                 lines.push('');
-                lines.push(response.content || '*No response*');
+                lines.push(result.summary);
                 lines.push('');
             }
-            lines.push('---');
-            lines.push('### Synthesized Summary');
-            lines.push('');
-            lines.push(result.summary);
-            lines.push('');
+            else {
+                context.onContentDelta(`---\n\n### Synthesized Summary\n\n${result.summary}\n\n`);
+            }
             const statusParts = [
                 `${result.metadata.agentsUsed} agents`,
                 `${(result.metadata.totalDurationMs / 1000).toFixed(1)}s`,
@@ -1235,14 +1839,217 @@ Flags:
                 const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
                 statusParts.push(`saved as /${saveId}`);
             }
-            lines.push(`*${statusParts.join(' \u00b7 ')}*`);
-            return { success: true, type: 'info', content: lines.join('\n') };
+            const statusLine = `*${statusParts.join(' \u00b7 ')}*`;
+            if (context.onContentDelta) {
+                context.onContentDelta(`\n${statusLine}\n`);
+                context.onContentDelta(`\n✅ **Multi-agent task complete!**\n`);
+            }
+            else {
+                lines.push(statusLine);
+                lines.push('');
+                lines.push('✅ Multi-agent task complete!');
+                return { success: true, type: 'info', content: lines.join('\n') };
+            }
+            return { success: true, type: 'silent' };
         }
         catch (error) {
             return {
                 success: false,
                 type: 'error',
                 error: `/multi failed: ${error instanceof Error ? error.message : String(error)}`,
+            };
+        }
+    },
+};
+/**
+ * /multiyolo — same as /multi but with YOLO mode (auto-approve all tool calls)
+ */
+const multiYoloCommand = {
+    name: 'multiyolo',
+    description: 'Multi-agent orchestration with YOLO mode — /multiyolo <task>',
+    category: 'general',
+    usage: '/multiyolo <task>',
+    examples: ['/multiyolo Refactor the auth module to use JWT', '/multiyolo Create a new CLI tool'],
+    fullDescription: `Same as /multi but with YOLO mode enabled — all tool calls are auto-approved.
+Use with caution as this allows agents to write files and run commands without confirmation.`,
+    async handler(args, context) {
+        const trimmed = args?.trim();
+        if (!trimmed)
+            return { success: false, type: 'error', error: 'Usage: /multiyolo <task>' };
+        let modelConfig;
+        try {
+            modelConfig = requireModelConfig();
+        }
+        catch (e) {
+            return { success: false, type: 'error', error: e.message };
+        }
+        // Parse flags
+        const saveAsMatch = trimmed.match(/--save-as\s+(\S+)/);
+        const templateMatch = trimmed.match(/--template\s+(\S+)/);
+        const saveAs = saveAsMatch ? saveAsMatch[1] : null;
+        const templateId = templateMatch ? templateMatch[1] : null;
+        // Extract clean task (remove flags)
+        const task = trimmed
+            .replace(/--save-as\s+\S+/g, '')
+            .replace(/--template\s+\S+/g, '')
+            .trim();
+        if (!task)
+            return { success: false, type: 'error', error: 'Usage: /multiyolo <task>' };
+        try {
+            const agentConfig = {
+                apiKey: modelConfig.apiKey,
+                baseURL: modelConfig.baseURL,
+                model: modelConfig.model,
+                timeout: 180000,
+            };
+            let agents;
+            let modeType;
+            let orchestratorName;
+            let synthesizerName;
+            if (templateId) {
+                const templateApp = getApp(templateId);
+                if (!templateApp) {
+                    const available = getRegisteredApps().map(a => a.id).join(', ');
+                    return { success: false, type: 'error', error: `Template "${templateId}" not found. Available: ${available}` };
+                }
+                agents = templateApp.agents.map(a => ({
+                    ...a,
+                    config: { ...agentConfig, ...a.config },
+                }));
+                modeType = templateId;
+                orchestratorName = templateApp.name;
+                synthesizerName = templateApp.synthesizer || agents[agents.length - 1]?.name;
+            }
+            else {
+                modeType = detectTaskType(task);
+                orchestratorName = modeMeta(modeType).label;
+                agents = buildMultiAgents(modeType, agentConfig);
+                synthesizerName = agents[agents.length - 1]?.name;
+            }
+            const orchestrator = new OrchestratorAgent(`Multi-YOLO-${modeType}`, `You are ${orchestratorName}. Coordinate specialist agents to achieve the task. (YOLO mode)`);
+            // Attach with YOLO permission mode — all tool calls auto-approved
+            for (const agent of agents) {
+                orchestrator.registerAgent({
+                    ...agent,
+                    confirmationHandler: context.confirmationHandler,
+                    permissionMode: 'yolo',
+                });
+            }
+            // Build sub-tasks
+            const subTasks = {};
+            const subTaskMap = {
+                architect: `Focus on architecture and design. Evaluate the project structure, dependencies, data flow, and design patterns. Propose a concrete plan with specific file paths.`,
+                scaffolder: `Focus on implementation. Build the complete project — create all files with working code, set up configs, install dependencies, and verify the build succeeds.`,
+                reviewer: `Focus on code review. Examine the code for bugs, type safety, error handling gaps, and consistency issues. Report specific problems with file paths and fix suggestions.`,
+                debugger: `Focus on runtime analysis. Identify potential failure modes, edge cases, resource leaks, and async issues. Think about what could go wrong and how to prevent it.`,
+                scanner: `Focus on security. Scan for hardcoded secrets, injection flaws, XSS, unsafe eval/exec, and path traversal. Report severity and exact locations.`,
+                analyzer: `Focus on code analysis. Find duplicated code, long functions, complex conditionals, unused imports, circular dependencies, and inconsistent patterns. Report with file paths.`,
+                planner: `Focus on planning. Given the analysis findings, create a step-by-step refactoring plan with file paths, change descriptions, risk levels, and before/after snippets.`,
+                implementer: `Focus on implementation. Write clean, production-ready code. Make actual file changes using Write/Edit. Verify correctness and run builds to ensure nothing is broken.`,
+                synthesizer: `Focus on synthesis. You will receive all agent responses and produce a final summary. (Synthesis task is handled separately.)`,
+            };
+            for (const agent of agents) {
+                if (agent.name === 'synthesizer')
+                    continue;
+                subTasks[agent.name] = subTaskMap[agent.name] || `Analyze the task from a ${agent.role} perspective and provide recommendations.`;
+            }
+            // Stream progress
+            if (context.onContentDelta) {
+                context.onContentDelta(`## ⚡ Multi-Agent Orchestration (YOLO)\n`);
+                context.onContentDelta(`**Task:** ${task}\n\n`);
+                context.onContentDelta(`*Agents: ${agents.filter(a => a.name !== 'synthesizer').map(a => a.name).join(', ')}*\n\n`);
+                context.onContentDelta(`*Permission mode: \`yolo\` — all tool calls auto-approved*\n\n---\n\n`);
+            }
+            const result = await orchestrator.orchestrate(task, subTasks, synthesizerName);
+            if (saveAs) {
+                const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+                if (getApp(saveId)) {
+                    return {
+                        success: false,
+                        type: 'error',
+                        error: `App "${saveId}" already exists. Choose a different name.`,
+                    };
+                }
+                const builder = new AppBuilder(saveId, `${task.slice(0, 50)}...`)
+                    .describe(`Custom app created via /multiyolo: ${task.slice(0, 120)}`)
+                    .use(`/${saveId} <task>`)
+                    .examples([`/${saveId} ${task.slice(0, 60)}`]);
+                for (const agent of agents) {
+                    builder.agent(agent.name, agent.role, agent.systemPrompt, agent.tools);
+                }
+                builder.register();
+            }
+            const lines = [];
+            if (!context.onContentDelta) {
+                lines.push(`## ⚡ Multi-Agent Orchestration (YOLO)`);
+                lines.push(`**Task:** ${task}`);
+                lines.push('');
+            }
+            for (const response of result.responses) {
+                const agentCfg = agents.find(a => a.name === response.agentName);
+                const role = agentCfg?.role || response.agentName;
+                const toolHint = response.metadata?.toolCallsCount
+                    ? ` [${response.metadata.toolCallsCount} tool calls]`
+                    : '';
+                const header = `### ${role}${toolHint}`;
+                const duration = response.metadata?.durationMs
+                    ? `*${(response.metadata.durationMs / 1000).toFixed(1)}s*`
+                    : '';
+                if (context.onContentDelta) {
+                    context.onContentDelta(`\n${header}\n`);
+                    if (duration)
+                        context.onContentDelta(`${duration}\n\n`);
+                    context.onContentDelta(`${response.content || '*No response*'}\n\n`);
+                }
+                else {
+                    lines.push(header);
+                    if (duration)
+                        lines.push(duration);
+                    lines.push('');
+                    lines.push(response.content || '*No response*');
+                    lines.push('');
+                }
+            }
+            if (!context.onContentDelta) {
+                lines.push('---');
+                lines.push('### Synthesized Summary');
+                lines.push('');
+                lines.push(result.summary);
+                lines.push('');
+            }
+            else {
+                context.onContentDelta(`---\n\n### Synthesized Summary\n\n${result.summary}\n\n`);
+            }
+            const statusParts = [
+                `${result.metadata.agentsUsed} agents`,
+                `${(result.metadata.totalDurationMs / 1000).toFixed(1)}s`,
+            ];
+            if (result.metadata.totalTokens) {
+                statusParts.push(`${result.metadata.totalTokens} tokens`);
+            }
+            if (saveAs) {
+                const saveId = saveAs.replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+                statusParts.push(`saved as /${saveId}`);
+            }
+            statusParts.push('YOLO mode');
+            const statusLine = `*${statusParts.join(' · ')}*`;
+            if (context.onContentDelta) {
+                context.onContentDelta(`\n${statusLine}\n`);
+                context.onContentDelta(`\n✅ **Multi-agent task complete! (YOLO mode)**\n`);
+            }
+            else {
+                lines.push(statusLine);
+                lines.push('');
+                lines.push('✅ Multi-agent task complete! (YOLO mode)');
+                return { success: true, type: 'info', content: lines.join('\n') };
+            }
+            return { success: true, type: 'silent' };
+        }
+        catch (error) {
+            return {
+                success: false,
+                type: 'error',
+                error: `/multiyolo failed: ${error instanceof Error ? error.message : String(error)}`,
             };
         }
     },
@@ -1260,7 +2067,7 @@ const researchCommand = {
 - Pragmatist   — practical, implemention-focused
 
 Agents deliberate in parallel, then results are aggregated.`,
-    async handler(args, _context) {
+    async handler(args, context) {
         const question = args?.trim();
         if (!question)
             return { success: false, type: 'error', error: 'Usage: /research <question>' };
@@ -1271,17 +2078,23 @@ Agents deliberate in parallel, then results are aggregated.`,
         catch (e) {
             return { success: false, type: 'error', error: e.message };
         }
+        // Build workspace source context so agents can reference real code
+        const cwd = context.cwd || process.cwd();
+        const sourceCtx = buildSourceContext(cwd);
+        const baseModelCfg = { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey };
         try {
             const council = new CouncilAgent('research-council', modelConfig, {
                 rule: 'majority',
-                maxTokensPerAgent: 400,
+                maxTokensPerAgent: 800,
                 enableIteration: false,
             });
-            council.addMember('analyst', 'Data Analyst', `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.\nAlways state VOTE: approve, reject, or abstain and REASONING: with data-driven justification.`, 1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
-            council.addMember('architect', 'Systems Architect', `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.\nAlways state VOTE: approve, reject, or abstain and REASONING: with architectural justification.`, 1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
-            council.addMember('ethicist', 'Ethics & Safety Officer', `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.\nAlways state VOTE: approve, reject, or abstain and REASONING: with ethical justification.`, 1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
-            council.addMember('pragmatist', 'Pragmatic Engineer', `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.\nAlways state VOTE: approve, reject, or abstain and REASONING: with practical justification.`, 1, { model: modelConfig.model, baseURL: modelConfig.baseURL || undefined, apiKey: modelConfig.apiKey });
-            const result = await council.deliberate(question);
+            const researchTools = ['Read', 'Grep', 'Glob'];
+            const researchNote = `\n\nWorkspace context (project metadata + file tree + structure summaries + git changes):\n${sourceCtx}\n\nRead files with Read tool, search with Grep, browse with Glob. Structure summaries show exports/classes/functions — use them to navigate. Git changes show what was recently modified.\nAlways state VOTE: approve, reject, or abstain and REASONING: with clear justification.`;
+            council.addMember('analyst', 'Data Analyst', `You are a Data Analyst on a research council. You reason from data, statistics, and empirical evidence.\nYou value measurable outcomes and quantitative reasoning.${researchNote}`, 1, baseModelCfg, researchTools);
+            council.addMember('architect', 'Systems Architect', `You are a Systems Architect on a research council. You evaluate designs, tradeoffs, and architectural decisions.\nYou focus on scalability, maintainability, and system coherence.${researchNote}`, 1, baseModelCfg, researchTools);
+            council.addMember('ethicist', 'Ethics & Safety Officer', `You are an Ethics & Safety Officer on a research council. You evaluate safety, fairness, privacy, and societal impact.\nYou raise concerns others might miss and advocate for responsible practices.${researchNote}`, 1, baseModelCfg, researchTools);
+            council.addMember('pragmatist', 'Pragmatic Engineer', `You are a Pragmatic Engineer on a research council. You evaluate practicality, implementation effort, and real-world constraints.\nYou balance idealism with what actually works in production.${researchNote}`, 1, baseModelCfg, researchTools);
+            const result = await council.deliberate(question, context.sessionId);
             // Build research-focused output (not vote-centric)
             const lines = [];
             lines.push('## ⬡ AEGIS Research Council');
@@ -1350,10 +2163,11 @@ const memoryCommand = {
         if (args?.startsWith('activate ')) {
             const token = args.replace('activate ', '').trim();
             if (token.length < 20) {
-                return { success: false, type: 'error', error: 'Invalid token format — must be a valid signed JWT from Stripe checkout' };
+                return { success: false, type: 'error', error: 'Invalid token — paste the full token from your activation email' };
             }
             // Write token file AND config.json
             try {
+                fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
                 fs.writeFileSync(tokenPath, token);
             }
             catch { }
@@ -1474,7 +2288,8 @@ const memoryCommand = {
         // Ej prenumerant — öppna Stripe
         if (!subscribed) {
             const stripeUrl = 'https://buy.stripe.com/14A4gB4J53vxcaV74S9R601';
-            exec(`xdg-open "${stripeUrl}"`, () => { });
+            const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+            exec(`${openCmd} "${stripeUrl}"`, () => { });
             return {
                 success: true,
                 type: 'info',
@@ -1491,7 +2306,7 @@ const memoryCommand = {
                     '',
                     'After payment you receive a token via email / success page.',
                     'Place the token in a file to activate:',
-                    `  echo '<your-token>' > ~/.aegiscode/memory.token`,
+                    `  mkdir -p ~/.aegiscode && echo '<your-token>' > ~/.aegiscode/memory.token`,
                     '',
                     'Or run:',
                     '  `/memory activate <token>`',
@@ -1542,7 +2357,7 @@ const cloudCommand = {
     name: 'cloud',
     description: 'Manage AEGIS Cloud sync (aegiscloud.org)',
     category: 'config',
-    usage: '/cloud [status | key <api_key> | sync on|off]',
+    usage: '/cloud [status | key <api_key> | activate | deactivate]',
     fullDescription: 'Connect aegis-cli to aegiscloud.org. Conversations are uploaded automatically on exit.',
     async handler(args) {
         const fs = await import('fs');
@@ -1569,15 +2384,15 @@ const cloudCommand = {
                 message: '✓ AEGIS Cloud key saved — conversations will sync on exit',
             };
         }
-        // /cloud sync on|off
-        if (trimmed === 'sync on' || trimmed === 'sync off') {
-            const enable = trimmed === 'sync on';
+        // /cloud sync on|off  (also: activate / deactivate)
+        if (trimmed === 'sync on' || trimmed === 'activate' || trimmed === 'sync off' || trimmed === 'deactivate') {
+            const enable = trimmed === 'sync on' || trimmed === 'activate';
             cfg.aegiscloud = { ...cloud, syncConversations: enable };
             fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
             return {
                 success: true,
                 type: 'success',
-                message: `Conversation sync: ${enable ? '✓ enabled' : '✗ disabled'}`,
+                message: `Cloud sync: ${enable ? '✓ activated — conversations will upload on exit' : '✗ deactivated'}`,
             };
         }
         // /cloud status (default)
@@ -1602,9 +2417,9 @@ const cloudCommand = {
         }
         else {
             lines.push('Commands:');
-            lines.push('  `/cloud sync on`  — enable auto-upload on exit');
-            lines.push('  `/cloud sync off` — disable auto-upload');
-            lines.push('  `/cloud key <k>`  — update API key');
+            lines.push('  `/cloud activate`   — enable auto-upload on exit');
+            lines.push('  `/cloud deactivate` — disable auto-upload');
+            lines.push('  `/cloud key <k>`    — update API key');
         }
         return { success: true, type: 'info', content: lines.join('\n') };
     },
@@ -1660,13 +2475,16 @@ function createAppCommand(app) {
         usage: app.usage || `/${app.id} <task>`,
         examples: app.examples,
         fullDescription: `Runs a multi-agent app: **${app.name}**\n\nAgents: ${app.agents.map(a => `**${a.role}**`).join(' → ')}\n\nUses ${app.agents.length} specialist agents in parallel, then synthesizes results.`,
-        async handler(args) {
+        async handler(args, context) {
             const task = args?.trim();
             if (!task) {
                 return { success: false, type: 'error', error: `Usage: /${app.id} <task>\n\n${app.description}` };
             }
             try {
-                const result = await runApp(app.id, { task });
+                const result = await runApp(app.id, {
+                    task,
+                    confirmationHandler: context.confirmationHandler,
+                });
                 const lines = [];
                 // ── Status line ──
                 const statusIcon = result.errorCount > 0 ? '⚠' : '✓';
@@ -1680,20 +2498,37 @@ function createAppCommand(app) {
                     const role = appCfg?.role || response.agentName;
                     const icon = result.errorCount > 0 && response.content.startsWith('[Error:') ? '⚠' : '▸';
                     const toolHint = response.toolCallsCount ? ` [${response.toolCallsCount} tool calls]` : '';
-                    lines.push(`### ${icon} ${role}${toolHint}`);
-                    if (response.durationMs) {
-                        lines.push(`*${(response.durationMs / 1000).toFixed(1)}s*`);
+                    const header = `### ${icon} ${role}${toolHint}`;
+                    const duration = response.durationMs ? `*${(response.durationMs / 1000).toFixed(1)}s*` : '';
+                    if (context.onContentDelta) {
+                        context.onContentDelta(`\n${header}\n`);
+                        if (duration)
+                            context.onContentDelta(`${duration}\n\n`);
+                        context.onContentDelta(`${response.content || '*No response*'}\n\n`);
                     }
-                    lines.push('');
-                    lines.push(response.content || '*No response*');
-                    lines.push('');
+                    else {
+                        lines.push(header);
+                        if (duration)
+                            lines.push(duration);
+                        lines.push('');
+                        lines.push(response.content || '*No response*');
+                        lines.push('');
+                    }
                 }
                 // ── Summary ──
-                lines.push('---');
-                lines.push('### Synthesis');
-                lines.push('');
-                lines.push(result.summary);
-                return { success: true, type: 'info', content: lines.join('\n') };
+                if (!context.onContentDelta) {
+                    lines.push('---');
+                    lines.push('### Synthesis');
+                    lines.push('');
+                    lines.push(result.summary);
+                }
+                else {
+                    context.onContentDelta(`---\n\n### Synthesis\n\n${result.summary}\n\n`);
+                }
+                if (!context.onContentDelta) {
+                    return { success: true, type: 'info', content: lines.join('\n') };
+                }
+                return { success: true, type: 'silent' };
             }
             catch (error) {
                 return {
@@ -1714,8 +2549,11 @@ export const builtinCommands = [
     compactCommand,
     versionCommand,
     modelCommand,
+    routerCommand,
+    effortCommand,
     themeCommand,
     statusCommand,
+    tokensCommand,
     skillsCommand,
     hooksCommand,
     thinkingCommand,
@@ -1725,7 +2563,10 @@ export const builtinCommands = [
     billingCommand,
     yoloCommand,
     multiCommand,
+    multiYoloCommand,
     researchCommand,
+    buildCommand,
+    cloneCommand,
     ...appCommands,
 ];
 //# sourceMappingURL=builtinCommands.js.map

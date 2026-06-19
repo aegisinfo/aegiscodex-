@@ -48,6 +48,12 @@ export declare const globalOptions: {
         describe: string;
         group: string;
     };
+    router: {
+        type: "boolean";
+        describe: string;
+        default: boolean;
+        group: string;
+    };
     'permission-mode': {
         type: "string";
         choices: readonly ["default", "autoEdit", "yolo"];

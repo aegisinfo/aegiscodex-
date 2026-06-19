@@ -28,12 +28,21 @@ export declare class SharedMemory {
     private ready;
     constructor();
     private init;
+    private getMemoryToken;
+    /** Pull entries newer than the last sync marker and merge them in. Never blocks startup. */
+    private syncFromCloud;
     /** Await readiness before any operation */
     private ensureReady;
     private loadUserId;
     private applyTTL;
     add(content: string, source: string, session: string, tags?: string[], role?: 'user' | 'assistant', immediate?: boolean): Promise<MemoryEntry | null>;
     search(query: string, limit?: number): Promise<MemoryEntry[]>;
+    /**
+     * Top up local results with a cloud keyword search — catches entries written on
+     * another device since the last `pullSince`. Capped at 1.5s so an offline or slow
+     * connection never meaningfully delays a search; on any failure, local results stand.
+     */
+    private mergeCloudResults;
     recent(limit?: number): MemoryEntry[];
     summarizeAndStoreSession(sessionId: string, apiKey?: string, baseURL?: string, model?: string): Promise<boolean>;
     private summarizeSession;
@@ -41,8 +50,22 @@ export declare class SharedMemory {
     private rowsToEntries;
     private commit;
     isSubscribed(): boolean;
+    /**
+     * Call once at startup. Finds the token (env var or memory.token file),
+     * verifies it against aegiscloud.org, and caches the result in config.json.
+     * No-op if verification is still fresh (< 24 h).
+     * Clears subscription if the server rejects the token.
+     */
+    initVerification(): Promise<void>;
     /** Returns true only for write operations: subscribed, or this IS the free-tier session. */
     isWriteAllowed(sessionId: string): boolean;
+    /**
+     * Best-effort server-side check (anonymous machine fingerprint) that this device
+     * hasn't already burned the free trial elsewhere. No-op for subscribed users or
+     * once already resolved. Fails open on network errors — this is an anti-abuse
+     * soft gate, not a security boundary, so a legitimate offline user is never blocked.
+     */
+    private claimFreeTrialIfNeeded;
     /** Returns true for reads: subscribed, OR free session was ever used (let them see value). */
     isEnabled(): boolean;
     /**

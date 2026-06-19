@@ -5,6 +5,7 @@
 import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './types.js';
 import type { AgentConfig } from '../agent/types.js';
 import { buildCommand } from './build.js';
+import { cloneCommand } from './clone.js';
 import { sessionActions, getState, getConfig } from '../store/index.js';
 import {
   OrchestratorAgent,
@@ -582,6 +583,54 @@ export const routerCommand: SlashCommand = {
       `  complex  ${tiers.complex || '(auto)'}`,
     ];
     return { success: true, type: 'info', content: lines.join('\n') };
+  },
+};
+
+/**
+ * /effort - extended-thinking budget tier (native Anthropic transport only)
+ */
+export const effortCommand: SlashCommand = {
+  name: 'effort',
+  description: 'Set Claude\'s extended-thinking effort level',
+  category: 'config',
+  usage: '/effort [off|low|medium|high|max]',
+  examples: ['/effort', '/effort high', '/effort off'],
+  fullDescription:
+    'Controls Claude\'s adaptive thinking depth via output_config.effort. Higher levels reason more ' +
+    'before answering — better for hard problems, slower and more expensive for simple ones. ' +
+    'Only takes effect on the native Anthropic API path (not OpenAI-compatible providers, and not Haiku models).',
+
+  async handler(args: string): Promise<SlashCommandResult> {
+    const { configActions, getState } = await import('../store/index.js');
+    const state = getState();
+    const config = state.config.config;
+    const current = config?.thinking?.budget || 'off';
+
+    const persist = async (budget: typeof current) => {
+      configActions().updateConfig({ thinking: { budget } });
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const os = await import('os');
+        const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.thinking = { budget };
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      } catch { /* non-fatal */ }
+    };
+
+    const arg = args.trim().toLowerCase();
+    if (!arg) {
+      return { success: true, type: 'info', content: `thinking effort: ${current}` };
+    }
+
+    const valid = ['off', 'low', 'medium', 'high', 'max'];
+    if (!valid.includes(arg)) {
+      return { success: false, type: 'error', content: `usage: /effort [${valid.join('|')}]` };
+    }
+
+    await persist(arg as typeof current);
+    return { success: true, type: 'success', message: `thinking effort: ${arg}` };
   },
 };
 
@@ -2690,6 +2739,7 @@ export const builtinCommands: SlashCommand[] = [
   versionCommand,
   modelCommand,
   routerCommand,
+  effortCommand,
   themeCommand,
   statusCommand,
   tokensCommand,
@@ -2705,5 +2755,6 @@ export const builtinCommands: SlashCommand[] = [
   multiYoloCommand,
   researchCommand,
   buildCommand,
+  cloneCommand,
   ...appCommands,
 ];

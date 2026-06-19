@@ -1,80 +1,48 @@
-import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 /**
- * ChatStatusBar - 聊天状态栏组件
- *
- *
+ * ChatStatusBar — Claude Code style minimal status bar
  */
 import React from 'react';
 import { Box, Text } from 'ink';
 import { useShallow } from 'zustand/react/shallow';
 import { themeManager } from '../../themes/index.js';
-import { useClawdStore, } from '../../../store/index.js';
-/**
- *
- */
+import { useClawdStore } from '../../../store/index.js';
 function formatTokens(count) {
-    if (count >= 1000000) {
+    if (count >= 1000000)
         return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
+    if (count >= 1000)
         return `${(count / 1000).toFixed(1)}k`;
-    }
     return String(count);
 }
-/**
- *
- */
-export const ChatStatusBar = React.memo(({ model, isVisible = true, }) => {
+export const ChatStatusBar = React.memo(({ model, modelIsAuto = false, isVisible = true, isScrolledUp = false, renderLatency = 0, routerEnabled = false, onToggleRouter, }) => {
     const theme = themeManager.getTheme();
     const displayModel = model;
-    // Single store subscription with shallow comparison — avoids cascading
-    // re-renders when unrelated store slices change (e.g. isThinking during streaming).
-    // The 4 individual selectors were causing 4 separate subscriptions.
-    const { sessionId, tokenUsage, messageCount, queuedCommands } = useClawdStore(useShallow((state) => ({
-        sessionId: state.session.sessionId,
-        tokenUsage: state.session.tokenUsage,
+    const { messageCount, queuedCommands } = useClawdStore(useShallow((state) => ({
         messageCount: state.session.messages.length,
         queuedCommands: state.command.pendingCommands.length,
     })));
-    if (!isVisible) {
+    if (!isVisible)
         return null;
-    }
-    // 构建状态项（使用简洁的文字标
-    const segments = [];
-    // Model - 核心信息，高亮显
+    const items = [];
     if (displayModel) {
-        segments.push({
-            content: (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.text.muted, children: "model:" }), _jsx(Text, { color: theme.colors.primary, bold: true, children: displayModel.length > 24 ? displayModel.slice(0, 24) + '…' : displayModel })] })),
-        });
+        const truncated = displayModel.length > 24 ? displayModel.slice(0, 24) + '…' : displayModel;
+        items.push(modelIsAuto ? `${truncated} (auto)` : truncated);
     }
-    // Messages count
+    if (renderLatency > 50) {
+        items.push(`lag: ${renderLatency}ms`);
+    }
     if (messageCount !== undefined) {
-        segments.push({
-            content: (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.text.muted, children: "msgs:" }), _jsx(Text, { color: theme.colors.text.secondary, children: messageCount })] })),
-        });
+        items.push(`${messageCount} msgs`);
     }
-    // Queue (only if > 0)
+    if (isScrolledUp) {
+        items.push('↑ scrolled');
+    }
     if (queuedCommands > 0) {
-        segments.push({
-            content: (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.text.muted, children: "queue:" }), _jsx(Text, { color: theme.colors.warning, children: queuedCommands })] })),
-        });
+        items.push(`queue: ${queuedCommands}`);
     }
-    // Tokens - input/output format
-    if (tokenUsage && (tokenUsage.inputTokens + tokenUsage.outputTokens) > 0) {
-        segments.push({
-            content: (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.text.muted, children: "tokens:" }), _jsxs(Text, { color: theme.colors.info, children: [formatTokens(tokenUsage.inputTokens), "/", formatTokens(tokenUsage.outputTokens)] })] })),
-        });
-    }
-    // Session ID
-    if (sessionId) {
-        segments.push({
-            content: (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.text.muted, children: "sid:" }), _jsx(Text, { color: theme.colors.info, dimColor: true, children: sessionId.slice(0, 8) })] })),
-        });
-    }
-    if (segments.length === 0) {
+    if (items.length === 0)
         return null;
-    }
-    return (_jsxs(Box, { flexDirection: "row", justifyContent: "flex-start", paddingX: 0, marginTop: 0, children: [_jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: "\u2500 " }), segments.map((seg, index) => (_jsxs(React.Fragment, { children: [index > 0 && (_jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: " \u00B7 " })), _jsx(Text, { dimColor: seg.dimmed, children: seg.content })] }, index))), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: " \u2500" })] }));
+    return (_jsx(Box, { flexDirection: "row", paddingX: 0, marginTop: 0, children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [items.join(' · '), _jsx(Text, { children: " \u00B7 " }), _jsxs(Text, { color: routerEnabled ? theme.colors.success : theme.colors.text.muted, bold: routerEnabled, children: ["R:", routerEnabled ? 'ON' : 'OFF'] }), _jsx(Text, { dimColor: true, children: " alt+r" })] }) }));
 });
 ChatStatusBar.displayName = 'ChatStatusBar';
 export default ChatStatusBar;

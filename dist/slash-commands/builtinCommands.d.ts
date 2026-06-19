@@ -23,6 +23,14 @@ export declare const versionCommand: SlashCommand;
  */
 export declare const modelCommand: SlashCommand;
 /**
+ * /router - 自动路由：按任务复杂度自动选择模
+ */
+export declare const routerCommand: SlashCommand;
+/**
+ * /effort - extended-thinking budget tier (native Anthropic transport only)
+ */
+export declare const effortCommand: SlashCommand;
+/**
  * /theme - 切换主题
  */
 export declare const themeCommand: SlashCommand;
@@ -30,6 +38,10 @@ export declare const themeCommand: SlashCommand;
  * /status - 显示会话状态
  */
 export declare const statusCommand: SlashCommand;
+/**
+ * /tokens - token usage graph and estimated cost
+ */
+export declare const tokensCommand: SlashCommand;
 /**
  * /skills - Skills 管理
  */

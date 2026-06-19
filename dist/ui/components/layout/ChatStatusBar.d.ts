@@ -1,18 +1,17 @@
 /**
- * ChatStatusBar - 聊天状态栏组件
- *
- *
+ * ChatStatusBar — Claude Code style minimal status bar
  */
 import React from 'react';
 interface ChatStatusBarProps {
-    /** 当前模型 */
     model?: string;
-    /** 是否显示 */
+    /** True when `model` was picked by the auto-router rather than /model */
+    modelIsAuto?: boolean;
     isVisible?: boolean;
+    isScrolledUp?: boolean;
+    renderLatency?: number;
+    routerEnabled?: boolean;
+    onToggleRouter?: () => void;
 }
-/**
- *
- */
 export declare const ChatStatusBar: React.FC<ChatStatusBarProps>;
 export default ChatStatusBar;
 //# sourceMappingURL=ChatStatusBar.d.ts.map

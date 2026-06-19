@@ -11,16 +11,20 @@ import * as path from 'path';
 import * as os from 'os';
 import { v4 as uuid } from 'uuid';
 import initSqlJs from 'sql.js';
-import { pipeline } from '@xenova/transformers';
+import { pushEntries, pullSince, claimFreeTrial, searchCloud } from './CloudSync.js';
 // ── Paths ────────────────────────────────────────────────────────────────────
 const MEMORY_DIR = path.join(os.homedir(), '.aegiscode', 'memory');
 const DB_PATH = path.join(MEMORY_DIR, 'memory.db');
 const CONFIG_FILE = path.join(os.homedir(), '.aegiscode', 'config.json');
 const SESSION_FILE = path.join(MEMORY_DIR, 'last-session.txt');
 const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
+const LAST_CLOUD_SYNC_FILE = path.join(MEMORY_DIR, '.last-cloud-sync');
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
 const OLLAMA_EMBED_URL = process.env.AEGIS_OLLAMA_EMBED_URL || 'http://localhost:11434/api/embed';
+// ── Token verification ───────────────────────────────────────────────────────
+const VERIFY_URL = 'https://aegiscloud.org/api/verify-token';
+const VERIFY_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours
 // ── Constants ────────────────────────────────────────────────────────────────
 const VECTOR_DIM_XENOVA = 384; // all-MiniLM-L6-v2 output dimension
 const VECTOR_DIM_OLLAMA = 768; // nomic-embed-text output dimension
@@ -36,6 +40,11 @@ const JUNK_PATTERNS = [
     /^\/billing/i, /^\/council/i, /^\/help/i, /^\/theme/i,
     /^\/clear/i, /^\| sid/i, /^\|──/i, /^\| tok/i, /^\s*$/,
 ];
+function isExpired(expiresAt) {
+    if (!expiresAt)
+        return false;
+    return new Date(expiresAt).getTime() < Date.now();
+}
 function isJunk(content) {
     if (content.length < 8)
         return true;
@@ -208,6 +217,7 @@ async function getEmbedder() {
     }
     // 2. Fallback to Xenova transformers (local)
     try {
+        const { pipeline } = await import('@xenova/transformers');
         const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         embedPipeline = async (texts) => {
             const results = await Promise.all(texts.map(t => extractor(t, { pooling: 'mean', normalize: true })));
@@ -276,6 +286,9 @@ function parseJsonArr(s) {
 }
 // ── Cosine similarity between two vectors ───────────────────────────────────
 function cosineSimilarity(a, b) {
+    // Guard: mismatched dimensions (e.g. Xenova 384 vs Ollama 768) produce NaN
+    if (a.length !== b.length || a.length === 0)
+        return 0;
     let dot = 0, na = 0, nb = 0;
     for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
@@ -301,6 +314,46 @@ export class SharedMemory {
         this.db = await initDb();
         this.embedder = await getEmbedder();
         this.applyTTL();
+        if (this.isSubscribed())
+            void this.syncFromCloud();
+    }
+    // ── Cloud sync (cross-device, subscribed users only) ────────────────────
+    getMemoryToken() {
+        const fromEnv = (process.env.AEGIS_MEMORY_TOKEN || '').trim();
+        if (fromEnv)
+            return fromEnv;
+        try {
+            if (fs.existsSync(MEMORY_TOKEN_FILE)) {
+                const t = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
+                if (t)
+                    return t;
+            }
+        }
+        catch { }
+        return null;
+    }
+    /** Pull entries newer than the last sync marker and merge them in. Never blocks startup. */
+    async syncFromCloud() {
+        const token = this.getMemoryToken();
+        if (!token)
+            return;
+        let since = null;
+        try {
+            if (fs.existsSync(LAST_CLOUD_SYNC_FILE)) {
+                since = fs.readFileSync(LAST_CLOUD_SYNC_FILE, 'utf8').trim() || null;
+            }
+        }
+        catch { }
+        const pulled = await pullSince(since, token);
+        if (pulled.length === 0)
+            return;
+        this.import(pulled, true);
+        const newest = pulled.reduce((max, e) => (e.timestamp > max ? e.timestamp : max), since ?? '');
+        try {
+            fs.mkdirSync(MEMORY_DIR, { recursive: true });
+            fs.writeFileSync(LAST_CLOUD_SYNC_FILE, newest);
+        }
+        catch { }
     }
     /** Await readiness before any operation */
     async ensureReady() {
@@ -341,6 +394,7 @@ export class SharedMemory {
             return null;
         // Record this session as the free-tier session on first write
         this.recordFreeSession(session);
+        void this.claimFreeTrialIfNeeded(session);
         const cleaned = stripInvalidChars(content);
         if (isJunk(cleaned))
             return null;
@@ -393,6 +447,11 @@ export class SharedMemory {
             topics, entities, sentiment, tokenCount,
             embedding: embeddingBuf ? Array.from(new Float32Array(embeddingBuf.buffer, embeddingBuf.byteOffset, embeddingBuf.byteLength / 4)) : null,
         };
+        if (this.isSubscribed()) {
+            const token = this.getMemoryToken();
+            if (token)
+                void pushEntries([entry], token);
+        }
         return entry;
     }
     // ── Search (hybrid: keyword + vector) ───────────────────────────────────
@@ -403,7 +462,7 @@ export class SharedMemory {
         const q = query.toLowerCase();
         const words = q.split(/\s+/).filter(w => w.length > 3 && !['what', 'that', 'this', 'with', 'have', 'from', 'your', 'just', 'been', 'were'].includes(w));
         if (words.length === 0 && !this.embedder) {
-            return this.recent(limit);
+            return this.mergeCloudResults(this.recent(limit), query, limit);
         }
         // ── Keyword score (ALL entries) ──
         const allRows = this.db.exec(`SELECT * FROM memories ORDER BY timestamp DESC LIMIT 1000`);
@@ -411,7 +470,8 @@ export class SharedMemory {
         const keywordScored = allEntries.map(e => {
             const text = (e.content + ' ' + e.tags.join(' ')).toLowerCase();
             const keywordScore = words.reduce((s, w) => {
-                const count = (text.match(new RegExp(w, 'g')) || []).length;
+                const safe = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const count = (text.match(new RegExp(safe, 'g')) || []).length;
                 return s + count;
             }, 0);
             const importBoost = e.session === 'aegiscloud-import' ? 1.5 : 1;
@@ -437,14 +497,37 @@ export class SharedMemory {
                         return { entry, score: hybrid, vecSim };
                     });
                     vectorScored.sort((a, b) => b.score - a.score);
-                    return vectorScored.slice(0, limit).map(({ entry }) => entry);
+                    const vectorResults = vectorScored.slice(0, limit).map(({ entry }) => entry);
+                    return this.mergeCloudResults(vectorResults, query, limit);
                 }
             }
             catch {
                 // fall through to keyword-only
             }
         }
-        return keywordScored.slice(0, limit).map(({ entry }) => entry);
+        const localResults = keywordScored.slice(0, limit).map(({ entry }) => entry);
+        return this.mergeCloudResults(localResults, query, limit);
+    }
+    /**
+     * Top up local results with a cloud keyword search — catches entries written on
+     * another device since the last `pullSince`. Capped at 1.5s so an offline or slow
+     * connection never meaningfully delays a search; on any failure, local results stand.
+     */
+    async mergeCloudResults(localResults, query, limit) {
+        if (localResults.length >= limit)
+            return localResults;
+        if (!this.isSubscribed())
+            return localResults;
+        const token = this.getMemoryToken();
+        if (!token)
+            return localResults;
+        const timeout = new Promise(resolve => setTimeout(() => resolve([]), 1500));
+        const cloudResults = await Promise.race([searchCloud(query, limit, token), timeout]);
+        if (cloudResults.length === 0)
+            return localResults;
+        const seenIds = new Set(localResults.map(e => e.id));
+        const fresh = cloudResults.filter(e => !seenIds.has(e.id));
+        return [...localResults, ...fresh].slice(0, limit);
     }
     recent(limit = 6) {
         const rows = this.db.exec(`SELECT * FROM memories ORDER BY timestamp DESC LIMIT ?`, [limit]);
@@ -483,6 +566,11 @@ export class SharedMemory {
     }
     async summarizeSession(sessionId, entries, apiKey, baseURL, model) {
         if (!apiKey || entries.length < 3)
+            return null;
+        // Claude Code Pro/Max OAuth tokens (sk-ant-oat...) only work through the
+        // official Claude Code client, not direct API calls — skip rather than
+        // make a request that's guaranteed to be rejected.
+        if (apiKey.startsWith('sk-ant-oat'))
             return null;
         const conversation = entries
             .slice(0, 20)
@@ -583,8 +671,7 @@ export class SharedMemory {
             const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
             for (const e of sorted) {
                 const prefix = e.summary ? 'SUMMARY:' : e.role === 'user' ? 'User:' : 'AEGIS:';
-                const meta = e.topics?.length ? ` [topics: ${e.topics.join(', ')}]` : '';
-                lines.push(`  ${prefix} ${e.content.slice(0, 200)}${meta}`);
+                lines.push(`  ${prefix} ${e.content.slice(0, 200)}`);
             }
             lines.push('');
         }
@@ -634,44 +721,87 @@ export class SharedMemory {
     }
     // ── Subscription / free-tier helpers ────────────────────────────────────
     isSubscribed() {
-        // 1. Check memory.token file (simplest flow: put token in file after Stripe payment)
-        try {
-            if (fs.existsSync(MEMORY_TOKEN_FILE)) {
-                const fileToken = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
-                if (fileToken.length >= 20) {
-                    // Token file exists and is valid — sync to config.json
-                    try {
-                        const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-                        if (!cfg?.memory?.subscribed) {
-                            const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: fileToken, activatedAt: new Date().toISOString() } };
-                            fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-                        }
-                    }
-                    catch { }
-                    return true;
-                }
-            }
-        }
-        catch { }
-        // 2. Check environment variable
-        if (process.env.AEGIS_MEMORY_TOKEN) {
-            try {
-                const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-                if (!cfg?.memory?.subscribed) {
-                    const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: process.env.AEGIS_MEMORY_TOKEN, activatedAt: new Date().toISOString() } };
-                    fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-                }
-            }
-            catch { }
-            return true;
-        }
-        // 3. Check config.json
         try {
             const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-            return cfg?.memory?.subscribed === true;
+            if (cfg?.memory?.subscribed !== true)
+                return false;
+            if (isExpired(cfg?.memory?.expiresAt))
+                return false;
+            // Require a server-verified timestamp within the cache window
+            const lv = cfg?.memory?.lastVerified;
+            if (!lv)
+                return false;
+            return Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS;
         }
         catch {
             return false;
+        }
+    }
+    /**
+     * Call once at startup. Finds the token (env var or memory.token file),
+     * verifies it against aegiscloud.org, and caches the result in config.json.
+     * No-op if verification is still fresh (< 24 h).
+     * Clears subscription if the server rejects the token.
+     */
+    async initVerification() {
+        const token = (process.env.AEGIS_MEMORY_TOKEN || '').trim() ||
+            (fs.existsSync(MEMORY_TOKEN_FILE)
+                ? fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim()
+                : '');
+        if (!token || token.length < 10)
+            return;
+        // Check cache — skip network call if still fresh
+        try {
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            const lv = cfg?.memory?.lastVerified;
+            if (cfg?.memory?.subscribed && lv && Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS) {
+                return; // still valid
+            }
+        }
+        catch { }
+        // Call server
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(VERIFY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': token },
+                body: JSON.stringify({ token }),
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
+            const data = await res.json();
+            const cfg = (() => { try {
+                return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            }
+            catch {
+                return {};
+            } })();
+            if (data.valid) {
+                const updated = {
+                    ...cfg,
+                    memory: {
+                        ...cfg.memory,
+                        subscribed: true,
+                        token,
+                        lastVerified: new Date().toISOString(),
+                        activatedAt: cfg?.memory?.activatedAt || new Date().toISOString(),
+                        expiresAt: data.expiresAt || null,
+                    },
+                };
+                fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+            }
+            else {
+                // Invalid token — revoke subscription
+                const updated = {
+                    ...cfg,
+                    memory: { ...cfg.memory, subscribed: false, lastVerified: null },
+                };
+                fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+            }
+        }
+        catch {
+            // Network error — do not revoke (allow offline use if previously verified)
         }
     }
     /** Returns true only for write operations: subscribed, or this IS the free-tier session. */
@@ -680,6 +810,11 @@ export class SharedMemory {
             return true;
         try {
             const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            // Some other device already claimed the free trial for this machine fingerprint —
+            // blocks even if this device never recorded a local freeSessionId (closes the
+            // "just delete config.json" loophole).
+            if (cfg?.memory?.freeTrialClaimed === false)
+                return false;
             const freeId = cfg?.memory?.freeSessionId ?? null;
             // Free tier not yet used — this session will be the free one
             if (!freeId)
@@ -689,6 +824,38 @@ export class SharedMemory {
         catch {
             return true;
         }
+    }
+    /**
+     * Best-effort server-side check (anonymous machine fingerprint) that this device
+     * hasn't already burned the free trial elsewhere. No-op for subscribed users or
+     * once already resolved. Fails open on network errors — this is an anti-abuse
+     * soft gate, not a security boundary, so a legitimate offline user is never blocked.
+     */
+    async claimFreeTrialIfNeeded(sessionId) {
+        if (this.isSubscribed())
+            return;
+        let cfg;
+        try {
+            cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+        }
+        catch {
+            cfg = {};
+        }
+        if (typeof cfg?.memory?.freeTrialClaimed === 'boolean')
+            return; // already resolved
+        const { getMachineFingerprint } = await import('./machineFingerprint.js');
+        const fingerprint = getMachineFingerprint();
+        const allowed = await claimFreeTrial(fingerprint, sessionId);
+        if (allowed === null)
+            return; // network error — fail open, retry next time
+        try {
+            const raw = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf8') : '{}';
+            const latest = JSON.parse(raw);
+            const updated = { ...latest, memory: { ...latest.memory, freeTrialClaimed: allowed } };
+            fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
+            fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+        }
+        catch { }
     }
     /** Returns true for reads: subscribed, OR free session was ever used (let them see value). */
     isEnabled() {
@@ -756,9 +923,7 @@ export class SharedMemory {
         const existingRows = this.db.exec(`SELECT id FROM memories`);
         const existingIds = new Set(existingRows[0]?.values.map((r) => r[0]) ?? []);
         for (const e of entries) {
-            if (!merge && existingIds.has(e.id))
-                continue;
-            if (existingIds.has(e.id))
+            if (existingIds.has(e.id) && !merge)
                 continue;
             let embeddingBuf = null;
             if (e.embedding && e.embedding.length > 0) {

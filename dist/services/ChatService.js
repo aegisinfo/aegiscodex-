@@ -2,6 +2,9 @@
  * ChatService - LLM 通信服务
  */
 import OpenAI from 'openai';
+import { OpenAIEventAdapter } from './streaming/OpenAIEventAdapter.js';
+import { ClaudeCliChatService } from './ClaudeCliChatService.js';
+import { AnthropicChatService } from './AnthropicChatService.js';
 // For local Ollama models, only include tools when the query looks like a coding task.
 // This avoids sending 350+ tokens of tool schemas on every conversational message,
 // which would add 25-30s of prefill time on CPU.
@@ -26,7 +29,7 @@ export class OpenAIChatService {
         });
         this.model = config.model || 'claude-sonnet-4-6';
     }
-    async chat(messages, tools, signal, streamCallbacks) {
+    async chat(messages, tools, signal, streamCallbacks, attempt = 0) {
         const isGroq = this.client.baseURL?.includes('groq.com') || false;
         const isOllama = this.client.baseURL?.includes('11434') || false;
         let content = '';
@@ -60,6 +63,10 @@ export class OpenAIChatService {
                 messages: openaiMessages,
                 stream: true,
             };
+            // Keep Ollama models loaded in memory between requests — eliminates cold-start latency
+            if (isOllama) {
+                requestParams.keep_alive = -1;
+            }
             const includeTools = tools && tools.length > 0 && !isGroq &&
                 (!isOllama || ollamaQueryNeedsTools(messages));
             if (includeTools) {
@@ -70,17 +77,66 @@ export class OpenAIChatService {
             }
             const stream = await this.client.chat.completions.create(requestParams, { signal });
             const toolCalls = new Map();
+            const adapter = streamCallbacks?.onStreamEvent ? new OpenAIEventAdapter() : null;
+            let inOllamaThinkBlock = false;
             for await (const chunk of stream) {
                 const delta = chunk.choices[0]?.delta;
                 if (!delta)
                     continue;
-                if (delta.content) {
-                    content += delta.content;
-                    streamCallbacks?.onContentDelta?.(delta.content);
+                // For ollama: extract <think>…</think> from delta.content before adapter/callbacks.
+                // Ollama embeds thinking in content as tags rather than a separate reasoning_content field.
+                let adaptDelta = delta;
+                if (isOllama && delta.content) {
+                    let remaining = delta.content;
+                    let plainContent = '';
+                    let thinkContent = '';
+                    while (remaining.length > 0) {
+                        if (inOllamaThinkBlock) {
+                            const closeIdx = remaining.indexOf('</think>');
+                            if (closeIdx === -1) {
+                                thinkContent += remaining;
+                                remaining = '';
+                            }
+                            else {
+                                thinkContent += remaining.slice(0, closeIdx);
+                                remaining = remaining.slice(closeIdx + 8);
+                                inOllamaThinkBlock = false;
+                            }
+                        }
+                        else {
+                            const openIdx = remaining.indexOf('<think>');
+                            if (openIdx === -1) {
+                                plainContent += remaining;
+                                remaining = '';
+                            }
+                            else {
+                                plainContent += remaining.slice(0, openIdx);
+                                remaining = remaining.slice(openIdx + 7);
+                                inOllamaThinkBlock = true;
+                            }
+                        }
+                    }
+                    adaptDelta = {
+                        ...delta,
+                        content: plainContent || null,
+                        reasoning_content: thinkContent || null,
+                    };
                 }
-                const reasoning = delta.reasoning_content
-                    || delta.thinking
-                    || delta.reasoning;
+                // Unified event path: convert chunk to AnthropicStreamEvents and emit
+                if (adapter && streamCallbacks?.onStreamEvent) {
+                    const events = adapter.adapt(adaptDelta);
+                    for (const event of events) {
+                        streamCallbacks.onStreamEvent(event);
+                    }
+                }
+                // Legacy individual callbacks (still called for backward compat)
+                if (adaptDelta.content) {
+                    content += adaptDelta.content;
+                    streamCallbacks?.onContentDelta?.(adaptDelta.content);
+                }
+                const reasoning = adaptDelta.reasoning_content
+                    || adaptDelta.thinking
+                    || adaptDelta.reasoning;
                 if (reasoning && typeof reasoning === 'string') {
                     reasoningContent += reasoning;
                     streamCallbacks?.onThinkingDelta?.(reasoning);
@@ -126,6 +182,13 @@ export class OpenAIChatService {
                 }
                 catch { }
             }
+            // Emit finalize events (content_block_stop + message_stop)
+            if (adapter && streamCallbacks?.onStreamEvent) {
+                const stopReason = stream.finalMessage?.stop_reason;
+                for (const event of adapter.finalize(stopReason)) {
+                    streamCallbacks.onStreamEvent(event);
+                }
+            }
             const result = {
                 content,
                 reasoningContent: reasoningContent || undefined,
@@ -153,10 +216,20 @@ export class OpenAIChatService {
                 if (content.length > 0) {
                     return { content, reasoningContent: reasoningContent || undefined, usage };
                 }
-                const delay = 1000;
-                process.stderr.write(`[RETRY] after ${delay}ms\n`);
+                const MAX_RETRIES = 5;
+                if (attempt >= MAX_RETRIES) {
+                    const status = error instanceof OpenAI.APIError ? error.status : undefined;
+                    const reason = status === 429 ? 'Rate limited' : `Server error (${status ?? 'transient'})`;
+                    throw new Error(`${reason} — gave up after ${MAX_RETRIES} retries.\n` +
+                        (status === 429
+                            ? `Your account hit Anthropic's rate limit. Wait a few minutes and try again,\n` +
+                                `or check usage at https://claude.ai/settings/usage`
+                            : error.message));
+                }
+                const delay = Math.min(1000 * 2 ** attempt, 16000);
+                process.stderr.write(`[RETRY] attempt ${attempt + 1}/${MAX_RETRIES} after ${delay}ms\n`);
                 await new Promise(r => setTimeout(r, delay));
-                return this.chat(messages, tools, signal, streamCallbacks);
+                return this.chat(messages, tools, signal, streamCallbacks, attempt + 1);
             }
             if (error instanceof OpenAI.APIError) {
                 if (isOllama && error.status === 400 && error.message.includes('does not support tools')) {
@@ -198,6 +271,17 @@ export class OpenAIChatService {
     }
 }
 export function createChatService(config) {
+    // Claude Code Pro/Max OAuth tokens (sk-ant-oat...) only work through the
+    // real `claude` binary — Anthropic rejects direct API calls using them
+    // from anything else. Same model selection, different transport.
+    if (config.apiKey?.startsWith('sk-ant-oat')) {
+        return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode });
+    }
+    // Native Anthropic transport — required for cache_control, thinking, and
+    // citations, none of which the OpenAI-compatible shim below can carry.
+    if (config.baseURL?.includes('anthropic.com')) {
+        return new AnthropicChatService(config);
+    }
     return new OpenAIChatService(config);
 }
 //# sourceMappingURL=ChatService.js.map

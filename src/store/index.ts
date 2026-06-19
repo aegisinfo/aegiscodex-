@@ -51,6 +51,7 @@ export {
   useAwaitingSecondCtrlC,
   useShowAllThinking,
   useAutoRouterActiveModel,
+  useRouterEnabled,
   // Focus
   useCurrentFocus,
   usePreviousFocus,

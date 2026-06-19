@@ -1,4 +1,4 @@
-import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * MessageRenderer - renders markdown content with memoization
  *
@@ -28,8 +28,6 @@ const messageRendererComparator = (prev, next) => {
         return false;
     if (prev.isStreaming !== next.isStreaming)
         return false;
-    if (prev.showAllThinking !== next.showAllThinking)
-        return false;
     if (prev.terminalWidth !== next.terminalWidth)
         return false;
     if (prev.showPrefix !== next.showPrefix)
@@ -48,16 +46,7 @@ const messageRendererComparator = (prev, next) => {
 export const MessageRenderer = memo(({ content, role, terminalWidth = 80, showPrefix = true, thinking, isStreaming, showAllThinking = false, contentBlocks, }) => {
     const theme = themeManager.getTheme();
     const roleStyle = themeManager.getRoleStyle(role);
-    const [localExpanded, setLocalExpanded] = useState(!!isStreaming);
-    useEffect(() => {
-        if (isStreaming) {
-            setLocalExpanded(true);
-        }
-        else if (thinking) {
-            setLocalExpanded(false);
-        }
-    }, [isStreaming, !!thinking]);
-    const isThinkingExpanded = showAllThinking || localExpanded;
+    const isThinkingExpanded = true;
     // Incremental markdown parse cache — avoids re-parsing stable content
     // during streaming by detecting append-only growth and reusing blocks.
     const parseCacheRef = useRef({ content: '', blocks: [] });
@@ -103,60 +92,131 @@ export const MessageRenderer = memo(({ content, role, terminalWidth = 80, showPr
     const filteredThinkingBlocks = useMemo(() => {
         return thinkingBlocks.filter((block) => block.type !== 'empty');
     }, [thinkingBlocks]);
-    const thinkingWordCount = useMemo(() => {
-        if (!thinking)
-            return 0;
-        return thinking.trim().split(/\s+/).filter(Boolean).length;
-    }, [thinking]);
-    const prefixOffset = showPrefix && roleStyle ? roleStyle.prefix.length + 1 : 0;
+    const prefixOffset = showPrefix && roleStyle && roleStyle.prefix ? roleStyle.prefix.length + 1 : 0;
     const hasToolBlocks = contentBlocks && contentBlocks.some(b => b.type === 'tool_use' || b.type === 'tool_result');
-    return (_jsxs(Box, { flexDirection: "column", marginBottom: 1, children: [filteredThinkingBlocks.length > 0 && (_jsx(Box, { flexDirection: "column", marginBottom: 1, children: isThinkingExpanded ? (_jsxs(_Fragment, { children: [_jsx(Box, { marginBottom: 0, children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [showPrefix && roleStyle && _jsxs(Text, { children: [roleStyle.prefix, " "] }), isStreaming ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.primary, children: '□ ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thinking" }), thinkingWordCount > 0 && _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" \u00B7 ", thinkingWordCount, "w..."] })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.primary, children: '□ ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thought" }), thinkingWordCount > 0 && (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" \u00B7 ", thinkingWordCount, "w"] }))] }))] }) }), _jsx(Box, { flexDirection: "column", marginLeft: prefixOffset, borderStyle: "round", borderColor: theme.colors.border.light, paddingX: 1, children: filteredThinkingBlocks.map((block, index) => (_jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: block.content }) }, index))) })] })) : (_jsxs(Box, { marginLeft: prefixOffset, children: [_jsx(Text, { color: theme.colors.primary, children: '□ ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thought" }), thinkingWordCount > 0 && (_jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [" \u00B7 ", thinkingWordCount, "w"] }))] })) })), filteredBlocks.map((block, index) => (_jsx(BlockRenderer, { block: block, isFirst: index === 0 && filteredThinkingBlocks.length === 0, roleStyle: showPrefix ? roleStyle : undefined, terminalWidth: terminalWidth, theme: theme }, index))), hasToolBlocks && (_jsx(Box, { flexDirection: "column", marginTop: 1, children: contentBlocks.map((block, idx) => {
-                    if (block.type === 'tool_use') {
-                        return (_jsx(ToolUseBlockRenderer, { name: block.name, input: block.input, status: block.status, startedAt: block.startedAt, completedAt: block.completedAt, theme: theme, prefixOffset: prefixOffset }, `tool-${block.id || idx}`));
-                    }
-                    if (block.type === 'tool_result') {
-                        return (_jsx(ToolResultBlockRenderer, { content: block.content, isError: block.is_error, theme: theme, prefixOffset: prefixOffset }, `result-${block.tool_use_id || idx}`));
-                    }
-                    return null;
-                }) })), isStreaming && (_jsx(StreamingCursor, { prefixOffset: prefixOffset })), !isStreaming && (_jsx(MessageSeparator, { width: terminalWidth }))] }));
+    // ===== Content-block-driven rendering (Claude Code style) =====
+    // When contentBlocks are present, render from the structured block model
+    // instead of the flat markdown string.
+    const shouldUseContentBlocks = contentBlocks && contentBlocks.length > 0;
+    // User messages: "You" label + content, clearly separated
+    if (role === 'user') {
+        return (_jsx(Box, { flexDirection: "column", marginBottom: 1, marginTop: 0, children: _jsxs(Box, { flexDirection: "row", children: [_jsxs(Box, { marginRight: 1, flexShrink: 0, children: [_jsx(Text, { color: theme.colors.primary, bold: true, children: "You" }), _jsx(Text, { color: theme.colors.border.light, children: ":" })] }), _jsx(Box, { flexGrow: 1, children: _jsx(Text, { color: theme.colors.text.primary, wrap: "wrap", children: content }) })] }) }));
+    }
+    return (_jsxs(Box, { flexDirection: "column", marginBottom: 0, children: [shouldUseContentBlocks ? (_jsx(ContentBlockRenderer, { contentBlocks: contentBlocks, content: content, theme: theme, isStreaming: isStreaming, roleStyle: roleStyle, terminalWidth: terminalWidth, prefixOffset: prefixOffset })) : (_jsxs(_Fragment, { children: [!!thinking && (_jsx(Box, { flexDirection: "column", children: isStreaming ? (_jsxs(_Fragment, { children: [_jsx(Box, { children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [_jsx(ThinkingIcon, {}), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thinking" })] }) }), _jsx(Box, { flexDirection: "column", marginLeft: 0, children: filteredThinkingBlocks.map((block, index) => (_jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: block.content }) }, index))) })] })) : thinking.length > 0 ? (_jsxs(_Fragment, { children: [_jsx(Box, { children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [_jsx(Text, { color: theme.colors.primary, children: '□ ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thought" })] }) }), _jsx(Box, { flexDirection: "column", marginLeft: 0, children: filteredThinkingBlocks.map((block, index) => (_jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: block.content }) }, index))) })] })) : null })), filteredBlocks.map((block, index) => (_jsx(BlockRenderer, { block: block, isFirst: index === 0 && filteredThinkingBlocks.length === 0, roleStyle: showPrefix ? roleStyle : undefined, terminalWidth: terminalWidth, theme: theme }, index)))] })), !shouldUseContentBlocks && hasToolBlocks && (_jsx(ActionsBlock, { contentBlocks: contentBlocks, theme: theme, prefixOffset: prefixOffset })), isStreaming && (_jsx(StreamingCursor, { prefixOffset: prefixOffset, hasContent: content.length > 0 || (thinking?.length ?? 0) > 0 }))] }));
 }, messageRendererComparator);
 MessageRenderer.displayName = 'MessageRenderer';
-// ===== Message Separator =====
-const MessageSeparator = React.memo(({ width }) => {
-    const theme = themeManager.getTheme();
-    const lineWidth = Math.max(4, Math.min(width - 2, 78));
-    return (_jsx(Box, { marginTop: 0, children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: '─'.repeat(lineWidth) }) }));
-});
-MessageSeparator.displayName = 'MessageSeparator';
+/**
+ * ContentBlockRenderer — renders structured content blocks inline.
+ * Matches Claude Code's rendering: text blocks as markdown, thinking blocks inline,
+ * tool_use blocks as ● colored lines, all in sequence.
+ */
+const ContentBlockRenderer = React.memo(({ contentBlocks, content, theme, isStreaming, roleStyle, terminalWidth, prefixOffset, }) => {
+    const roleStyleWithPrefix = roleStyle && roleStyle.prefix ? roleStyle : undefined;
+    // Local variable tracks prefix emission within a single render pass.
+    // Unlike useRef, a local variable doesn't need reset logic and has no
+    // stale-closure risk — it's recreated each render.
+    let prefixEmitted = false;
+    const emitPrefix = () => {
+        if (prefixEmitted || !roleStyleWithPrefix)
+            return null;
+        prefixEmitted = true;
+        return (_jsx(Box, { marginRight: 1, children: _jsx(Text, { color: roleStyleWithPrefix.color, bold: roleStyleWithPrefix.bold, children: roleStyleWithPrefix.prefix }) }));
+    };
+    return (_jsxs(_Fragment, { children: [contentBlocks.map((block, idx) => {
+                if (block.type === 'thinking') {
+                    // A thinking block is "active" during streaming — the buffer's thinking
+                    // content is still being accumulated. Using idx === last-block check
+                    // fails when text blocks are merged before tool blocks (thinking is always
+                    // the first synthesized block, never the last).
+                    const isActive = isStreaming && block.thinking.length > 0;
+                    const filtered = parseMarkdown(block.thinking).filter(b => b.type !== 'empty');
+                    return (_jsxs(Box, { flexDirection: "column", children: [emitPrefix(), isActive ? (_jsxs(_Fragment, { children: [_jsx(Box, { children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [_jsx(ThinkingIcon, {}), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thinking" })] }) }), _jsx(Box, { flexDirection: "column", marginLeft: 2, children: filtered.map((b, i) => (_jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: b.content }) }, i))) })] })) : block.thinking ? (_jsxs(_Fragment, { children: [_jsx(Box, { children: _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [_jsx(Text, { color: theme.colors.primary, children: '□ ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: "thought" })] }) }), _jsx(Box, { flexDirection: "column", marginLeft: 2, children: filtered.map((b, i) => (_jsx(Box, { children: _jsx(Text, { color: theme.colors.text.muted, dimColor: true, italic: true, children: b.content }) }, i))) })] })) : null] }, `cb-think-${idx}`));
+                }
+                if (block.type === 'text') {
+                    const parsed = parseMarkdown(block.text);
+                    const filtered = parsed.filter(b => b.type !== 'empty');
+                    return (_jsxs(Box, { flexDirection: "column", children: [emitPrefix(), filtered.map((b, i) => (_jsx(BlockRenderer, { block: b, isFirst: false, roleStyle: undefined, terminalWidth: terminalWidth, theme: theme }, i)))] }, `cb-text-${idx}`));
+                }
+                if (block.type === 'tool_use') {
+                    const result = contentBlocks.find(b => b.type === 'tool_result' && b.tool_use_id === block.id);
+                    return (_jsx(ToolUseBlock, { block: block, result: result, theme: theme, prefixOffset: prefixOffset }, `cb-tool-${block.id || idx}`));
+                }
+                return null;
+            }), content && (!contentBlocks || contentBlocks.every(b => b.type !== 'text')) && (_jsxs(Box, { flexDirection: "column", children: [emitPrefix(), parseMarkdown(content)
+                        .filter(b => b.type !== 'empty')
+                        .map((b, i) => (_jsx(BlockRenderer, { block: b, isFirst: false, roleStyle: undefined, terminalWidth: terminalWidth, theme: theme }, i)))] }, "remaining-text"))] }));
+}, (prev, next) => prev.contentBlocks === next.contentBlocks &&
+    prev.content === next.content &&
+    prev.isStreaming === next.isStreaming &&
+    prev.terminalWidth === next.terminalWidth &&
+    prev.prefixOffset === next.prefixOffset &&
+    prev.theme.colors === next.theme.colors);
 // ===== Streaming Cursor Component (animated) =====
-// Clean blinking cursor — subtle thin bar, no pulsing blue block
-const CURSOR_FRAMES = ['▏', ' '];
-const CURSOR_INTERVAL = 530; // ms — calm blink rate
-const StreamingCursor = React.memo(({ prefixOffset }) => {
+// Braille spinner — shown before first token (matches Claude Code style)
+const SPIN_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPIN_INTERVAL = 80;
+// Smooth breathing bar — shown while text is streaming
+const CURSOR_FRAMES = ['▏', '▎', '▍', '▌', '▌', '▍', '▎', '▏', '▏', ' ', ' ', ' '];
+const CURSOR_INTERVAL = 65;
+const StreamingCursor = React.memo(({ prefixOffset, hasContent }) => {
     const theme = themeManager.getTheme();
-    const [visible, setVisible] = useState(true);
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setVisible(v => !v);
-        }, CURSOR_INTERVAL);
-        return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    return (_jsx(Box, { marginLeft: prefixOffset, children: _jsx(Text, { color: "#4488ff", children: visible ? CURSOR_FRAMES[0] : CURSOR_FRAMES[1] }) }));
-});
-StreamingCursor.displayName = 'StreamingCursor';
-// ===== Tool Call Visual Components =====
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const SPINNER_INTERVAL = 80;
-const ToolSpinner = React.memo(({ color }) => {
     const [frame, setFrame] = useState(0);
     useEffect(() => {
-        const timer = setInterval(() => setFrame(f => (f + 1) % SPINNER_FRAMES.length), SPINNER_INTERVAL);
-        return () => clearInterval(timer);
-    }, []);
-    return _jsx(Text, { color: color, children: SPINNER_FRAMES[frame] });
+        setFrame(0);
+        const interval = setInterval(() => setFrame(f => (f + 1) % (hasContent ? CURSOR_FRAMES.length : SPIN_FRAMES.length)), hasContent ? CURSOR_INTERVAL : SPIN_INTERVAL);
+        return () => clearInterval(interval);
+    }, [hasContent]);
+    return (_jsx(Box, { marginLeft: prefixOffset, children: _jsx(Text, { color: theme.colors.primary, children: hasContent ? CURSOR_FRAMES[frame] : SPIN_FRAMES[frame] }) }));
 });
-ToolSpinner.displayName = 'ToolSpinner';
+StreamingCursor.displayName = 'StreamingCursor';
+// ===== Animated thinking icon =====
+const THINK_FRAMES = ['◌', '○', '◎', '●', '◎', '○'];
+const THINK_INTERVAL = 180;
+const ThinkingIcon = React.memo(() => {
+    const theme = themeManager.getTheme();
+    const [frame, setFrame] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setFrame(f => (f + 1) % THINK_FRAMES.length), THINK_INTERVAL);
+        return () => clearInterval(t);
+    }, []);
+    return _jsxs(Text, { color: theme.colors.primary, children: [THINK_FRAMES[frame], ' '] });
+});
+ThinkingIcon.displayName = 'ThinkingIcon';
+const ToolUseBlock = React.memo(({ block, result, theme, prefixOffset, }) => {
+    const isError = block.status === 'error';
+    const isRunning = block.status === 'running';
+    const dotColor = isError ? DOT_ERR : isRunning ? DOT_RUN : DOT_OK;
+    const elapsed = block.completedAt ? formatElapsed(block.completedAt - block.startedAt) : null;
+    const summary = getToolSummary(block.name, block.input);
+    const { label, path } = splitToolSummary(summary);
+    const subLines = [];
+    if (result?.content) {
+        const lines = result.content.split('\n').filter(l => l.trim());
+        const diffLines = lines.filter(l => /^[+-]/.test(l) && !l.startsWith('+++') && !l.startsWith('---'));
+        if (diffLines.length > 0) {
+            const added = diffLines.filter(l => l.startsWith('+')).length;
+            const removed = diffLines.filter(l => l.startsWith('-')).length;
+            if (added > 0 || removed > 0) {
+                subLines.push({ text: `${added > 0 ? `+${added}` : ''}${removed > 0 ? ` -${removed}` : ''} lines`, isUrl: false });
+            }
+            diffLines.slice(0, 5).forEach(l => {
+                subLines.push({ text: l, isUrl: false, isDiff: true, diffType: l.startsWith('+') ? '+' : '-' });
+            });
+        }
+        else {
+            lines.slice(0, 4).forEach(line => {
+                const trimmed = line.length > 100 ? line.slice(0, 97) + '…' : line;
+                subLines.push({ text: trimmed, isUrl: /^https?:\/\//.test(trimmed) });
+            });
+        }
+    }
+    return (_jsxs(Box, { flexDirection: "column", marginLeft: prefixOffset, children: [_jsxs(Box, { children: [_jsx(Text, { color: dotColor, bold: true, children: '● ' }), _jsx(Text, { color: theme.colors.text.primary, bold: true, children: label }), path && _jsx(Text, { color: isError ? DOT_ERR : DOT_OK, children: path }), elapsed && _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [' ', elapsed] })] }), subLines.map((sub, i) => (_jsxs(Box, { marginLeft: 2, children: [_jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: i === 0 ? '└ ' : '  ' }), sub.isDiff ? (_jsx(Box, { backgroundColor: sub.diffType === '+' ? '#0d2b0d' : '#2b0d0d', children: _jsx(Text, { color: sub.diffType === '+' ? DOT_OK : DOT_ERR, children: sub.text }) })) : sub.isUrl ? (_jsx(Text, { color: "#58a6ff", underline: true, children: sub.text })) : (_jsx(Text, { color: isError ? DOT_ERR : theme.colors.text.muted, dimColor: !isError, children: sub.text }))] }, i)))] }));
+}, (prev, next) => prev.block === next.block &&
+    prev.result === next.result &&
+    prev.theme === next.theme &&
+    prev.prefixOffset === next.prefixOffset);
+ToolUseBlock.displayName = 'ToolUseBlock';
+// ===== Tool Call Visual Components =====
 function shortenPath(p) {
     if (p.length <= 45)
         return p;
@@ -181,6 +241,14 @@ function getToolSummary(name, input) {
                 return `${name}(${args.pattern || ''})`;
             case 'Grep':
                 return `${name}(${args.pattern || ''}${args.path ? ` in ${shortenPath(args.path)}` : ''})`;
+            case 'Task': {
+                const tasks = Array.isArray(args.tasks) ? args.tasks : [];
+                if (tasks.length === 0)
+                    return name;
+                const first = String(tasks[0]?.description || '');
+                const summary = tasks.length > 1 ? `${first} +${tasks.length - 1} more` : first;
+                return `${name}(${summary.length > 45 ? summary.slice(0, 42) + '…' : summary})`;
+            }
             default: {
                 const entries = Object.entries(args);
                 if (entries.length === 0)
@@ -207,33 +275,35 @@ function formatElapsed(ms) {
         return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
 }
-const ToolUseBlockRenderer = ({ name, input, status, startedAt, completedAt, theme, prefixOffset, }) => {
-    const summary = useMemo(() => getToolSummary(name, input), [name, input]);
-    const { label, path } = useMemo(() => splitToolSummary(summary), [summary]);
-    const isRunning = status === 'running';
-    const isError = status === 'error';
-    const elapsed = !isRunning && completedAt ? formatElapsed(completedAt - startedAt) : null;
-    return (_jsx(Box, { marginLeft: prefixOffset + 2, marginY: 0, children: isRunning ? (_jsxs(_Fragment, { children: [_jsx(ToolSpinner, { color: theme.colors.primary }), _jsxs(Text, { color: theme.colors.text.secondary, children: [' ', label] }), path && _jsx(Text, { color: theme.colors.primary, children: path })] })) : isError ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.error, children: '• ' }), _jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: label }), path && _jsx(Text, { color: theme.colors.primary, dimColor: true, children: path }), elapsed && _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [' ', elapsed] })] })) : (_jsxs(_Fragment, { children: [_jsx(Text, { color: theme.colors.success, children: '• ' }), _jsx(Text, { color: theme.colors.text.secondary, children: label }), path && _jsx(Text, { color: theme.colors.primary, children: path }), elapsed && _jsxs(Text, { color: theme.colors.text.muted, dimColor: true, children: [' ', elapsed] })] })) }));
-};
-const ToolResultBlockRenderer = ({ content, isError, theme, prefixOffset, }) => {
-    const lines = useMemo(() => {
-        if (!content)
-            return [];
-        const all = content.split('\n').filter(l => l.trim());
-        return all.slice(0, 4);
-    }, [content]);
-    if (lines.length === 0)
+// ===== Colors =====
+const DOT_OK = '#3fb950';
+const DOT_ERR = '#f85149';
+const DOT_RUN = '#e3b341';
+const ActionsBlock = React.memo(({ contentBlocks, theme, prefixOffset }) => {
+    const toolBlocks = contentBlocks.filter(b => b.type === 'tool_use');
+    if (toolBlocks.length === 0)
         return null;
-    return (_jsx(Box, { flexDirection: "column", marginLeft: prefixOffset + 2, marginBottom: 0, children: lines.map((line, i) => (_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.text.muted, dimColor: true, children: i === 0 ? '⎿  ' : '   ' }), _jsx(Text, { color: isError ? theme.colors.error : theme.colors.text.muted, dimColor: true, wrap: "wrap", children: line.length > 120 ? line.slice(0, 117) + '…' : line })] }, i))) }));
-};
-const BlockRenderer = ({ block, isFirst, roleStyle, terminalWidth, theme, }) => {
+    return (_jsx(Box, { flexDirection: "column", children: contentBlocks.map((block, idx) => {
+            if (block.type !== 'tool_use')
+                return null;
+            const result = contentBlocks.find(b => b.type === 'tool_result' && b.tool_use_id === block.id);
+            return (_jsx(ToolUseBlock, { block: block, result: result, theme: theme, prefixOffset: 0 }, `action-${block.id || idx}`));
+        }) }));
+}, (prev, next) => prev.contentBlocks === next.contentBlocks &&
+    prev.theme === next.theme &&
+    prev.prefixOffset === next.prefixOffset);
+const BlockRenderer = React.memo(({ block, isFirst, roleStyle, terminalWidth, theme, }) => {
     const prefixWidth = roleStyle?.prefix.length ?? 0;
     const contentWidth = terminalWidth - prefixWidth - 2;
     if (block.type === 'empty') {
         return null;
     }
-    return (_jsxs(Box, { flexDirection: "row", children: [isFirst && roleStyle && (_jsx(Box, { marginRight: 1, children: _jsx(Text, { color: roleStyle.color, bold: roleStyle.bold, children: roleStyle.prefix }) })), !isFirst && roleStyle && _jsx(Box, { width: prefixWidth + 1 }), _jsx(Box, { flexGrow: 1, flexShrink: 1, children: block.type === 'code' ? (_jsx(CodeBlock, { content: block.content, language: block.language, filePath: block.filePath, theme: theme })) : block.type === 'heading' ? (_jsx(Heading, { content: block.content, level: block.level || 1, theme: theme })) : block.type === 'list' ? (_jsx(ListItem, { content: block.content, listType: block.listType, marker: block.marker, indent: block.indent, theme: theme })) : block.type === 'hr' ? (_jsx(HorizontalRule, { width: contentWidth, theme: theme })) : block.type === 'table' && block.tableData ? (_jsx(TableRenderer, { headers: block.tableData.headers, rows: block.tableData.rows, alignments: block.tableData.alignments, theme: theme })) : block.type === 'blockquote' ? (_jsx(Blockquote, { content: block.content, theme: theme })) : (_jsx(TextBlock, { content: block.content, theme: theme })) })] }));
-};
+    const roleStyleWithPrefix = roleStyle && roleStyle.prefix ? roleStyle : undefined;
+    return (_jsxs(Box, { flexDirection: "row", children: [isFirst && roleStyleWithPrefix && (_jsx(Box, { marginRight: 1, children: _jsx(Text, { color: roleStyleWithPrefix.color, bold: roleStyleWithPrefix.bold, children: roleStyleWithPrefix.prefix }) })), !isFirst && roleStyleWithPrefix && _jsx(Box, { width: prefixWidth + 1 }), _jsx(Box, { flexGrow: 1, flexShrink: 1, children: block.type === 'code' ? (_jsx(CodeBlock, { content: block.content, language: block.language, filePath: block.filePath, theme: theme })) : block.type === 'heading' ? (_jsx(Heading, { content: block.content, level: block.level || 1, theme: theme })) : block.type === 'list' ? (_jsx(ListItem, { content: block.content, listType: block.listType, marker: block.marker, indent: block.indent, theme: theme })) : block.type === 'hr' ? (_jsx(HorizontalRule, { width: contentWidth, theme: theme })) : block.type === 'table' && block.tableData ? (_jsx(TableRenderer, { headers: block.tableData.headers, rows: block.tableData.rows, alignments: block.tableData.alignments, theme: theme, maxWidth: contentWidth })) : block.type === 'blockquote' ? (_jsx(Blockquote, { content: block.content, theme: theme })) : (_jsx(TextBlock, { content: block.content, theme: theme })) })] }));
+}, (prev, next) => prev.block === next.block &&
+    prev.isFirst === next.isFirst &&
+    prev.terminalWidth === next.terminalWidth &&
+    prev.theme === next.theme);
 const CodeBlock = ({ content, language, filePath }) => {
     return (_jsx(CodeHighlighter, { content: content, language: language, filePath: filePath, showLineNumbers: true }));
 };
@@ -264,31 +334,86 @@ const stripMarkdownForWidth = (text) => {
         .replace(/~~(.+?)~~/g, '$1')
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 };
-const TableRenderer = ({ headers, rows, alignments, theme }) => {
-    const columnWidths = headers.map((header, index) => {
+/**
+ * Get theme-aware diff color for Before/After table columns.
+ * Returns theme.colors.error for "before"-like headers,
+ * theme.colors.success for "after"-like headers.
+ */
+function getDiffColumnColor(header, theme) {
+    const h = header.trim().toLowerCase();
+    if (/^(before|old|previous|removed?|from)$/.test(h))
+        return theme.colors.error;
+    if (/^(after|new|updated?|added?|to)$/.test(h))
+        return theme.colors.success;
+    return null;
+}
+const MIN_COL_WIDTH = 6;
+const TRUNCATION_MARKER = '…';
+/** Truncate cell content to fit within `maxWidth`, appending `…` if cut. */
+function truncateCell(content, maxWidth) {
+    const cleaned = stripMarkdownForWidth(content);
+    const raw = stringWidth(cleaned);
+    if (raw <= maxWidth)
+        return renderRawCell(content, maxWidth, 'left');
+    // Find safe truncation point respecting ansi / markdown
+    let visible = 0;
+    let i = 0;
+    const chars = [...content];
+    for (; i < chars.length; i++) {
+        const ch = chars[i];
+        visible += stringWidth(ch);
+        if (visible > maxWidth - 1)
+            break;
+    }
+    return content.slice(0, i) + TRUNCATION_MARKER;
+}
+function renderRawCell(content, width, align) {
+    const actualWidth = stringWidth(stripMarkdownForWidth(content));
+    const padding = Math.max(0, width - actualWidth);
+    if (align === 'center') {
+        const left = Math.floor(padding / 2);
+        const right = padding - left;
+        return ' '.repeat(left) + content + ' '.repeat(right);
+    }
+    if (align === 'right') {
+        return ' '.repeat(padding) + content;
+    }
+    return content + ' '.repeat(padding);
+}
+const TableRenderer = ({ headers, rows, alignments, theme, maxWidth }) => {
+    const borderCost = 1 + headers.length * 2; // leading + each col pair (cell│)
+    const available = maxWidth - borderCost - 2; // safety margin
+    // 1. Compute natural column widths
+    const naturalWidths = headers.map((header, index) => {
         const headerWidth = stringWidth(stripMarkdownForWidth(header));
         const maxRowWidth = Math.max(0, ...rows.map((row) => stringWidth(stripMarkdownForWidth(row[index] || ''))));
         return Math.max(headerWidth, maxRowWidth) + 2;
     });
+    const totalNatural = naturalWidths.reduce((a, b) => a + b, 0);
+    // 2. Clamp column widths if they exceed available space
+    const columnWidths = totalNatural <= available
+        ? naturalWidths
+        : naturalWidths.map((w) => Math.max(MIN_COL_WIDTH, Math.floor(w * (available / totalNatural))));
+    const truncated = totalNatural > available;
+    // Detect if any column is a diff column (Before/After/etc.)
+    const diffColors = headers.map(h => getDiffColumnColor(h, theme));
+    const isDiffTable = diffColors.some(c => c !== null);
     const renderCell = (content, width, align) => {
-        const actualWidth = stringWidth(stripMarkdownForWidth(content));
-        const padding = Math.max(0, width - actualWidth);
-        if (align === 'center') {
-            const left = Math.floor(padding / 2);
-            const right = padding - left;
-            return ' '.repeat(left) + content + ' '.repeat(right);
+        if (truncated) {
+            return truncateCell(content, width);
         }
-        if (align === 'right') {
-            return ' '.repeat(padding) + content;
-        }
-        return content + ' '.repeat(padding);
+        return renderRawCell(content, width, align);
     };
-    return (_jsxs(Box, { flexDirection: "column", marginY: 1, children: [_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u2502" }), headers.map((header, index) => (_jsxs(React.Fragment, { children: [_jsx(Text, { bold: true, color: theme.colors.primary, children: renderCell(header, columnWidths[index], alignments[index] || 'left') }), _jsx(Text, { color: theme.colors.border.light, children: "\u2502" })] }, index)))] }), _jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u251C" }), columnWidths.map((width, index) => (_jsxs(React.Fragment, { children: [_jsx(Text, { color: theme.colors.border.light, children: '─'.repeat(width) }), _jsx(Text, { color: theme.colors.border.light, children: index < columnWidths.length - 1 ? '┼' : '┤' })] }, index)))] }), rows.map((row, rowIndex) => (_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u2502" }), headers.map((_, colIndex) => {
+    return (_jsxs(Box, { flexDirection: "column", marginY: 1, children: [_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u2502" }), headers.map((header, index) => {
+                        const diffColor = diffColors[index];
+                        return (_jsxs(React.Fragment, { children: [_jsx(Text, { bold: true, color: diffColor ?? theme.colors.primary, children: renderCell(header, columnWidths[index], alignments[index] || 'left') }), _jsx(Text, { color: theme.colors.border.light, children: "\u2502" })] }, index));
+                    })] }), _jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u251C" }), columnWidths.map((width, index) => (_jsxs(React.Fragment, { children: [_jsx(Text, { color: theme.colors.border.light, children: '─'.repeat(width) }), _jsx(Text, { color: theme.colors.border.light, children: index < columnWidths.length - 1 ? '┼' : '┤' })] }, index)))] }), rows.map((row, rowIndex) => (_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u2502" }), headers.map((_, colIndex) => {
                         const cellContent = row[colIndex] || '';
-                        const paddedContent = renderCell(cellContent, columnWidths[colIndex], alignments[colIndex] || 'left');
+                        const renderedContent = renderCell(cellContent, columnWidths[colIndex], alignments[colIndex] || 'left');
+                        const diffColor = diffColors[colIndex];
                         const hasInlineFormat = /\*\*|`|~~|\[.*\]\(/.test(cellContent);
-                        return (_jsxs(React.Fragment, { children: [hasInlineFormat ? (_jsx(Text, { children: _jsx(InlineText, { content: paddedContent, theme: theme }) })) : (_jsx(Text, { children: paddedContent })), _jsx(Text, { color: theme.colors.border.light, children: "\u2502" })] }, colIndex));
-                    })] }, rowIndex)))] }));
+                        return (_jsxs(React.Fragment, { children: [diffColor ? (_jsx(Text, { color: diffColor, dimColor: rowIndex % 2 === 0, children: renderedContent })) : hasInlineFormat ? (_jsx(Text, { children: _jsx(InlineText, { content: renderedContent, theme: theme }) })) : (_jsx(Text, { children: renderedContent })), _jsx(Text, { color: theme.colors.border.light, children: "\u2502" })] }, colIndex));
+                    })] }, rowIndex))), truncated && (_jsx(Box, { children: _jsx(Text, { dimColor: true, color: theme.colors.text.secondary, children: `  ╚══ ${TRUNCATION_MARKER} columns scaled to fit terminal width (${maxWidth} cols)` }) }))] }));
 };
 const Blockquote = ({ content, theme, }) => (_jsxs(Box, { children: [_jsx(Text, { color: theme.colors.border.light, children: "\u2502 " }), _jsx(Text, { color: theme.colors.text.muted, italic: true, wrap: "wrap", children: content })] }));
 const TOOLCALL_RE = /^\s{2,}(\S+)\s*(.*?)\s*(✓|✗.*)$/;

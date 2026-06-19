@@ -15,6 +15,7 @@
  */
 import { OrchestratorAgent } from './OrchestratorAgent.js';
 import { requireModelConfig } from './utils.js';
+import { configManager } from '../../config/ConfigManager.js';
 // ─── Built-in app prompts ──────────────────────────────────────────
 const BUILTIN_APP_TEMPLATES = {
     audit: {
@@ -252,12 +253,22 @@ export async function runApp(appId, options) {
         model: modelCfg.model,
         timeout: modelCfg.timeout,
     };
+    // Resolve permission mode
+    let permissionMode = options.permissionMode || 'default';
+    try {
+        const mode = configManager.getDefaultPermissionMode();
+        if (mode)
+            permissionMode = mode;
+    }
+    catch { /* use default */ }
     const orchestrator = new OrchestratorAgent(`App-${appId}`, `You are ${app.name}. ${app.description}`);
     // Register agents with resolved config
     for (const agent of app.agents) {
         orchestrator.registerAgent({
             ...agent,
             config: { ...agentConfig, ...agent.config },
+            confirmationHandler: options.confirmationHandler,
+            permissionMode: permissionMode,
         });
     }
     // Build sub-tasks

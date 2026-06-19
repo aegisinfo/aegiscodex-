@@ -13,6 +13,7 @@ export interface AppProps {
     permissionMode?: PermissionMode;
     versionCheckPromise?: Promise<VersionCheckResult | null>;
     resumeSessionId?: string;
+    routerEnabled?: boolean;
 }
 export declare const App: React.FC<AppProps>;
 //# sourceMappingURL=App.d.ts.map

@@ -9,8 +9,10 @@
  * - Sub-agents can use real tools (Read, Edit, Write, Bash, Grep, Glob)
  */
 import { createChatService } from '../../services/ChatService.js';
+import { sharedMemory } from '../../memory/SharedMemory.js';
 import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
+import { configManager } from '../../config/ConfigManager.js';
 import { createToolRegistry, getBuiltinTools, ExecutionPipeline, PermissionMode, } from '../../tools/index.js';
 // ========== Tool-Enabled Sub-Agent Runner ==========
 /**
@@ -41,8 +43,10 @@ class SubAgentRunner {
                 }
             }
             this.toolRegistry = registry;
+            // Use configured permission mode, or read from user's settings (default: ask for confirm)
+            const mode = config.permissionMode || resolvePermissionMode();
             this.executionPipeline = new ExecutionPipeline(registry, {
-                defaultMode: PermissionMode.AUTO_EDIT, // no confirm prompts for sub-agents
+                defaultMode: mode,
             });
         }
     }
@@ -50,15 +54,21 @@ class SubAgentRunner {
         const startTime = Date.now();
         const sid = sessionId || 'default';
         this.currentSessionId = sid;
-        // ── Inject shared memory context from other agents ──
+        // ── Inject cross-session persistent memory ──
+        const memCtx = await sharedMemory.buildContext(task, 3, sid);
+        // ── Inject shared agent memory bus context (inter-agent communication) ──
         const agentContext = await agentMemoryBus.getContextForAgent(this.config.name, sid, 8, 600);
+        let systemPrompt = this.config.systemPrompt;
+        if (memCtx) {
+            systemPrompt += '\n\n' + memCtx;
+        }
+        if (agentContext) {
+            systemPrompt += '\n\n' + agentContext;
+        }
         const messages = [
-            { role: 'system', content: this.config.systemPrompt },
+            { role: 'system', content: systemPrompt },
             ...(context?.messages || []),
         ];
-        if (agentContext) {
-            messages.push({ role: 'system', content: agentContext });
-        }
         messages.push({
             role: 'user',
             content: context?.previousResults
@@ -160,8 +170,9 @@ class SubAgentRunner {
             const pipelineContext = {
                 sessionId,
                 workspaceRoot: process.cwd(),
-                permissionMode: PermissionMode.AUTO_EDIT,
+                permissionMode: this.config.permissionMode || resolvePermissionMode(),
                 messageId: tc.id,
+                confirmationHandler: this.config.confirmationHandler,
             };
             const execResult = await this.executionPipeline.execute(tc.function.name, params, pipelineContext);
             messages.push({
@@ -358,6 +369,23 @@ export class OrchestratorAgent {
     }
 }
 // ========== Factory ==========
+/**
+ * Resolve the user's configured permission mode, falling back to DEFAULT (ask for confirmation).
+ */
+function resolvePermissionMode() {
+    try {
+        const mode = configManager.getDefaultPermissionMode();
+        switch (mode) {
+            case 'autoEdit': return PermissionMode.AUTO_EDIT;
+            case 'yolo': return PermissionMode.YOLO;
+            case 'plan': return PermissionMode.PLAN;
+            default: return PermissionMode.DEFAULT;
+        }
+    }
+    catch {
+        return PermissionMode.DEFAULT;
+    }
+}
 export function createDefaultOrchestrator(config) {
     const agentConfig = { ...config, timeout: 180000 };
     const orchestrator = new OrchestratorAgent('AEGIS-Orchestrator', 'You are AEGIS Orchestrator, coordinating multiple specialist agents. Route tasks optimally.');

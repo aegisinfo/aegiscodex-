@@ -36,23 +36,23 @@ export declare const ModelConfigSchema: z.ZodObject<{
     topP: z.ZodOptional<z.ZodNumber>;
     topK: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    apiKey?: string | undefined;
-    baseURL?: string | undefined;
     name?: string | undefined;
     id?: string | undefined;
-    model?: string | undefined;
     provider?: "openai-compatible" | "anthropic" | undefined;
+    apiKey?: string | undefined;
+    baseURL?: string | undefined;
+    model?: string | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     topP?: number | undefined;
     topK?: number | undefined;
 }, {
-    apiKey?: string | undefined;
-    baseURL?: string | undefined;
     name?: string | undefined;
     id?: string | undefined;
-    model?: string | undefined;
     provider?: "openai-compatible" | "anthropic" | undefined;
+    apiKey?: string | undefined;
+    baseURL?: string | undefined;
+    model?: string | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     topP?: number | undefined;
@@ -74,6 +74,50 @@ export declare const UIConfigSchema: z.ZodObject<{
     theme?: string | undefined;
 }>;
 /**
+ * Auto-router Schema — per-tier model id overrides for simple/medium/complex tasks
+ */
+export declare const AutoRouterConfigSchema: z.ZodObject<{
+    enabled: z.ZodOptional<z.ZodBoolean>;
+    tiers: z.ZodOptional<z.ZodObject<{
+        simple: z.ZodOptional<z.ZodString>;
+        medium: z.ZodOptional<z.ZodString>;
+        complex: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        simple?: string | undefined;
+        medium?: string | undefined;
+        complex?: string | undefined;
+    }, {
+        simple?: string | undefined;
+        medium?: string | undefined;
+        complex?: string | undefined;
+    }>>;
+}, "strip", z.ZodTypeAny, {
+    enabled?: boolean | undefined;
+    tiers?: {
+        simple?: string | undefined;
+        medium?: string | undefined;
+        complex?: string | undefined;
+    } | undefined;
+}, {
+    enabled?: boolean | undefined;
+    tiers?: {
+        simple?: string | undefined;
+        medium?: string | undefined;
+        complex?: string | undefined;
+    } | undefined;
+}>;
+/**
+ * Extended-thinking Schema — budget tier sent as `thinking.budget_tokens` to
+ * Anthropic models that support it. 'off' omits the thinking param entirely.
+ */
+export declare const ThinkingConfigSchema: z.ZodObject<{
+    budget: z.ZodOptional<z.ZodEnum<["off", "low", "medium", "high", "max"]>>;
+}, "strip", z.ZodTypeAny, {
+    budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+}, {
+    budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+}>;
+/**
  *
  */
 export declare const PermissionConfigSchema: z.ZodObject<{
@@ -82,12 +126,12 @@ export declare const PermissionConfigSchema: z.ZodObject<{
     ask: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
     allow: string[];
-    ask: string[];
     deny: string[];
+    ask: string[];
 }, {
     allow?: string[] | undefined;
-    ask?: string[] | undefined;
     deny?: string[] | undefined;
+    ask?: string[] | undefined;
 }>;
 /**
  * MCP 服务器配置 Schema
@@ -121,15 +165,15 @@ export declare const McpServerConfigSchema: z.ZodObject<{
     }>>;
 }, "strip", z.ZodTypeAny, {
     type: "stdio" | "sse" | "http";
-    timeout?: number | undefined;
-    description?: string | undefined;
-    cwd?: string | undefined;
+    enabled?: boolean | undefined;
     command?: string | undefined;
     args?: string[] | undefined;
-    enabled?: boolean | undefined;
     env?: Record<string, string> | undefined;
+    cwd?: string | undefined;
     url?: string | undefined;
     headers?: Record<string, string> | undefined;
+    timeout?: number | undefined;
+    description?: string | undefined;
     healthCheck?: {
         enabled: boolean;
         intervalMs: number;
@@ -138,15 +182,15 @@ export declare const McpServerConfigSchema: z.ZodObject<{
     } | undefined;
 }, {
     type: "stdio" | "sse" | "http";
-    timeout?: number | undefined;
-    description?: string | undefined;
-    cwd?: string | undefined;
+    enabled?: boolean | undefined;
     command?: string | undefined;
     args?: string[] | undefined;
-    enabled?: boolean | undefined;
     env?: Record<string, string> | undefined;
+    cwd?: string | undefined;
     url?: string | undefined;
     headers?: Record<string, string> | undefined;
+    timeout?: number | undefined;
+    description?: string | undefined;
     healthCheck?: {
         enabled: boolean;
         intervalMs: number;
@@ -178,6 +222,11 @@ export declare const HookConfigSchema: z.ZodOptional<z.ZodObject<{
     Notification: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
     Compaction: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
 }, "strip", z.ZodTypeAny, {
+    enabled?: boolean | undefined;
+    defaultTimeout?: number | undefined;
+    timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+    failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+    maxConcurrentHooks?: number | undefined;
     PreToolUse?: any[] | undefined;
     PostToolUse?: any[] | undefined;
     PostToolUseFailure?: any[] | undefined;
@@ -189,12 +238,12 @@ export declare const HookConfigSchema: z.ZodOptional<z.ZodObject<{
     SubagentStop?: any[] | undefined;
     Notification?: any[] | undefined;
     Compaction?: any[] | undefined;
-    enabled?: boolean | undefined;
-    defaultTimeout?: number | undefined;
-    timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-    failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-    maxConcurrentHooks?: number | undefined;
 }, {
+    enabled?: boolean | undefined;
+    defaultTimeout?: number | undefined;
+    timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+    failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+    maxConcurrentHooks?: number | undefined;
     PreToolUse?: any[] | undefined;
     PostToolUse?: any[] | undefined;
     PostToolUseFailure?: any[] | undefined;
@@ -206,11 +255,6 @@ export declare const HookConfigSchema: z.ZodOptional<z.ZodObject<{
     SubagentStop?: any[] | undefined;
     Notification?: any[] | undefined;
     Compaction?: any[] | undefined;
-    enabled?: boolean | undefined;
-    defaultTimeout?: number | undefined;
-    timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-    failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-    maxConcurrentHooks?: number | undefined;
 }>>;
 /**
  *
@@ -228,23 +272,23 @@ export declare const ConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -262,23 +306,23 @@ export declare const ConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -299,12 +343,12 @@ export declare const ConfigSchema: z.ZodObject<{
         ask: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     }, {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     }>>;
     defaultPermissionMode: z.ZodOptional<z.ZodEnum<["default", "autoEdit", "yolo", "plan"]>>;
     toolWhitelist: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
@@ -338,15 +382,15 @@ export declare const ConfigSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -355,15 +399,15 @@ export declare const ConfigSchema: z.ZodObject<{
         } | undefined;
     }, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -390,6 +434,11 @@ export declare const ConfigSchema: z.ZodObject<{
         Notification: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
         Compaction: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
     }, "strip", z.ZodTypeAny, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -401,12 +450,12 @@ export declare const ConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -418,20 +467,15 @@ export declare const ConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -439,12 +483,12 @@ export declare const ConfigSchema: z.ZodObject<{
     } | undefined;
     theme?: string | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -456,23 +500,23 @@ export declare const ConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -482,6 +526,11 @@ export declare const ConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -493,20 +542,15 @@ export declare const ConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
 }, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -514,12 +558,12 @@ export declare const ConfigSchema: z.ZodObject<{
     } | undefined;
     theme?: string | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -531,23 +575,23 @@ export declare const ConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -557,6 +601,11 @@ export declare const ConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -568,11 +617,6 @@ export declare const ConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
 }>;
 /**
@@ -592,23 +636,23 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -627,23 +671,23 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -694,15 +738,15 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -711,15 +755,15 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         } | undefined;
     }, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -727,18 +771,55 @@ export declare const ClawdConfigSchema: z.ZodObject<{
             maxFailures: number;
         } | undefined;
     }>>>;
+    autoRouter: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodOptional<z.ZodBoolean>;
+        tiers: z.ZodOptional<z.ZodObject<{
+            simple: z.ZodOptional<z.ZodString>;
+            medium: z.ZodOptional<z.ZodString>;
+            complex: z.ZodOptional<z.ZodString>;
+        }, "strip", z.ZodTypeAny, {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        }, {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        }>>;
+    }, "strip", z.ZodTypeAny, {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    }, {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    }>>;
+    thinking: z.ZodOptional<z.ZodObject<{
+        budget: z.ZodOptional<z.ZodEnum<["off", "low", "medium", "high", "max"]>>;
+    }, "strip", z.ZodTypeAny, {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    }, {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    }>>;
     permissions: z.ZodOptional<z.ZodObject<{
         allow: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
         deny: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
         ask: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     }, {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     }>>;
     defaultPermissionMode: z.ZodOptional<z.ZodEnum<["default", "autoEdit", "yolo", "plan"]>>;
     toolWhitelist: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
@@ -761,6 +842,11 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         Notification: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
         Compaction: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
     }, "strip", z.ZodTypeAny, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -772,12 +858,12 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -789,39 +875,34 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }>>;
     env: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     maxTurns: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     } | undefined;
-    timeout?: number | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     theme?: string | undefined;
     env?: Record<string, string> | undefined;
+    timeout?: number | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -833,23 +914,23 @@ export declare const ClawdConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -859,6 +940,11 @@ export declare const ClawdConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -870,42 +956,48 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
     maxOutputTokens?: number | undefined;
     stream?: boolean | undefined;
     language?: string | undefined;
     debug?: string | boolean | undefined;
+    autoRouter?: {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    } | undefined;
+    thinking?: {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    } | undefined;
     maxTurns?: number | undefined;
 }, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     } | undefined;
-    timeout?: number | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     theme?: string | undefined;
     env?: Record<string, string> | undefined;
+    timeout?: number | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -917,23 +1009,23 @@ export declare const ClawdConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -943,6 +1035,11 @@ export declare const ClawdConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -954,16 +1051,22 @@ export declare const ClawdConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
     maxOutputTokens?: number | undefined;
     stream?: boolean | undefined;
     language?: string | undefined;
     debug?: string | boolean | undefined;
+    autoRouter?: {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    } | undefined;
+    thinking?: {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    } | undefined;
     maxTurns?: number | undefined;
 }>;
 /**
@@ -983,23 +1086,23 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -1018,23 +1121,23 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         topP: z.ZodOptional<z.ZodNumber>;
         topK: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     }, {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -1085,15 +1188,15 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -1102,15 +1205,15 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         } | undefined;
     }, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -1118,18 +1221,55 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
             maxFailures: number;
         } | undefined;
     }>>>;
+    autoRouter: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodOptional<z.ZodBoolean>;
+        tiers: z.ZodOptional<z.ZodObject<{
+            simple: z.ZodOptional<z.ZodString>;
+            medium: z.ZodOptional<z.ZodString>;
+            complex: z.ZodOptional<z.ZodString>;
+        }, "strip", z.ZodTypeAny, {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        }, {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        }>>;
+    }, "strip", z.ZodTypeAny, {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    }, {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    }>>;
+    thinking: z.ZodOptional<z.ZodObject<{
+        budget: z.ZodOptional<z.ZodEnum<["off", "low", "medium", "high", "max"]>>;
+    }, "strip", z.ZodTypeAny, {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    }, {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    }>>;
     permissions: z.ZodOptional<z.ZodObject<{
         allow: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
         deny: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
         ask: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     }, {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     }>>;
     defaultPermissionMode: z.ZodOptional<z.ZodEnum<["default", "autoEdit", "yolo", "plan"]>>;
     toolWhitelist: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
@@ -1152,6 +1292,11 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         Notification: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
         Compaction: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
     }, "strip", z.ZodTypeAny, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -1163,12 +1308,12 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }, {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -1180,11 +1325,6 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     }>>;
     env: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     maxTurns: z.ZodOptional<z.ZodNumber>;
@@ -1204,30 +1344,29 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     print: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     } | undefined;
-    timeout?: number | undefined;
-    allowedTools?: string[] | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     theme?: string | undefined;
     env?: Record<string, string> | undefined;
+    timeout?: number | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -1239,23 +1378,23 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow: string[];
-        ask: string[];
         deny: string[];
+        ask: string[];
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -1265,6 +1404,11 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -1276,22 +1420,29 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
     maxOutputTokens?: number | undefined;
     stream?: boolean | undefined;
     language?: string | undefined;
     debug?: string | boolean | undefined;
+    autoRouter?: {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    } | undefined;
+    thinking?: {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    } | undefined;
     maxTurns?: number | undefined;
     systemPrompt?: string | undefined;
     appendSystemPrompt?: string | undefined;
     initialMessage?: string | undefined;
     resumeSessionId?: string | undefined;
     forkSession?: boolean | undefined;
+    allowedTools?: string[] | undefined;
     disallowedTools?: string[] | undefined;
     mcpConfigPaths?: string[] | undefined;
     strictMcpConfig?: boolean | undefined;
@@ -1301,30 +1452,29 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     print?: boolean | undefined;
 }, {
     default?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
         topK?: number | undefined;
     } | undefined;
-    timeout?: number | undefined;
-    allowedTools?: string[] | undefined;
     temperature?: number | undefined;
     maxContextTokens?: number | undefined;
     theme?: string | undefined;
     env?: Record<string, string> | undefined;
+    timeout?: number | undefined;
     models?: {
-        apiKey?: string | undefined;
-        baseURL?: string | undefined;
         name?: string | undefined;
         id?: string | undefined;
-        model?: string | undefined;
         provider?: "openai-compatible" | "anthropic" | undefined;
+        apiKey?: string | undefined;
+        baseURL?: string | undefined;
+        model?: string | undefined;
         temperature?: number | undefined;
         maxContextTokens?: number | undefined;
         topP?: number | undefined;
@@ -1336,23 +1486,23 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     } | undefined;
     permissions?: {
         allow?: string[] | undefined;
-        ask?: string[] | undefined;
         deny?: string[] | undefined;
+        ask?: string[] | undefined;
     } | undefined;
     defaultPermissionMode?: "default" | "autoEdit" | "yolo" | "plan" | undefined;
     toolWhitelist?: string[] | undefined;
     toolBlacklist?: string[] | undefined;
     mcpServers?: Record<string, {
         type: "stdio" | "sse" | "http";
-        timeout?: number | undefined;
-        description?: string | undefined;
-        cwd?: string | undefined;
+        enabled?: boolean | undefined;
         command?: string | undefined;
         args?: string[] | undefined;
-        enabled?: boolean | undefined;
         env?: Record<string, string> | undefined;
+        cwd?: string | undefined;
         url?: string | undefined;
         headers?: Record<string, string> | undefined;
+        timeout?: number | undefined;
+        description?: string | undefined;
         healthCheck?: {
             enabled: boolean;
             intervalMs: number;
@@ -1362,6 +1512,11 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
     }> | undefined;
     mcpEnabled?: boolean | undefined;
     hooks?: {
+        enabled?: boolean | undefined;
+        defaultTimeout?: number | undefined;
+        timeoutBehavior?: "ignore" | "deny" | "ask" | undefined;
+        failureBehavior?: "ignore" | "deny" | "ask" | undefined;
+        maxConcurrentHooks?: number | undefined;
         PreToolUse?: any[] | undefined;
         PostToolUse?: any[] | undefined;
         PostToolUseFailure?: any[] | undefined;
@@ -1373,22 +1528,29 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
         SubagentStop?: any[] | undefined;
         Notification?: any[] | undefined;
         Compaction?: any[] | undefined;
-        enabled?: boolean | undefined;
-        defaultTimeout?: number | undefined;
-        timeoutBehavior?: "ignore" | "ask" | "deny" | undefined;
-        failureBehavior?: "ignore" | "ask" | "deny" | undefined;
-        maxConcurrentHooks?: number | undefined;
     } | undefined;
     maxOutputTokens?: number | undefined;
     stream?: boolean | undefined;
     language?: string | undefined;
     debug?: string | boolean | undefined;
+    autoRouter?: {
+        enabled?: boolean | undefined;
+        tiers?: {
+            simple?: string | undefined;
+            medium?: string | undefined;
+            complex?: string | undefined;
+        } | undefined;
+    } | undefined;
+    thinking?: {
+        budget?: "medium" | "off" | "low" | "high" | "max" | undefined;
+    } | undefined;
     maxTurns?: number | undefined;
     systemPrompt?: string | undefined;
     appendSystemPrompt?: string | undefined;
     initialMessage?: string | undefined;
     resumeSessionId?: string | undefined;
     forkSession?: boolean | undefined;
+    allowedTools?: string[] | undefined;
     disallowedTools?: string[] | undefined;
     mcpConfigPaths?: string[] | undefined;
     strictMcpConfig?: boolean | undefined;
@@ -1399,6 +1561,8 @@ export declare const RuntimeConfigSchema: z.ZodObject<{
 }>;
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
 export type UIConfig = z.infer<typeof UIConfigSchema>;
+export type AutoRouterConfig = z.infer<typeof AutoRouterConfigSchema>;
+export type ThinkingConfig = z.infer<typeof ThinkingConfigSchema>;
 export type PermissionConfig = z.infer<typeof PermissionConfigSchema>;
 export type McpServerConfig = z.infer<typeof McpServerConfigSchema>;
 export type HookConfig = z.infer<typeof HookConfigSchema>;

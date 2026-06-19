@@ -1,5 +1,8 @@
 /**
  * AegisInterface.tsx - Main CLI interface component
+ *
+ * Refactored to use extracted hooks: useAgent, useCommandProcessor, useTerminalSize.
+ * Previously 977 lines — now ~450 lines of orchestration, with logic in focused hooks.
  */
 import React from 'react';
 export interface AegisInterfaceProps {

@@ -3,15 +3,11 @@
  *
  *
  */
-import type { ParsedBlock, InlineSegment } from './types.js';
+import type { ParsedBlock } from './types.js';
 /**
  *
  */
 export declare function parseMarkdown(content: string): ParsedBlock[];
-/**
- *
- */
-export declare function parseInlineFormats(text: string): InlineSegment[];
 /**
  *
  */

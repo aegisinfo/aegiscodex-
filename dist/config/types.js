@@ -46,6 +46,24 @@ export const UIConfigSchema = z.object({
     theme: z.string().optional(),
 });
 /**
+ * Auto-router Schema — per-tier model id overrides for simple/medium/complex tasks
+ */
+export const AutoRouterConfigSchema = z.object({
+    enabled: z.boolean().optional(),
+    tiers: z.object({
+        simple: z.string().optional(),
+        medium: z.string().optional(),
+        complex: z.string().optional(),
+    }).optional(),
+});
+/**
+ * Extended-thinking Schema — budget tier sent as `thinking.budget_tokens` to
+ * Anthropic models that support it. 'off' omits the thinking param entirely.
+ */
+export const ThinkingConfigSchema = z.object({
+    budget: z.enum(['off', 'low', 'medium', 'high', 'max']).optional(),
+});
+/**
  *
  */
 export const PermissionConfigSchema = z.object({
@@ -156,6 +174,10 @@ export const ClawdConfigSchema = z.object({
     // MCP
     mcpEnabled: z.boolean().optional(),
     mcpServers: z.record(McpServerConfigSchema).optional(),
+    // 自动路由：按任务复杂度自动选择模型
+    autoRouter: AutoRouterConfigSchema.optional(),
+    // 扩展思考：发送给支持的模型的 thinking budget
+    thinking: ThinkingConfigSchema.optional(),
     // ===== 行为配
     // 权
     permissions: PermissionConfigSchema.optional(),
@@ -205,6 +227,8 @@ export const FIELD_ROUTING_TABLE = {
     language: { target: 'config', defaultScope: 'global', mergeStrategy: 'replace', persistable: true },
     mcpServers: { target: 'config', defaultScope: 'global', mergeStrategy: 'deep-merge', persistable: true },
     mcpEnabled: { target: 'config', defaultScope: 'global', mergeStrategy: 'replace', persistable: true },
+    autoRouter: { target: 'config', defaultScope: 'global', mergeStrategy: 'deep-merge', persistable: true },
+    thinking: { target: 'config', defaultScope: 'global', mergeStrategy: 'deep-merge', persistable: true },
     // settings.json 字
     permissions: { target: 'settings', defaultScope: 'local', mergeStrategy: 'replace', persistable: true },
     defaultPermissionMode: { target: 'settings', defaultScope: 'local', mergeStrategy: 'replace', persistable: true },
@@ -399,9 +423,11 @@ export const DEFAULT_CONFIG = {
     theme: 'dark',
     language: 'en',
     mcpEnabled: true,
+    autoRouter: { enabled: false, tiers: {} },
+    thinking: { budget: 'off' },
     mcpServers: {},
     permissions: DEFAULT_PERMISSIONS,
     defaultPermissionMode: 'default',
-    maxTurns: 100,
+    maxTurns: -1,
 };
 //# sourceMappingURL=types.js.map

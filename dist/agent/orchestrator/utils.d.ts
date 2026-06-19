@@ -5,7 +5,7 @@
  * so that every slash-command (/multi, /research, …) does not repeat
  * the same boilerplate.
  */
-import { ExecutionPipeline } from '../../tools/index.js';
+import { ExecutionPipeline, PermissionMode } from '../../tools/index.js';
 export interface ResolvedModelConfig {
     model: string;
     baseURL?: string;
@@ -39,7 +39,9 @@ export declare function requireModelConfig(): ResolvedModelConfig;
  * When `allowAllBuiltins` is true the agent gets Read/Edit/Write/Grep/Glob/Bash.
  * Otherwise you can pass a list of tool names.
  */
-export declare function createSubAgentToolkit(allowedTools?: string[]): {
+export declare function createSubAgentToolkit(allowedTools?: string[], options?: {
+    permissionMode?: PermissionMode;
+}): {
     registry: import("../../tools/registry.js").ToolRegistry;
     pipeline: ExecutionPipeline;
 };
@@ -47,4 +49,17 @@ export declare function createSubAgentToolkit(allowedTools?: string[]): {
  * Make a lightweight chat service from a resolved model config.
  */
 export declare function createSubAgentChatService(cfg: ResolvedModelConfig): import("../types.js").IChatService;
+/**
+ * Build a rich source-code context string for a workspace directory.
+ *
+ * Scans the workspace and provides:
+ * - Project metadata (package.json scripts/deps, tsconfig)
+ * - Recently changed files (git)
+ * - Prioritized file tree (configs & recent changes first)
+ * - Structural summaries (exports, classes, functions) for each file
+ *
+ * Injected into sub-agent system prompts so they know what exists
+ * and can target their Read / Grep / Glob calls effectively.
+ */
+export declare function buildSourceContext(cwd: string, maxFiles?: number, maxTotalChars?: number): string;
 //# sourceMappingURL=utils.d.ts.map

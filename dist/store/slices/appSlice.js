@@ -8,6 +8,8 @@ const initialAppState = {
     todos: [],
     awaitingSecondCtrlC: false,
     showAllThinking: false,
+    manualModelOverride: false,
+    autoRouterActiveModel: null,
 };
 export const createAppSlice = (set, get) => ({
     ...initialAppState,
@@ -95,6 +97,22 @@ export const createAppSlice = (set, get) => ({
         toggleShowAllThinking: () => {
             set((state) => ({
                 app: { ...state.app, showAllThinking: !state.app.showAllThinking },
+            }));
+        },
+        /**
+         *
+         */
+        setManualModelOverride: (value) => {
+            set((state) => ({
+                app: { ...state.app, manualModelOverride: value },
+            }));
+        },
+        /**
+         *
+         */
+        setAutoRouterActiveModel: (label) => {
+            set((state) => ({
+                app: { ...state.app, autoRouterActiveModel: label },
             }));
         },
     },

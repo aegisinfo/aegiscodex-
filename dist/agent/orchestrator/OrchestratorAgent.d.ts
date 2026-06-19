@@ -9,12 +9,15 @@
  * - Sub-agents can use real tools (Read, Edit, Write, Bash, Grep, Glob)
  */
 import type { AgentConfig, Message, ToolCall } from '../types.js';
+import { PermissionMode, type ConfirmationHandler } from '../../tools/index.js';
 export interface SubAgentConfig {
     name: string;
     role: string;
     systemPrompt: string;
     config: AgentConfig;
     tools?: string[];
+    permissionMode?: PermissionMode;
+    confirmationHandler?: ConfirmationHandler;
 }
 export interface TaskDelegation {
     agentName: string;

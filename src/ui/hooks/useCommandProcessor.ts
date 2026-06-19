@@ -331,10 +331,11 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
             sessionActions().setToolCallInput(streamingMessageId, toolId, bufferedCall.arguments);
           }
           sessionActions().updateToolCallStatus(streamingMessageId, toolId, isError ? 'error' : 'success', Date.now());
+          const DISPLAY_CONTENT_CAP = 3000; // diffs need more room than plain text results
           const resultContent = toolResult.error
             ? (toolResult.error.length > 200 ? toolResult.error.slice(0, 200) + '...' : toolResult.error)
             : (toolResult.displayContent
-                ? (toolResult.displayContent.length > 200 ? toolResult.displayContent.slice(0, 200) + '...' : toolResult.displayContent)
+                ? (toolResult.displayContent.length > DISPLAY_CONTENT_CAP ? toolResult.displayContent.slice(0, DISPLAY_CONTENT_CAP) + '...' : toolResult.displayContent)
                 : '');
           sessionActions().addToolResultBlock(streamingMessageId, toolId, resultContent, isError);
         },

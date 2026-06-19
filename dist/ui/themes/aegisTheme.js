@@ -38,9 +38,46 @@ const aegisColors = {
 const spacing = {
     xs: 0, sm: 1, md: 2, lg: 3, xl: 4
 };
+const tokens = {
+    elevation: {
+        flat: 'rgba(0,0,0,0)',
+        raised: 'rgba(0, 229, 192, 0.08)',
+        overlay: 'rgba(0, 0, 0, 0.5)',
+        sticky: 'rgba(0, 229, 192, 0.15)',
+    },
+    radius: {
+        sm: 0,
+        md: 1,
+        lg: 2,
+        full: 0,
+    },
+    animation: {
+        fast: 80,
+        normal: 150,
+        slow: 300,
+        easing: 'ease-out',
+    },
+    semantic: {
+        interactive: {
+            idle: aegisColors.primary,
+            hover: '#33ffd9',
+            active: '#00bfa0',
+            disabled: '#44405a',
+        },
+        focus: {
+            ring: '#00e5c0',
+            glow: 'rgba(0, 229, 192, 0.3)',
+        },
+        code: {
+            background: '#08080f',
+            border: '#1a1a2a',
+        },
+    },
+};
 export const aegisTheme = {
     name: 'aegis',
     colors: aegisColors,
-    spacing
+    spacing,
+    tokens,
 };
 //# sourceMappingURL=aegisTheme.js.map

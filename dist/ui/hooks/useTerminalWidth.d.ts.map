@@ -1,1 +1,1 @@
-{"version":3,"file":"useTerminalWidth.d.ts","sourceRoot":"","sources":["../../../src/ui/hooks/useTerminalWidth.ts"],"names":[],"mappings":"AAAA;;GAEG;AAIH;;;GAGG;AACH,eAAO,MAAM,gBAAgB,QAAO,MAwBnC,CAAC;AAEF;;;GAGG;AACH,eAAO,MAAM,iBAAiB,QAAO,MAwBpC,CAAC;AAEF;;GAEG;AACH,eAAO,MAAM,eAAe,QAAO;IAAE,KAAK,EAAE,MAAM,CAAC;IAAC,MAAM,EAAE,MAAM,CAAA;CAIjE,CAAC"}
+{"version":3,"file":"useTerminalWidth.d.ts","sourceRoot":"","sources":["../../../src/ui/hooks/useTerminalWidth.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,EAAE,gBAAgB,EAAE,iBAAiB,EAAE,eAAe,EAAE,MAAM,sBAAsB,CAAC"}

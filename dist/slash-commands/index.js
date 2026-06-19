@@ -174,7 +174,14 @@ export function unregisterSlashCommand(name) {
  *
  */
 export function isSlashCommand(input) {
-    return input.trim().startsWith('/');
+    const trimmed = input.trim();
+    if (!trimmed.startsWith('/'))
+        return false;
+    // A real command name is a single word ("/help", "/model"); filesystem
+    // paths ("/home/neo/foo") also start with '/' but contain further '/'
+    // in that first token — treat those as plain chat text, not a command.
+    const firstToken = trimmed.slice(1).split(/\s/)[0];
+    return firstToken.length > 0 && !firstToken.includes('/');
 }
 /**
  *
@@ -185,13 +192,13 @@ export function parseSlashCommand(input) {
         return null;
     }
     const withoutSlash = trimmed.slice(1);
-    const spaceIndex = withoutSlash.indexOf(' ');
-    if (spaceIndex === -1) {
+    const wsIndex = withoutSlash.search(/\s/);
+    if (wsIndex === -1) {
         return { name: withoutSlash, args: '' };
     }
     return {
-        name: withoutSlash.slice(0, spaceIndex),
-        args: withoutSlash.slice(spaceIndex + 1),
+        name: withoutSlash.slice(0, wsIndex),
+        args: withoutSlash.slice(wsIndex + 1),
     };
 }
 /**

@@ -15,6 +15,8 @@ interface ChatStatusBarProps {
   isVisible?: boolean;
   isScrolledUp?: boolean;
   renderLatency?: number;
+  routerEnabled?: boolean;
+  onToggleRouter?: () => void;
 }
 
 function formatTokens(count: number): string {
@@ -29,6 +31,8 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
   isVisible = true,
   isScrolledUp = false,
   renderLatency = 0,
+  routerEnabled = false,
+  onToggleRouter,
 }) => {
   const theme = themeManager.getTheme();
   const displayModel = model;
@@ -71,6 +75,11 @@ export const ChatStatusBar: React.FC<ChatStatusBarProps> = React.memo(({
     <Box flexDirection="row" paddingX={0} marginTop={0}>
       <Text color={theme.colors.text.muted} dimColor>
         {items.join(' · ')}
+        <Text> · </Text>
+        <Text color={routerEnabled ? theme.colors.success : theme.colors.text.muted} bold={routerEnabled}>
+          R:{routerEnabled ? 'ON' : 'OFF'}
+        </Text>
+        <Text dimColor> alt+r</Text>
       </Text>
     </Box>
   );

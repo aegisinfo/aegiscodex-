@@ -1,164 +1,186 @@
 import { jsx as _jsx } from "react/jsx-runtime";
-/**
- * CustomTextInput - 自定义文本输入组件
- *
- *
- */
-import React, { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef, memo } from 'react';
 import { Text, useInput } from 'ink';
 import chalk from 'chalk';
 import { useIsFocused, FocusId, focusManager } from '../../focus/index.js';
-/**
- *
- */
 const PASTE_CONFIG = {
     TIMEOUT_MS: 100,
-    RAPID_INPUT_THRESHOLD_MS: 150,
-    LARGE_INPUT_THRESHOLD: 300,
+    RAPID_INPUT_THRESHOLD_MS: 400,
+    LARGE_INPUT_THRESHOLD: 100,
 };
-/**
- *
- */
-export const CustomTextInput = ({ value, cursorPosition, onChange, onChangeCursorPosition, onSubmit, onPaste, onArrowUp, onArrowDown, placeholder = '', focusId = FocusId.MAIN_INPUT, disabled = false, }) => {
+export const CustomTextInput = memo(({ value, cursorPosition, onChange, onChangeCursorPosition, onSubmit, onPaste, onArrowUp, onArrowDown, placeholder = '', focusId = FocusId.MAIN_INPUT, disabled = false, cursorOn = true, }) => {
     const isFocused = useIsFocused(focusId);
     const isActive = isFocused && !disabled;
-    // 渲染带光标的文
+    // Refs for all values accessed inside the stable useInput handler.
+    // Updated on every render — never trigger re-renders themselves.
+    const valueRef = useRef(value);
+    const cursorPositionRef = useRef(cursorPosition);
+    const onChangeRef = useRef(onChange);
+    const onChangeCursorPositionRef = useRef(onChangeCursorPosition);
+    const onSubmitRef = useRef(onSubmit);
+    const onPasteRef = useRef(onPaste);
+    const onArrowUpRef = useRef(onArrowUp);
+    const onArrowDownRef = useRef(onArrowDown);
+    const isActiveRef = useRef(isActive);
+    valueRef.current = value;
+    cursorPositionRef.current = cursorPosition;
+    onChangeRef.current = onChange;
+    onChangeCursorPositionRef.current = onChangeCursorPosition;
+    onSubmitRef.current = onSubmit;
+    onPasteRef.current = onPaste;
+    onArrowUpRef.current = onArrowUp;
+    onArrowDownRef.current = onArrowDown;
+    isActiveRef.current = isActive;
     const renderedValue = useMemo(() => {
-        if (!isActive) {
-            return value || placeholder;
-        }
+        if (!isActive)
+            return value || chalk.dim(placeholder);
         if (value.length === 0) {
-            // 空输入，显示光标和占位
-            return chalk.hex('#4488ff')('▏') + chalk.dim(placeholder);
+            const block = cursorOn
+                ? chalk.bgHex('#00c8b4').hex('#000000')(' ')
+                : ' ';
+            return block + chalk.dim(placeholder);
         }
         const before = value.slice(0, cursorPosition);
-        const after = value.slice(cursorPosition);
-        // Thin bar cursor sits at the cursor position — no blue block, no pulsing
-        return `${before}${chalk.hex('#4488ff')('▏')}${after}`;
-    }, [value, cursorPosition, isActive, placeholder]);
-    // 粘贴检测状
-    const pasteStateRef = React.useRef({
+        const charUnder = value[cursorPosition] ?? ' ';
+        const after = value.slice(cursorPosition + 1);
+        const cursorChar = cursorOn
+            ? chalk.bgHex('#00c8b4').hex('#000000')(charUnder)
+            : charUnder;
+        return before + cursorChar + after;
+    }, [value, cursorPosition, isActive, placeholder, cursorOn]);
+    const pasteStateRef = useRef({
         chunks: [],
         timeoutId: null,
         firstInputTime: null,
     });
-    // 处理粘
-    const handlePaste = useCallback((text) => {
-        if (onPaste) {
-            const result = onPaste(text);
+    // Stable — accesses all mutable values via refs
+    const handlePasteStable = useCallback((text) => {
+        const val = valueRef.current;
+        const pos = cursorPositionRef.current;
+        // Claude Code behavior: trim trailing whitespace from pasted text
+        const cleanText = text.trimEnd();
+        if (onPasteRef.current) {
+            const result = onPasteRef.current(text);
             if (result?.prompt) {
-                // 显示粘贴提
-                onChange(value + result.prompt);
-                onChangeCursorPosition(value.length + result.prompt.length);
+                onChangeRef.current(val + result.prompt);
+                onChangeCursorPositionRef.current(val.length + result.prompt.length);
                 return;
             }
         }
-        // 默认行为：插入粘贴的文
-        const newValue = value.slice(0, cursorPosition) + text + value.slice(cursorPosition);
-        onChange(newValue);
-        onChangeCursorPosition(cursorPosition + text.length);
-    }, [value, cursorPosition, onChange, onChangeCursorPosition, onPaste]);
-    // 键盘输入处
-    useInput((input, key) => {
-        // Imperative focus check — avoids stale React closure
-        if (focusManager.getCurrentFocus() !== focusId || disabled)
+        const newValue = val.slice(0, pos) + cleanText + val.slice(pos);
+        onChangeRef.current(newValue);
+        onChangeCursorPositionRef.current(pos + cleanText.length);
+    }, []);
+    // Stable — Ink registers this once and never re-registers unless focusId changes.
+    // All mutable state is read from refs at call time.
+    const inputHandler = useCallback((input, key) => {
+        if (focusManager.getCurrentFocus() !== focusId || !isActiveRef.current)
             return;
-        if (!isActive)
-            return;
+        const val = valueRef.current;
+        const pos = cursorPositionRef.current;
         const now = Date.now();
         const pasteState = pasteStateRef.current;
         const timeSinceFirst = pasteState.firstInputTime
             ? now - pasteState.firstInputTime
             : 0;
-        // 检查是否是粘贴操
         const isPaste = input.length > PASTE_CONFIG.LARGE_INPUT_THRESHOLD ||
             input.includes('\n') ||
             (timeSinceFirst < PASTE_CONFIG.RAPID_INPUT_THRESHOLD_MS &&
                 pasteState.chunks.length > 0);
         if (isPaste && input.length > 1) {
-            // 收集粘贴分
             pasteState.chunks.push(input);
-            if (!pasteState.firstInputTime) {
+            if (!pasteState.firstInputTime)
                 pasteState.firstInputTime = now;
-            }
-            // 重置超
-            if (pasteState.timeoutId) {
+            if (pasteState.timeoutId)
                 clearTimeout(pasteState.timeoutId);
-            }
             pasteState.timeoutId = setTimeout(() => {
                 const mergedText = pasteState.chunks.join('');
-                handlePaste(mergedText);
-                // 重置状
+                handlePasteStable(mergedText);
                 pasteState.chunks = [];
                 pasteState.timeoutId = null;
                 pasteState.firstInputTime = null;
             }, PASTE_CONFIG.TIMEOUT_MS);
             return;
         }
-        // 普通键盘输
+        // Multi-agent commands (/multi, /multiyolo, /research, /build, /forge, /council):
+        // Enter inserts newline, Shift+Enter submits — enables multi-line prompts.
+        // All other commands/messages: Enter submits immediately (as before).
+        const MULTI_AGENT_CMDS = ['/multi', '/multiyolo', '/research', '/build', '/forge', '/council'];
+        const isMultiAgent = MULTI_AGENT_CMDS.some(cmd => val.trimStart().startsWith(cmd));
         if (key.return) {
-            onSubmit?.(value);
+            if (isMultiAgent && !key.shift) {
+                // Insert newline at cursor
+                const newValue = val.slice(0, pos) + '\n' + val.slice(pos);
+                onChangeRef.current(newValue);
+                onChangeCursorPositionRef.current(pos + 1);
+            }
+            else {
+                onSubmitRef.current?.(val);
+            }
             return;
         }
         if (key.leftArrow) {
-            if (cursorPosition > 0) {
-                onChangeCursorPosition(cursorPosition - 1);
-            }
+            if (pos > 0)
+                onChangeCursorPositionRef.current(pos - 1);
             return;
         }
         if (key.rightArrow) {
-            if (cursorPosition < value.length) {
-                onChangeCursorPosition(cursorPosition + 1);
-            }
+            if (pos < val.length)
+                onChangeCursorPositionRef.current(pos + 1);
             return;
         }
-        // 上箭头：浏览历史（上一条命
         if (key.upArrow) {
-            onArrowUp?.();
+            onArrowUpRef.current?.();
             return;
         }
-        // 下箭头：浏览历史（下一条命
         if (key.downArrow) {
-            onArrowDown?.();
+            onArrowDownRef.current?.();
             return;
         }
         if (key.backspace || key.delete) {
-            if (cursorPosition > 0) {
-                const newValue = value.slice(0, cursorPosition - 1) + value.slice(cursorPosition);
-                onChange(newValue);
-                onChangeCursorPosition(cursorPosition - 1);
+            if (pos > 0) {
+                const newValue = val.slice(0, pos - 1) + val.slice(pos);
+                onChangeRef.current(newValue);
+                onChangeCursorPositionRef.current(pos - 1);
             }
             return;
         }
-        // Ctrl+A: 移动到行
         if (key.ctrl && input === 'a') {
-            onChangeCursorPosition(0);
+            onChangeCursorPositionRef.current(0);
             return;
         }
-        // Ctrl+E: 移动到行
         if (key.ctrl && input === 'e') {
-            onChangeCursorPosition(value.length);
+            onChangeCursorPositionRef.current(val.length);
             return;
         }
-        // Ctrl+K: 删除光标后的内
         if (key.ctrl && input === 'k') {
-            onChange(value.slice(0, cursorPosition));
+            onChangeRef.current(val.slice(0, pos));
             return;
         }
-        // Ctrl+U: 删除光标前的内
         if (key.ctrl && input === 'u') {
-            onChange(value.slice(cursorPosition));
-            onChangeCursorPosition(0);
+            onChangeRef.current(val.slice(pos));
+            onChangeCursorPositionRef.current(0);
             return;
         }
-        // 普通字符输
         if (input && !key.ctrl && !key.meta) {
-            const newValue = value.slice(0, cursorPosition) + input + value.slice(cursorPosition);
-            onChange(newValue);
-            onChangeCursorPosition(cursorPosition + input.length);
+            const newValue = val.slice(0, pos) + input + val.slice(pos);
+            onChangeRef.current(newValue);
+            onChangeCursorPositionRef.current(pos + input.length);
         }
-    }, { isActive });
+    }, [focusId, handlePasteStable] // both stable — focusId is a constant, handlePasteStable has empty deps
+    );
+    useInput(inputHandler, { isActive });
     return (_jsx(Text, { children: !isActive && value.length === 0 ? (_jsx(Text, { dimColor: true, children: placeholder })) : (renderedValue) }));
-};
+}, 
+// Only re-render when the displayed output would actually change.
+// Callbacks are accessed via refs so they never need to cause a re-render.
+// focus changes trigger re-renders via useIsFocused internally (bypasses this comparator).
+(prev, next) => prev.value === next.value &&
+    prev.cursorPosition === next.cursorPosition &&
+    prev.cursorOn === next.cursorOn &&
+    prev.placeholder === next.placeholder &&
+    prev.disabled === next.disabled &&
+    prev.focusId === next.focusId);
+CustomTextInput.displayName = 'CustomTextInput';
 export default CustomTextInput;
 //# sourceMappingURL=CustomTextInput.js.map

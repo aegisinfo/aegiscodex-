@@ -10,6 +10,7 @@ export declare class ContextManager {
     private readonly cache;
     private readonly options;
     private currentSessionId;
+    private readonly pendingSaves;
     constructor(options?: Partial<ContextManagerOptions>);
     /**
      *
@@ -32,9 +33,14 @@ export declare class ContextManager {
      */
     private shouldCompress;
     /**
-     *
+     * Persist message to JSONL synchronously (awaited by the caller).
+     * The promise is tracked so cleanup() can flush before exit.
      */
-    private saveMessageAsync;
+    private saveMessagePersist;
+    /**
+     * Flush all pending saves — call before exit to ensure no data loss.
+     */
+    flush(): Promise<void>;
     /**
      *
      */
@@ -90,6 +96,6 @@ export declare class ContextManager {
     /**
      *
      */
-    cleanup(): void;
+    cleanup(): Promise<void>;
 }
 //# sourceMappingURL=ContextManager.d.ts.map

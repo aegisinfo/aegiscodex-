@@ -28,11 +28,16 @@ export interface ToolResultBlock {
     is_error: boolean;
 }
 export type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock;
+export interface ModelTokens {
+    inputTokens: number;
+    outputTokens: number;
+}
 export interface TokenUsage {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
     maxContextTokens: number;
+    modelBreakdown: Record<string, ModelTokens>;
 }
 export interface SessionMessage {
     id: string;
@@ -87,6 +92,7 @@ export interface SessionActions {
     setSessionId: (sessionId: string) => void;
     restoreSession: (sessionId: string, messages: SessionMessage[]) => void;
     updateTokenUsage: (usage: Partial<TokenUsage>) => void;
+    removeLastMessages: (count: number) => void;
     clearMessages: () => void;
     resetSession: () => void;
 }
@@ -113,6 +119,10 @@ export interface AppState {
     /** 是否展开所有思考块（全局开关） */
     showAllThinking: boolean;
     todos: TodoItem[];
+    /** Set once the user runs /model this session — auto-router backs off until /router on resets it */
+    manualModelOverride: boolean;
+    /** Display label of the model the auto-router picked for the in-flight/last turn, or null if none */
+    autoRouterActiveModel: string | null;
 }
 export interface AppActions {
     setInitializationStatus: (status: InitializationStatus) => void;
@@ -124,6 +134,8 @@ export interface AppActions {
     removeTodo: (id: string) => void;
     setAwaitingSecondCtrlC: (awaiting: boolean) => void;
     toggleShowAllThinking: () => void;
+    setManualModelOverride: (value: boolean) => void;
+    setAutoRouterActiveModel: (label: string | null) => void;
 }
 export interface AppSlice extends AppState {
     actions: AppActions;

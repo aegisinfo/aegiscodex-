@@ -50,7 +50,7 @@ function callDeepSeek(q, p) { return callOpenAICompatible('https://api.deepseek.
 function callGroq(q, p) { return callOpenAICompatible('https://api.groq.com/openai/v1', process.env.GROQ_API_KEY || '', 'llama-3.3-70b-versatile', q, p); }
 const AGENTS = [
     {
-        name: 'Strategist',
+        name: 'Claude',
         role: 'Strategic Analyst',
         color: C.teal,
         call: (q) => callPrimary(q, 'a strategic analyst focused on long-term impact and human values'),

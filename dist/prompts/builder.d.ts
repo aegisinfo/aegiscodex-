@@ -5,7 +5,7 @@
  * 1. 环境上下文 - 动态生成
  * 2. 基础提示词 - DEFAULT_SYSTEM_PROMPT 或 PLAN_MODE_SYSTEM_PROMPT
  * 3. 可用 Skills 列表 - 渐进式披露的"发现阶段"
- * 4. 项目配置 - CLAWDCODE.md
+ * 4. 项目配置 - AEGIS.md
  * 5. 追加内容 - 用户自定义
  */
 import type { PermissionMode } from '../agent/types.js';
@@ -22,7 +22,7 @@ export interface PromptSource {
  *
  */
 export interface BuildSystemPromptOptions {
-    /** 项目路径（用于查找 CLAWDCODE.md） */
+    /** 项目路径（用于查找 AEGIS.md） */
     projectPath?: string;
     /** 替换默认提示词 */
     replaceDefault?: string;

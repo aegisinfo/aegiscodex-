@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as os   from 'os';
 import { v4 as uuid } from 'uuid';
 import initSqlJs, { Database as SqlJsDb } from 'sql.js';
+import { pushEntries, pullSince, claimFreeTrial, searchCloud } from './CloudSync.js';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const MEMORY_DIR       = path.join(os.homedir(), '.aegiscode', 'memory');
@@ -18,6 +19,7 @@ const DB_PATH          = path.join(MEMORY_DIR, 'memory.db');
 const CONFIG_FILE      = path.join(os.homedir(), '.aegiscode', 'config.json');
 const SESSION_FILE     = path.join(MEMORY_DIR, 'last-session.txt');
 const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
+const LAST_CLOUD_SYNC_FILE = path.join(MEMORY_DIR, '.last-cloud-sync');
 
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
@@ -334,6 +336,44 @@ export class SharedMemory {
     this.db = await initDb();
     this.embedder = await getEmbedder();
     this.applyTTL();
+    if (this.isSubscribed()) void this.syncFromCloud();
+  }
+
+  // ── Cloud sync (cross-device, subscribed users only) ────────────────────
+  private getMemoryToken(): string | null {
+    const fromEnv = (process.env.AEGIS_MEMORY_TOKEN || '').trim();
+    if (fromEnv) return fromEnv;
+    try {
+      if (fs.existsSync(MEMORY_TOKEN_FILE)) {
+        const t = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
+        if (t) return t;
+      }
+    } catch {}
+    return null;
+  }
+
+  /** Pull entries newer than the last sync marker and merge them in. Never blocks startup. */
+  private async syncFromCloud(): Promise<void> {
+    const token = this.getMemoryToken();
+    if (!token) return;
+
+    let since: string | null = null;
+    try {
+      if (fs.existsSync(LAST_CLOUD_SYNC_FILE)) {
+        since = fs.readFileSync(LAST_CLOUD_SYNC_FILE, 'utf8').trim() || null;
+      }
+    } catch {}
+
+    const pulled = await pullSince(since, token);
+    if (pulled.length === 0) return;
+
+    this.import(pulled, true);
+
+    const newest = pulled.reduce((max, e) => (e.timestamp > max ? e.timestamp : max), since ?? '');
+    try {
+      fs.mkdirSync(MEMORY_DIR, { recursive: true });
+      fs.writeFileSync(LAST_CLOUD_SYNC_FILE, newest);
+    } catch {}
   }
 
   /** Await readiness before any operation */
@@ -381,6 +421,7 @@ export class SharedMemory {
     if (!this.isWriteAllowed(session)) return null;
     // Record this session as the free-tier session on first write
     this.recordFreeSession(session);
+    void this.claimFreeTrialIfNeeded(session);
 
     const cleaned = stripInvalidChars(content);
     if (isJunk(cleaned)) return null;
@@ -440,6 +481,11 @@ export class SharedMemory {
       embedding: embeddingBuf ? Array.from(new Float32Array(embeddingBuf.buffer, embeddingBuf.byteOffset, embeddingBuf.byteLength / 4)) : null,
     };
 
+    if (this.isSubscribed()) {
+      const token = this.getMemoryToken();
+      if (token) void pushEntries([entry], token);
+    }
+
     return entry;
   }
 
@@ -455,7 +501,7 @@ export class SharedMemory {
     );
 
     if (words.length === 0 && !this.embedder) {
-      return this.recent(limit);
+      return this.mergeCloudResults(this.recent(limit), query, limit);
     }
 
     // ── Keyword score (ALL entries) ──
@@ -494,14 +540,36 @@ export class SharedMemory {
             return { entry, score: hybrid, vecSim };
           });
           vectorScored.sort((a, b) => b.score - a.score);
-          return vectorScored.slice(0, limit).map(({ entry }) => entry);
+          const vectorResults = vectorScored.slice(0, limit).map(({ entry }) => entry);
+          return this.mergeCloudResults(vectorResults, query, limit);
         }
       } catch {
         // fall through to keyword-only
       }
     }
 
-    return keywordScored.slice(0, limit).map(({ entry }) => entry);
+    const localResults = keywordScored.slice(0, limit).map(({ entry }) => entry);
+    return this.mergeCloudResults(localResults, query, limit);
+  }
+
+  /**
+   * Top up local results with a cloud keyword search — catches entries written on
+   * another device since the last `pullSince`. Capped at 1.5s so an offline or slow
+   * connection never meaningfully delays a search; on any failure, local results stand.
+   */
+  private async mergeCloudResults(localResults: MemoryEntry[], query: string, limit: number): Promise<MemoryEntry[]> {
+    if (localResults.length >= limit) return localResults;
+    if (!this.isSubscribed()) return localResults;
+    const token = this.getMemoryToken();
+    if (!token) return localResults;
+
+    const timeout = new Promise<MemoryEntry[]>(resolve => setTimeout(() => resolve([]), 1500));
+    const cloudResults = await Promise.race([searchCloud(query, limit, token), timeout]);
+    if (cloudResults.length === 0) return localResults;
+
+    const seenIds = new Set(localResults.map(e => e.id));
+    const fresh = cloudResults.filter(e => !seenIds.has(e.id));
+    return [...localResults, ...fresh].slice(0, limit);
   }
 
   recent(limit = 6): MemoryEntry[] {
@@ -807,11 +875,45 @@ export class SharedMemory {
     if (this.isSubscribed()) return true;
     try {
       const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      // Some other device already claimed the free trial for this machine fingerprint —
+      // blocks even if this device never recorded a local freeSessionId (closes the
+      // "just delete config.json" loophole).
+      if (cfg?.memory?.freeTrialClaimed === false) return false;
       const freeId = cfg?.memory?.freeSessionId ?? null;
       // Free tier not yet used — this session will be the free one
       if (!freeId) return true;
       return freeId === sessionId;
     } catch { return true; }
+  }
+
+  /**
+   * Best-effort server-side check (anonymous machine fingerprint) that this device
+   * hasn't already burned the free trial elsewhere. No-op for subscribed users or
+   * once already resolved. Fails open on network errors — this is an anti-abuse
+   * soft gate, not a security boundary, so a legitimate offline user is never blocked.
+   */
+  private async claimFreeTrialIfNeeded(sessionId: string): Promise<void> {
+    if (this.isSubscribed()) return;
+    let cfg: any;
+    try {
+      cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    } catch {
+      cfg = {};
+    }
+    if (typeof cfg?.memory?.freeTrialClaimed === 'boolean') return; // already resolved
+
+    const { getMachineFingerprint } = await import('./machineFingerprint.js');
+    const fingerprint = getMachineFingerprint();
+    const allowed = await claimFreeTrial(fingerprint, sessionId);
+    if (allowed === null) return; // network error — fail open, retry next time
+
+    try {
+      const raw = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf8') : '{}';
+      const latest = JSON.parse(raw);
+      const updated = { ...latest, memory: { ...latest.memory, freeTrialClaimed: allowed } };
+      fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+    } catch {}
   }
 
   /** Returns true for reads: subscribed, OR free session was ever used (let them see value). */
