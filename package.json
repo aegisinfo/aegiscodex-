@@ -1,6 +1,6 @@
 {
   "name": "aegiscode",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "description": "A CLI Coding Agent inspired by Claude Code - An AI-powered coding assistant that can read, write, and execute code",
   "type": "module",
   "main": "dist/main.js",

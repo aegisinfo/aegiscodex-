@@ -392,6 +392,7 @@ export const DEFAULT_MODELS = [
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
     allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    requireConfirmation: false,
   },
   {
     id: 'claude-sonnet-4',
@@ -401,6 +402,7 @@ export const DEFAULT_MODELS = [
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
     allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    requireConfirmation: false,
   },
   {
     id: 'claude-opus-4',
@@ -410,6 +412,7 @@ export const DEFAULT_MODELS = [
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
     allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    requireConfirmation: false,
   },
   {
     id: 'claude-haiku-4',
@@ -419,6 +422,7 @@ export const DEFAULT_MODELS = [
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
     allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    requireConfirmation: false,
   },
   {
     id: 'deepseek-chat',

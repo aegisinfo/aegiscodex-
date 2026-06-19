@@ -201,34 +201,70 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
   }, [apiKey, baseURL, model, debug, resumeSessionId]);
 
   // ==================== Model Switch Subscription ====================
+  // Tracks both which model is active AND that model's own settings
+  // (requireConfirmation/allowedTools/disallowedTools), since the running
+  // Agent instance freezes these at creation time. Without watching the
+  // settings too, toggling e.g. `/confirm off` for the *currently active*
+  // model would silently have no effect until the user switched models away
+  // and back.
+  const currentModelSettingsRef = useRef<string>('');
   useEffect(() => {
+    // Seed the snapshot from current state so the first store change after
+    // mount doesn't look like a settings change and trigger a spurious rebuild.
+    const initialModels = getState().config.config?.models || [];
+    const initialFound = currentModelIdRef.current
+      ? initialModels.find((m: ModelConfig) => m.id === currentModelIdRef.current)
+      : undefined;
+    if (initialFound) {
+      currentModelSettingsRef.current = JSON.stringify({
+        requireConfirmation: initialFound.requireConfirmation,
+        allowedTools: initialFound.allowedTools,
+        disallowedTools: initialFound.disallowedTools,
+      });
+    }
+
+    const rebuildAgent = (found: ModelConfig, displayName: string) => {
+      if (!agentRef.current) return;
+      import('../../agent/Agent.js').then(({ Agent }) => {
+        const apiKey = found.apiKey || process.env.OPENAI_API_KEY || '';
+        if (!apiKey) return;
+        Agent.create({
+          apiKey,
+          baseURL: found.baseURL || (found as ModelConfig & { baseUrl?: string }).baseUrl,
+          model: displayName,
+          requireConfirmation: found.requireConfirmation,
+        }).then(agent => {
+          agentRef.current = agent;
+        }).catch(() => {});
+      }).catch(() => {});
+    };
+
     const unsubscribe = subscribe((state) => {
       const newModelId = state.config.config?.currentModelId;
-      if (newModelId && newModelId !== currentModelIdRef.current) {
-        currentModelIdRef.current = newModelId;
-        const models = state.config.config?.models || [];
-        const found = models.find((m: ModelConfig) => m.id === newModelId);
-        if (found) {
-          const displayName = found.model || found.id;
-          setCurrentModel(displayName);
-          modelRef.current = displayName;
+      if (!newModelId) return;
+      const models = state.config.config?.models || [];
+      const found = models.find((m: ModelConfig) => m.id === newModelId);
+      if (!found) return;
 
-          if (agentRef.current) {
-            import('../../agent/Agent.js').then(({ Agent }) => {
-              const apiKey = found.apiKey || process.env.OPENAI_API_KEY || '';
-              if (!apiKey) return;
-              Agent.create({
-                apiKey,
-                baseURL: found.baseURL || (found as ModelConfig & { baseUrl?: string }).baseUrl,
-                model: displayName,
-                requireConfirmation: found.requireConfirmation,
-              }).then(agent => {
-                agentRef.current = agent;
-              }).catch(() => {});
-            }).catch(() => {});
-          }
-        }
-      }
+      const settingsSnapshot = JSON.stringify({
+        requireConfirmation: found.requireConfirmation,
+        allowedTools: found.allowedTools,
+        disallowedTools: found.disallowedTools,
+      });
+
+      const modelChanged = newModelId !== currentModelIdRef.current;
+      const settingsChanged = settingsSnapshot !== currentModelSettingsRef.current;
+
+      if (!modelChanged && !settingsChanged) return;
+
+      currentModelIdRef.current = newModelId;
+      currentModelSettingsRef.current = settingsSnapshot;
+
+      const displayName = found.model || found.id || newModelId;
+      setCurrentModel(displayName);
+      modelRef.current = displayName;
+
+      rebuildAgent(found, displayName);
     });
     return unsubscribe;
   }, []);
