@@ -43,6 +43,10 @@ export const ModelConfigSchema = z.object({
   maxContextTokens: z.number().optional(),
   topP: z.number().optional(),
   topK: z.number().optional(),
+
+  // 模型级工具过滤：只在当前模型生效
+  allowedTools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
 });
 
 /**

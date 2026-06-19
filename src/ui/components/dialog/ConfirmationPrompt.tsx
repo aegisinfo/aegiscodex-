@@ -27,6 +27,7 @@ export const ConfirmationPrompt: React.FC<ConfirmationPromptProps> = ({
     { key: 'y', label: 'allow', scope: 'once' as const, approved: true },
     { key: 'a', label: 'always', scope: 'session' as const, approved: true },
     { key: 'n', label: 'deny', scope: 'once' as const, approved: false },
+    { key: 'd', label: 'never', scope: 'session' as const, approved: false },
   ];
 
   useInput((input, key) => {
@@ -36,13 +37,15 @@ export const ConfirmationPrompt: React.FC<ConfirmationPromptProps> = ({
       setSelectedIndex(prev => (prev < options.length - 1 ? prev + 1 : 0));
     } else if (key.return) {
       const sel = options[selectedIndex];
-      onResponse({ approved: sel.approved, scope: sel.scope });
+      onResponse({ approved: sel.approved, scope: sel.scope, reason: sel.approved ? undefined : 'denied' });
     } else if (input === 'y' || input === 'Y') {
       onResponse({ approved: true, scope: 'once' });
     } else if (input === 'a' || input === 'A') {
       onResponse({ approved: true, scope: 'session' });
     } else if (input === 'n' || input === 'N') {
       onResponse({ approved: false, reason: 'denied' });
+    } else if (input === 'd' || input === 'D') {
+      onResponse({ approved: false, scope: 'session', reason: 'denied for this session' });
     }
   }, { isActive: isFocused });
 

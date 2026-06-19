@@ -197,6 +197,10 @@ export interface PipelineStage {
 export interface ExecutionPipelineConfig {
   permissions?: PermissionConfig;
   defaultMode?: PermissionMode;
+  /** Per-model allowed tools — overrides global whitelist for the current model */
+  allowedTools?: string[];
+  /** Per-model disallowed tools — overrides global blacklist for the current model */
+  disallowedTools?: string[];
 }
 
 // ========== 执行历

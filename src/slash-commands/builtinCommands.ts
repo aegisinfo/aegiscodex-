@@ -6,6 +6,7 @@ import type { SlashCommand, SlashCommandResult, SlashCommandContext } from './ty
 import type { AgentConfig } from '../agent/types.js';
 import { buildCommand } from './build.js';
 import { cloneCommand } from './clone.js';
+import { debateCommand } from './debate.js';
 import { sessionActions, getState, getConfig } from '../store/index.js';
 import {
   OrchestratorAgent,
@@ -2756,5 +2757,6 @@ export const builtinCommands: SlashCommand[] = [
   researchCommand,
   buildCommand,
   cloneCommand,
+  debateCommand,
   ...appCommands,
 ];

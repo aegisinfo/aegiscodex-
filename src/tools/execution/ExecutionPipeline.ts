@@ -43,6 +43,7 @@ export class ExecutionPipeline {
   private stages: PipelineStage[];
   private executionHistory: ExecutionHistoryEntry[] = [];
   private readonly sessionApprovals = new Set<string>();
+  private readonly sessionDenials = new Set<string>();
   private readonly maxHistorySize = 1000;
 
   constructor(
@@ -54,10 +55,10 @@ export class ExecutionPipeline {
 
     // 初始化七个执行阶
     this.stages = [
-      new DiscoveryStage(this.registry),
-      new PermissionStage(config.permissions, this.sessionApprovals, defaultMode),
+      new DiscoveryStage(this.registry, config.allowedTools, config.disallowedTools),
+      new PermissionStage(config.permissions, this.sessionApprovals, this.sessionDenials, defaultMode),
       new HookStage(),
-      new ConfirmationStage(this.sessionApprovals),
+      new ConfirmationStage(this.sessionApprovals, this.sessionDenials),
       new ExecutionStage(),
       new PostHookStage(),
       new FormattingStage(),
@@ -207,6 +208,36 @@ export class ExecutionPipeline {
    */
   hasSessionApproval(signature: string): boolean {
     return this.sessionApprovals.has(signature);
+  }
+
+  // ==================== Session Denials ====================
+
+  /**
+   * 
+   */
+  getSessionDenials(): Set<string> {
+    return new Set(this.sessionDenials);
+  }
+
+  /**
+   * 
+   */
+  clearSessionDenials(): void {
+    this.sessionDenials.clear();
+  }
+
+  /**
+   * 
+   */
+  addSessionDenial(signature: string): void {
+    this.sessionDenials.add(signature);
+  }
+
+  /**
+   * 
+   */
+  hasSessionDenial(signature: string): boolean {
+    return this.sessionDenials.has(signature);
   }
 
   /**

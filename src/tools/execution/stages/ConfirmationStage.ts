@@ -12,7 +12,10 @@ import type {
 export class ConfirmationStage implements PipelineStage {
   readonly name = 'confirmation';
 
-  constructor(private sessionApprovals: Set<string>) {}
+  constructor(
+    private sessionApprovals: Set<string>,
+    private sessionDenials?: Set<string>
+  ) {}
 
   async process(execution: ToolExecution): Promise<void> {
     // 如果不需要确认，直接通
@@ -26,8 +29,14 @@ export class ConfirmationStage implements PipelineStage {
       return;
     }
 
-    // 检查是否已在会话中批
+    // 检查是否已在会话中拒绝
     const signature = execution._internal.permissionSignature;
+    if (signature && this.sessionDenials?.has(signature)) {
+      execution.abort('Permission denied (session)');
+      return;
+    }
+
+    // 检查是否已在会话中批
     if (signature && this.sessionApprovals.has(signature)) {
       return;
     }
@@ -52,11 +61,15 @@ export class ConfirmationStage implements PipelineStage {
     const response = await handler.requestConfirmation(confirmationDetails);
 
     if (!response.approved) {
+      // 如果用户选择"永远拒绝"，保存到会话拒绝列
+      if (response.scope === 'session' && signature && this.sessionDenials) {
+        this.sessionDenials.add(signature);
+      }
       execution.abort(`User rejected: ${response.reason || 'No reason provided'}`);
       return;
     }
 
-    // 如果用户选择"记住此决定"，保存到会话批准列
+    // 如果用户选择"永远允许"，保存到会话批准列
     if (response.scope === 'session' && signature) {
       this.sessionApprovals.add(signature);
     }

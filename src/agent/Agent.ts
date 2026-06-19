@@ -177,13 +177,18 @@ export class Agent {
         await this.registerMcpTools();
       }
 
-      // 5. 创建执行管道（使用 settings.json 中的权限配
+      // 5. 创建执行管道（使用 settings.json 中的权限配 + 模型级工具过滤
       const permissionConfig = configManager.getPermissionConfig();
       const defaultMode = defaultPermissionMode as 'default' | 'autoEdit' | 'yolo' | 'plan';
+
+      // Hämta modellspecifika verktygsbegränsningar
+      const modelRestrictions = configManager.getModelToolRestrictions(this.config.model);
 
       this.executionPipeline = new ExecutionPipeline(this.toolRegistry, {
         permissions: permissionConfig,
         defaultMode: this.mapPermissionMode(defaultMode),
+        allowedTools: modelRestrictions.allowedTools,
+        disallowedTools: modelRestrictions.disallowedTools,
       });
 
       this.isInitialized = true;

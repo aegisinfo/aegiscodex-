@@ -24,6 +24,7 @@ export class PermissionStage implements PipelineStage {
   constructor(
     config?: Partial<PermissionConfig>,
     private sessionApprovals?: Set<string>,
+    private sessionDenials?: Set<string>,
     defaultMode: PermissionMode = PermissionMode.DEFAULT
   ) {
     this.permissionChecker = new PermissionChecker(config);
@@ -57,24 +58,30 @@ export class PermissionStage implements PipelineStage {
     });
     execution._internal.permissionSignature = signature;
 
-    // 3. 检查会话批准列
+    // 3. 检查会话拒绝列
+    if (this.sessionDenials?.has(signature)) {
+      execution.abort('Permission denied (session)');
+      return;
+    }
+
+    // 4. 检查会话批准列
     if (this.sessionApprovals?.has(signature)) {
       // 已在会话中批准，跳过权限检
       return;
     }
 
-    // 4. 执行权限检
+    // 5. 执行权限检
     let checkResult = this.permissionChecker.check({
       toolName: tool.name,
       params: execution.params,
       tool,
     });
 
-    // 5. 应用权限模式覆
+    // 6. 应用权限模式覆
     const currentMode = execution.context.permissionMode || this.defaultMode;
     checkResult = this.applyModeOverrides(tool.kind, checkResult, currentMode);
 
-    // 6. 根据结果采取行
+    // 7. 根据结果采取行
     switch (checkResult.result) {
       case PermissionResult.DENY:
         execution.abort(checkResult.reason || 'Permission denied');

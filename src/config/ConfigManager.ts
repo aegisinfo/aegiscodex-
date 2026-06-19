@@ -376,6 +376,25 @@ export class ConfigManager {
   }
 
   /**
+   * Hämta modellspecifika verktygsbegränsningar
+   * 
+   */
+  getModelToolRestrictions(modelId?: string): { allowedTools?: string[]; disallowedTools?: string[] } {
+    if (!modelId) return {};
+    const models: any[] = (this.config as any).models || [];
+    let model = models.find((m: any) => m.id === modelId);
+    if (!model) model = models.find((m: any) => m.model === modelId);
+    if (!model && (this.config.default as any)?.model === modelId) {
+      model = this.config.default;
+    }
+    if (!model) return {};
+    return {
+      allowedTools: model.allowedTools,
+      disallowedTools: model.disallowedTools,
+    };
+  }
+
+  /**
    * 
    */
   getDefaultPermissionMode(): string {
