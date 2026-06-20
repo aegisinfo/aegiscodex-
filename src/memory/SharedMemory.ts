@@ -334,6 +334,14 @@ export class SharedMemory {
 
   private async init() {
     this.db = await initDb();
+
+    // Read-only one-shot callers (e.g. aegiscode-gui's stats/search introspection)
+    // must NOT trigger TTL eviction or a cloud sync/import — both commit() the db,
+    // and a short-lived process racing a live interactive session's in-memory state
+    // is exactly how a fresh restore got silently clobbered. Skip mutating side
+    // effects entirely when read-only.
+    if (process.env.AEGIS_MEMORY_READONLY === '1') return;
+
     this.embedder = await getEmbedder();
     this.applyTTL();
     if (this.isSubscribed()) void this.syncFromCloud();
@@ -379,6 +387,11 @@ export class SharedMemory {
   /** Await readiness before any operation */
   private async ensureReady() {
     await this.ready;
+  }
+
+  /** Public wrapper for callers (e.g. one-shot CLI flags) that need the db loaded before calling sync methods like getStats()/recent()/clear(). */
+  async whenReady() {
+    await this.ensureReady();
   }
 
   // ── User ID ─────────────────────────────────────────────────────────────
@@ -1042,10 +1055,20 @@ export class SharedMemory {
     const embedRes = this.db.exec(`SELECT COUNT(*) AS c FROM memories WHERE embedding IS NOT NULL`);
     const withEmbeddings = (embedRes[0]?.values[0][0] as number) ?? 0;
 
+    const roleRes = this.db.exec(`SELECT role, COUNT(*) AS c FROM memories GROUP BY role`);
+    const byRole = { user: 0, assistant: 0, other: 0 };
+    for (const row of roleRes[0]?.values ?? []) {
+      const role = row[0] as string;
+      const count = row[1] as number;
+      if (role === 'user' || role === 'assistant') byRole[role] = count;
+      else byRole.other += count;
+    }
+
     return {
       total,
       sessions,
       summaries,
+      byRole,
       avgImportance: avgImportance.toFixed(2),
       enabled: this.isEnabled(),
       withEmbeddings,
