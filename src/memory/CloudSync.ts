@@ -23,6 +23,23 @@ export async function pushEntries(entries: MemoryEntry[], token: string): Promis
   }
 }
 
+/** Like pushEntries, but reports how many entries the server actually saved (for bulk uploads). */
+export async function pushBatch(entries: MemoryEntry[], token: string): Promise<number> {
+  if (entries.length === 0) return 0;
+  try {
+    const res = await fetch(`${MEMORY_API_BASE}/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ entries }),
+    });
+    if (!res.ok) return 0;
+    const data = await res.json() as { saved?: number };
+    return data.saved ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Returns true/false if the server could check, null if the request failed (caller should fail open). */
 export async function claimFreeTrial(fingerprint: string, sessionId: string): Promise<boolean | null> {
   try {

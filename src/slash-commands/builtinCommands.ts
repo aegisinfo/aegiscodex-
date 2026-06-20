@@ -2318,9 +2318,9 @@ const billingCommand: SlashCommand = {
 
 const memoryCommand: SlashCommand = {
   name: 'memory',
-  description: 'View or manage semantic memory — /memory activate <token> | /memory load <url|path> | /memory clear | /memory stats',
+  description: 'View or manage semantic memory — /memory activate <token> | /memory load <url|path> | /memory upload | /memory clear | /memory stats',
   category: 'config',
-  usage: '/memory [activate <token> | load <url|path> | clear | stats]',
+  usage: '/memory [activate <token> | load <url|path> | upload | clear | stats]',
   async handler(args: string): Promise<SlashCommandResult> {
     const fs   = await import('fs');
     const path = await import('path');
@@ -2428,6 +2428,19 @@ const memoryCommand: SlashCommand = {
       }
     }
 
+    // /memory upload — push every local memory to aegiscloud.org at once
+    if (args?.trim() === 'upload') {
+      if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed' };
+      const { total, pushed } = await sharedMemory.pushAll();
+      if (total === 0) {
+        return { success: true, type: 'info', message: 'No local memories to upload' };
+      }
+      if (pushed < total) {
+        return { success: false, type: 'error', error: `Uploaded ${pushed}/${total} memories — some batches failed, try again` };
+      }
+      return { success: true, type: 'success', message: `✓ Uploaded ${pushed}/${total} memories to aegiscloud.org` };
+    }
+
     // /memory clear
     if (args?.trim() === 'clear') {
       if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed' };
@@ -2507,7 +2520,7 @@ const memoryCommand: SlashCommand = {
         lines.push(`  ${(e.content ?? '').slice(0, 100)}`);
       });
     }
-    lines.push('', '`/memory clear` — wipe all memories');
+    lines.push('', '`/memory upload` — push all local memories to aegiscloud.org', '`/memory clear` — wipe all memories');
 
     return { success: true, type: 'info', content: lines.join('\n') };
   },

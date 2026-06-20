@@ -11,7 +11,7 @@ import * as path from 'path';
 import * as os   from 'os';
 import { v4 as uuid } from 'uuid';
 import initSqlJs, { Database as SqlJsDb } from 'sql.js';
-import { pushEntries, pullSince, claimFreeTrial, searchCloud } from './CloudSync.js';
+import { pushEntries, pushBatch, pullSince, claimFreeTrial, searchCloud } from './CloudSync.js';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const MEMORY_DIR       = path.join(os.homedir(), '.aegiscode', 'memory');
@@ -976,6 +976,20 @@ export class SharedMemory {
     return this.rowsToEntries(rows);
   }
 
+  /** Push every local entry to the cloud in batches, regardless of last-sync state. */
+  async pushAll(batchSize = 200): Promise<{ total: number; pushed: number }> {
+    await this.ensureReady();
+    const token = this.getMemoryToken();
+    const entries = this.export();
+    if (!token || entries.length === 0) return { total: entries.length, pushed: 0 };
+
+    let pushed = 0;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      pushed += await pushBatch(entries.slice(i, i + batchSize), token);
+    }
+    return { total: entries.length, pushed };
+  }
+
   import(entries: MemoryEntry[], merge = true) {
     const existingRows = this.db.exec(`SELECT id FROM memories`);
     const existingIds = new Set(
@@ -983,6 +997,7 @@ export class SharedMemory {
     );
 
     for (const e of entries) {
+      if (!e.id || !e.content) continue;
       if (existingIds.has(e.id) && !merge) continue;
 
       let embeddingBuf: Buffer | null = null;
@@ -996,7 +1011,8 @@ export class SharedMemory {
          topics, entities, sentiment, token_count, embedding)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        e.id, e.timestamp, e.source, e.role, jsonArr(e.tags), e.content, e.session,
+        e.id, e.timestamp ?? new Date().toISOString(), e.source ?? 'cloud',
+        e.role ?? 'assistant', jsonArr(e.tags), e.content, e.session ?? 'cloud-import',
         e.importance ?? 0.5, e.summary ? 1 : 0,
         jsonArr(e.topics ?? []), jsonArr(e.entities ?? []), e.sentiment ?? 'neutral',
         e.tokenCount ?? estimateTokens(e.content), embeddingBuf,
