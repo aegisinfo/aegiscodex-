@@ -79,6 +79,32 @@ async function main(): Promise<void> {
   // 1. 早期解
   parseDebugEarly();
 
+  // One-shot memory introspection flags for external callers (e.g. aegiscode-gui's
+  // Electron main process) — single source of truth instead of duplicating the
+  // SQLite schema/read logic in another codebase. MUST run before anything below
+  // imports SharedMemory (its singleton constructor fires init() — TTL eviction +
+  // cloud sync — synchronously on first import) or makes network calls (version
+  // check, token verification) that a fast read-only call has no business paying for.
+  const earlyArgs = process.argv.slice(2);
+  if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json') {
+    process.env.AEGIS_MEMORY_READONLY = '1';
+    const { sharedMemory } = await import('./memory/SharedMemory.js');
+    await sharedMemory.whenReady();
+
+    if (earlyArgs[0] === '--memory-stats-json') {
+      console.log(JSON.stringify(sharedMemory.getStats()));
+    } else if (earlyArgs[0] === '--memory-search-json') {
+      const query = earlyArgs[1] || '';
+      const limit = parseInt(earlyArgs[2] || '50', 10);
+      const results = query ? await sharedMemory.search(query, limit) : sharedMemory.recent(limit);
+      console.log(JSON.stringify(results));
+    } else {
+      sharedMemory.clear();
+      console.log(JSON.stringify({ ok: true }));
+    }
+    process.exit(0);
+  }
+
   // 2. 启动版本检查（不等待，与后续流程并行执
   versionCheckPromise = checkVersionOnStartup();
 
@@ -111,30 +137,6 @@ async function main(): Promise<void> {
 
   // Handle /council command
   const args = process.argv.slice(2);
-
-  // One-shot memory introspection flags for external callers (e.g. aegiscode-gui's
-  // Electron main process) — single source of truth instead of duplicating the
-  // SQLite schema/read logic in another codebase.
-  if (args[0] === '--memory-stats-json' || args[0] === '--memory-search-json' || args[0] === '--memory-clear-json') {
-    // Read-only init: no TTL eviction, no cloud sync/import — a short-lived
-    // introspection process must never commit() and race a live session's state.
-    process.env.AEGIS_MEMORY_READONLY = '1';
-    const { sharedMemory } = await import('./memory/SharedMemory.js');
-    await sharedMemory.whenReady();
-
-    if (args[0] === '--memory-stats-json') {
-      console.log(JSON.stringify(sharedMemory.getStats()));
-    } else if (args[0] === '--memory-search-json') {
-      const query = args[1] || '';
-      const limit = parseInt(args[2] || '50', 10);
-      const results = query ? await sharedMemory.search(query, limit) : sharedMemory.recent(limit);
-      console.log(JSON.stringify(results));
-    } else {
-      sharedMemory.clear();
-      console.log(JSON.stringify({ ok: true }));
-    }
-    process.exit(0);
-  }
 
   if (args[0] === '/council' || args[0] === 'council') {
     const question = args.slice(1).join(' ');
