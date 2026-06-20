@@ -10,13 +10,25 @@ import type { MemoryEntry } from './SharedMemory.js';
 
 const MEMORY_API_BASE = process.env.AEGIS_MEMORY_API_BASE || 'https://aegiscloud.org/api/memory';
 
+// Embeddings are 384 floats — as JSON that's ~7KB per entry. The server only
+// ever does keyword (LIKE) search/dashboard listing on memory_entries, never
+// vector similarity, so transmitting them bloats every push for zero server-side
+// benefit. A bulk upload of a few thousand entries turned tens of MB of pure
+// embedding JSON across many sequential requests, which is what was actually
+// timing out — not a network problem. Dropping it: a device that pulls this
+// entry down just lacks a precomputed vector locally (falls back to keyword
+// search for it, same as any entry whose embedder failed at add()-time).
+function stripEmbedding(entries: MemoryEntry[]): Omit<MemoryEntry, 'embedding'>[] {
+  return entries.map(({ embedding, ...rest }) => rest);
+}
+
 export async function pushEntries(entries: MemoryEntry[], token: string): Promise<void> {
   if (entries.length === 0) return;
   try {
     await fetch(`${MEMORY_API_BASE}/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ entries: stripEmbedding(entries) }),
     });
   } catch {
     // silent fail — sync is optional, local memory already has the entry
@@ -27,11 +39,22 @@ export async function pushEntries(entries: MemoryEntry[], token: string): Promis
 export async function pushBatch(entries: MemoryEntry[], token: string): Promise<number> {
   if (entries.length === 0) return 0;
   try {
-    const res = await fetch(`${MEMORY_API_BASE}/save`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ entries }),
-    });
+    // A bulk upload can be many sequential batches — one slow/hung request
+    // without its own timeout would stall the whole pushAll() loop indefinitely,
+    // regardless of any timeout the caller process is given from outside.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    let res: Response;
+    try {
+      res = await fetch(`${MEMORY_API_BASE}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ entries: stripEmbedding(entries) }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) return 0;
     const data = await res.json() as { saved?: number };
     return data.saved ?? 0;

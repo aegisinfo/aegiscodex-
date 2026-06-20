@@ -990,7 +990,7 @@ export class SharedMemory {
   }
 
   /** Push every local entry to the cloud in batches, regardless of last-sync state. */
-  async pushAll(batchSize = 200): Promise<{ total: number; pushed: number }> {
+  async pushAll(batchSize = 500): Promise<{ total: number; pushed: number }> {
     await this.ensureReady();
     const token = this.getMemoryToken();
     const entries = this.export();
