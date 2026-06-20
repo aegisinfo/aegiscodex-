@@ -47,6 +47,9 @@ import { ErrorBoundary } from './common/ErrorBoundary.js';
 // Focus
 import { FocusId, focusActions } from '../focus/index.js';
 
+// Heartbeat (online status ping)
+import { startHeartbeat, stopHeartbeat } from '../../services/Heartbeat.js';
+
 // Theme
 import { themeManager } from '../themes/index.js';
 
@@ -188,6 +191,12 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
     return () => {
       if (renderLatencyTimerRef.current) clearTimeout(renderLatencyTimerRef.current);
     };
+  }, []);
+
+  // ==================== Heartbeat (online status) ====================
+  useEffect(() => {
+    startHeartbeat();
+    return () => stopHeartbeat();
   }, []);
 
   const [selectorState, setSelectorState] = useState<{
