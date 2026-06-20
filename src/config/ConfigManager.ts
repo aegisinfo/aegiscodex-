@@ -22,7 +22,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import {
   Config,
-  ConfigSchema,
+  ClawdConfigSchema,
   DEFAULT_CONFIG,
   ModelConfig,
   type PermissionConfig,
@@ -118,7 +118,7 @@ export class ConfigManager {
         if (parsed.model && !parsed.default.model) parsed.default.model = parsed.model;
       }
 
-      const validated = ConfigSchema.partial().parse(parsed);
+      const validated = ClawdConfigSchema.partial().parse(parsed);
 
       // 深度合并配
       this.config = this.mergeConfig(this.config, validated);
@@ -286,6 +286,18 @@ export class ConfigManager {
     // currentModelId — explicit merge
     if ((override as any).currentModelId) {
       (merged as any).currentModelId = (override as any).currentModelId;
+    }
+
+    // 合并 autoRouter 配置（深度合并）
+    if (override.autoRouter || base.autoRouter) {
+      merged.autoRouter = {
+        ...base.autoRouter,
+        ...override.autoRouter,
+        tiers: {
+          ...(base.autoRouter?.tiers || {}),
+          ...(override.autoRouter?.tiers || {}),
+        },
+      };
     }
     // 其他字段使用后者覆
     if (override.defaultPermissionMode) {
