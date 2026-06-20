@@ -254,7 +254,33 @@ function saveClaudeCodeOAuthToken(token: string): void {
   fs.writeFileSync(ENV_FILE, filtered.filter(l => l.trim()).join('\n') + '\n');
 }
 
+// spawn('claude', ...)/`which claude` relies on PATH — same check ClaudeCliChatService
+// uses, duplicated here (rather than imported) to keep this auth module's only
+// dependency on node:child_process for the existing OAuth browser flow above.
+function isClaudeCliInstalled(): boolean {
+  const home = os.homedir();
+  const candidates = [
+    ...(process.env.PATH || '').split(':').map(dir => path.join(dir, 'claude')),
+    path.join(home, '.local', 'bin', 'claude'),
+    path.join(home, '.npm-global', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+  return candidates.some(p => p && fs.existsSync(p));
+}
+
 export async function runLoginClaudePro(): Promise<void> {
+  if (!isClaudeCliInstalled()) {
+    process.stdout.write(
+      `\n${C.primary}◆ ÆGIS — Login with Claude Code Pro / Max${C.reset}\n\n` +
+      `  The claude CLI isn't installed yet — it's required for this login\n` +
+      `  method (your subscription auth lives in its credential store).\n\n` +
+      `  Install it, then run this command again:\n` +
+      `    ${C.bold}npm install -g @anthropic-ai/claude-code${C.reset}\n\n`,
+    );
+    return;
+  }
+
   process.stdout.write(
     `\n${C.primary}◆ ÆGIS — Login with Claude Code Pro / Max${C.reset}\n\n` +
     `  This uses your claude.ai subscription instead of a pay-per-token API key.\n` +

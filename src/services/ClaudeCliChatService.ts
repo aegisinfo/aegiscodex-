@@ -24,6 +24,9 @@
  */
 
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type {
   Message,
   ToolDefinition,
@@ -37,6 +40,28 @@ export interface ClaudeCliChatServiceConfig {
   model?: string;
   /** aegiscode permission mode ('default' | 'autoEdit' | 'yolo' | 'plan'); mapped to claude CLI's --permission-mode. */
   permissionMode?: string;
+}
+
+// spawn('claude', ...) relies on process.env.PATH, which is fine in an interactive
+// shell but NOT when aegiscode is launched from a GUI app (Electron's main process
+// inherits whatever minimal PATH the desktop session/launcher set, often missing
+// ~/.local/bin) — this is exactly where Claude Code's own installer puts the
+// binary. Resolve an absolute path so Pro/Max chat doesn't ENOENT in that case.
+let cachedClaudeBin: string | null | undefined;
+function resolveClaudeBin(): string {
+  if (cachedClaudeBin !== undefined) return cachedClaudeBin ?? 'claude';
+
+  const home = homedir();
+  const candidates = [
+    ...(process.env.PATH || '').split(':').map(dir => join(dir, 'claude')),
+    join(home, '.local', 'bin', 'claude'),
+    join(home, '.npm-global', 'bin', 'claude'),
+    '/usr/local/bin/claude',
+    '/opt/homebrew/bin/claude',
+  ];
+
+  cachedClaudeBin = candidates.find(p => p && existsSync(p)) ?? null;
+  return cachedClaudeBin ?? 'claude';
 }
 
 const PERMISSION_MODE_MAP: Record<string, string> = {
@@ -112,7 +137,7 @@ export class ClaudeCliChatService implements IChatService {
       // Strip ANTHROPIC_API_KEY so the child claude binary uses its own
       // OAuth subscription login instead of our (possibly out-of-credit) key.
       const { ANTHROPIC_API_KEY, ...env } = process.env;
-      const child = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'], env });
+      const child = spawn(resolveClaudeBin(), args, { stdio: ['ignore', 'pipe', 'pipe'], env });
 
       let stderr = '';
       let stdoutBuffer = '';
@@ -153,7 +178,11 @@ export class ClaudeCliChatService implements IChatService {
 
       child.on('error', err => {
         signal?.removeEventListener('abort', onAbort);
-        reject(new Error(`Failed to launch claude CLI: ${err.message}. Is it installed and on PATH?`));
+        reject(new Error(
+          `Failed to launch the claude CLI (${err.message}). Install it with: ` +
+          `npm install -g @anthropic-ai/claude-code — then run "claude setup-token" ` +
+          `and "/login --claude-pro" in aegiscode to connect your subscription.`
+        ));
       });
 
       child.on('close', code => {
