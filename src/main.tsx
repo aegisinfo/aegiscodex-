@@ -86,7 +86,7 @@ async function main(): Promise<void> {
   // cloud sync — synchronously on first import) or makes network calls (version
   // check, token verification) that a fast read-only call has no business paying for.
   const earlyArgs = process.argv.slice(2);
-  if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json') {
+  if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json' || earlyArgs[0] === '--memory-upload-json') {
     process.env.AEGIS_MEMORY_READONLY = '1';
     const { sharedMemory } = await import('./memory/SharedMemory.js');
     await sharedMemory.whenReady();
@@ -98,6 +98,8 @@ async function main(): Promise<void> {
       const limit = parseInt(earlyArgs[2] || '50', 10);
       const results = query ? await sharedMemory.search(query, limit) : sharedMemory.recent(limit);
       console.log(JSON.stringify(results));
+    } else if (earlyArgs[0] === '--memory-upload-json') {
+      console.log(JSON.stringify(await sharedMemory.pushAll()));
     } else {
       sharedMemory.clear();
       console.log(JSON.stringify({ ok: true }));
