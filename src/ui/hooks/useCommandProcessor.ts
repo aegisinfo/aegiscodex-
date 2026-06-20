@@ -310,6 +310,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
           content: m.content,
         })),
         confirmationHandler: confirmationHandlerRef.current,
+        permissionMode: getState().config.config?.defaultPermissionMode || 'default',
       };
 
       const result = await dispatchAgent!.chat(value, chatContext, {

@@ -9,6 +9,11 @@
 
 Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq, Gemini and Ollama. BYOK — your keys, your cost.
 
+- **Private AI, no keys needed** — run fully local with Ollama. Nothing leaves your machine, no API key, no account.
+- **A model that grows over time** — `/router` auto-picks the cheapest model that can handle each task and learns from every session, so cost drops while quality holds.
+- **Many models, one answer** — `/council` votes and `/debate` makes them argue it out, so you get a reasoned consensus instead of one model's guess.
+- **Cloud sync — $2/month** — keep cross-session semantic memory and sync every session across machines. Activate with a single code.
+
 > ### Semantic memory — €2/month
 > The AI remembers your project, stack, and decisions across every session.  
 > Subscribe at **[aegiscloud.org](https://aegiscloud.org)**, then activate with one command:
@@ -199,6 +204,7 @@ Any OpenAI-compatible API can be added as a custom model.
 | `/multiyolo <task>` | | Same as /multi with auto-approved tool calls |
 | `/build <description>` | `/forge` | Build an app with multiple AI models in parallel |
 | `/council <question>` | | Multi-model majority vote |
+| `/debate <question>` | | Structured multi-model debate across rounds |
 | `/research <question>` | | Multi-agent research |
 | `/memory` | | Manage semantic memory |
 | `/skills` | `/sk` | List loaded skills |
@@ -244,6 +250,20 @@ Running `/model <id>` always wins — it pins your choice for the rest of the se
 3. **Sync** — summary of files written and how to run the app
 
 All agents write real files to your current directory. The more API keys you have configured, the more models work in parallel.
+
+---
+
+## /council & /debate — many models, one answer
+
+Don't trust a single model on a hard call. Put several to work on it.
+
+```
+/council "is a state machine overkill for this form?"   # they vote, consensus wins
+/debate  "monorepo vs polyrepo for this team" --rounds 3 # they argue it out across rounds
+/debate  "React vs SolidJS" --models gpt-4o,deepseek      # pick the panel
+```
+
+`/council` sends the question to multiple configured models simultaneously, then surfaces the majority answer with the dissents. `/debate` runs a structured, multi-round discussion — each model sees the others' arguments and refines or pushes back — so you get reasoning, not just a tally. Both auto-pick from the models you have keys for; add more keys, get a bigger panel.
 
 ---
 

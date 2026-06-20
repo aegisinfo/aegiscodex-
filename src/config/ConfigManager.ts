@@ -402,6 +402,14 @@ export class ConfigManager {
   }
 
   /**
+   * Update the default permission mode at runtime (used by /yolo toggle).
+   * This keeps ConfigManager in sync with config file changes without a full reload.
+   */
+  setDefaultPermissionMode(mode: 'default' | 'autoEdit' | 'yolo' | 'plan'): void {
+    this.config.defaultPermissionMode = mode;
+  }
+
+  /**
    * 
    */
   getMcpServers(): Record<string, McpServerConfig> {

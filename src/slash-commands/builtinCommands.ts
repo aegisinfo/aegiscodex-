@@ -2704,6 +2704,13 @@ const yoloCommand: SlashCommand = {
       fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
     } catch {}
 
+    // Update runtime state so next message picks up the change without reload
+    configActions().updateConfig({ defaultPermissionMode: enable ? 'yolo' as const : 'default' as const });
+    try {
+      const { ConfigManager } = await import('../config/ConfigManager.js');
+      ConfigManager.getInstance().setDefaultPermissionMode(enable ? 'yolo' : 'default');
+    } catch {}
+
     if (enable) {
       return {
         success: true,

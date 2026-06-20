@@ -31,6 +31,7 @@ import type {
   IChatService,
   StreamCallbacks,
 } from '../agent/types.js';
+import { getPermissionMode as getStorePermissionMode } from '../store/vanilla.js';
 
 export interface ClaudeCliChatServiceConfig {
   model?: string;
@@ -82,7 +83,8 @@ export class ClaudeCliChatService implements IChatService {
     streamCallbacks?: StreamCallbacks
   ): Promise<ChatResponse> {
     const args = ['--print', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'];
-    const cliPermissionMode = PERMISSION_MODE_MAP[this.config.permissionMode ?? 'default'] ?? 'default';
+    const currentMode = this.config.permissionMode || getStorePermissionMode() || 'default';
+    const cliPermissionMode = PERMISSION_MODE_MAP[currentMode] ?? 'default';
     args.push('--permission-mode', cliPermissionMode);
     if (this.config.model) args.push('--model', this.config.model);
 
