@@ -57,6 +57,22 @@ const INCOMPLETE_INTENT_PATTERNS = [
   /Let me (first|start|check|look|fix)/i,  // 英文意图
 ];
 
+// Matches the model claiming a tool call is stuck behind a human-clickable
+// permission dialog ("click Allow", "approve the prompt") without ever
+// issuing a tool call. There is no such dialog in this environment — every
+// permission/confirmation prompt is a real UI element rendered in response
+// to an actual tool call, so this phrasing with zero tool calls is always a
+// hallucination (often recalled from a prior session's identical mistake via
+// shared memory). Left unchecked, the model returns this as final content,
+// it gets persisted back to shared memory, and gets recalled again next
+// time — a self-reinforcing loop.
+const HALLUCINATED_PERMISSION_BLOCK_PATTERN = new RegExp(
+  '\\b(permission|approv\\w*)\\b[^.\\n]{0,60}\\b(blocked|stuck|denied|approve|dialog|click|allow|grant|settings\\.json)\\b' +
+  '|\\b(blocked|stuck|denied)\\b[^.\\n]{0,60}\\b(permission|approv\\w*)\\b' +
+  '|click\\s+(\\*\\*)?Allow(\\*\\*)?\\b',
+  'i'
+);
+
 // ========== Agent 
 
 export class Agent {
@@ -409,6 +425,23 @@ export class Agent {
           messages.push({
             role: 'user',
             content: '请执行你提到的操作，不要只是描述。',
+          });
+          continue;
+        }
+
+        if (
+          turnResult.content &&
+          HALLUCINATED_PERMISSION_BLOCK_PATTERN.test(turnResult.content) &&
+          recentRetries < 3
+        ) {
+          recentRetries++;
+          messages.push({
+            role: 'user',
+            content: '[System] You did not make a tool call — there is nothing pending and nothing ' +
+              'was denied. You are describing a permission system that has not been invoked. Issue ' +
+              'the tool call now (e.g. Write with the requested file_path and content); any real ' +
+              'confirmation prompt, if one is needed, appears automatically the instant you call it. ' +
+              'Do not write any more text about permissions — call the tool in this response.',
           });
           continue;
         }
