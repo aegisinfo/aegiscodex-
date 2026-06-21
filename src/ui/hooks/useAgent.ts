@@ -264,6 +264,14 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
       setCurrentModel(displayName);
       modelRef.current = displayName;
 
+      // Apply requireConfirmation synchronously on the live Agent instance so
+      // toggling /confirm takes effect immediately — the full rebuild below
+      // is async and would otherwise leave a window where agentRef.current
+      // still has the stale value if a message is sent before it resolves.
+      if (!modelChanged && agentRef.current) {
+        agentRef.current.setRequireConfirmation(found.requireConfirmation);
+      }
+
       rebuildAgent(found, displayName);
     });
     return unsubscribe;

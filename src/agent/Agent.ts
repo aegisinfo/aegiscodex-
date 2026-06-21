@@ -249,6 +249,15 @@ export class Agent {
     return { ...this.config };
   }
 
+  /**
+   * Update requireConfirmation in place so toggling /confirm takes effect
+   * immediately, without waiting on an async Agent rebuild that could race
+   * against the next user message.
+   */
+  setRequireConfirmation(value: boolean | undefined): void {
+    this.config.requireConfirmation = value;
+  }
+
   // ========== 核心执行循
 
   /**

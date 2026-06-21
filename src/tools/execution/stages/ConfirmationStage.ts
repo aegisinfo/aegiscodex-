@@ -61,7 +61,7 @@ export class ConfirmationStage implements PipelineStage {
     const handler = execution.context.confirmationHandler;
     if (!handler) {
       // 无确认处理器，默认拒
-      execution.abort('No confirmation handler available - operation requires user approval');
+      execution.abort('Internal error: confirmation was required but no approval UI is attached to this session. Retrying the same edit will not help — ask the user to restart the session or run /confirm off.');
       return;
     }
 
