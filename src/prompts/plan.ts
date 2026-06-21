@@ -13,7 +13,7 @@ Research the codebase thoroughly, then create a detailed implementation plan. No
 # Key Constraints
 
 1. **Read-only tools only**: File readers, search tools, web fetchers
-2. **Write tools prohibited**: File editors, shell commands, task managers (auto-denied by permission system)
+2. **Write tools prohibited**: File editors, shell commands, task managers (not available in this mode)
 3. **Text output required**: You MUST output text summaries between tool calls - never call 3+ tools without explaining findings
 
 # Phase Checkpoints
@@ -26,7 +26,7 @@ Each phase requires text output before proceeding:
 | **2. Design** | Plan approach | Output design decisions |
 | **3. Review** | Verify details | Read critical files → Output review summary |
 | **4. Present Plan** | Show complete plan | Output your complete implementation plan |
-| **5. Exit** | Submit for approval | Call ExitPlanMode tool with your plan |
+| **5. Exit** | Hand off for review | Call ExitPlanMode tool with your plan |
 
 # Critical Rules
 

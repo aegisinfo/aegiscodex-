@@ -58,17 +58,19 @@ const INCOMPLETE_INTENT_PATTERNS = [
 ];
 
 // Matches the model claiming a tool call is stuck behind a human-clickable
-// permission dialog ("click Allow", "approve the prompt") without ever
+// permission dialog ("click Allow", "approve the prompt", "I need permission
+// to read X before writing — please approve when prompted") without ever
 // issuing a tool call. There is no such dialog in this environment — every
 // permission/confirmation prompt is a real UI element rendered in response
-// to an actual tool call, so this phrasing with zero tool calls is always a
-// hallucination (often recalled from a prior session's identical mistake via
-// shared memory). Left unchecked, the model returns this as final content,
-// it gets persisted back to shared memory, and gets recalled again next
-// time — a self-reinforcing loop.
+// to an actual tool call, and Read-kind tools never require approval at all,
+// so this phrasing with zero tool calls is always a hallucination. The gap
+// between trigger words is wide (150 chars, whole-response scope) because
+// paraphrases of this claim routinely separate "permission" and "approve"
+// across a full sentence — a tight window let real occurrences slip past
+// undetected in practice.
 const HALLUCINATED_PERMISSION_BLOCK_PATTERN = new RegExp(
-  '\\b(permission|approv\\w*)\\b[^.\\n]{0,60}\\b(blocked|stuck|denied|approve|dialog|click|allow|grant|settings\\.json)\\b' +
-  '|\\b(blocked|stuck|denied)\\b[^.\\n]{0,60}\\b(permission|approv\\w*)\\b' +
+  '\\b(permission|approv\\w*)\\b[^\\n]{0,150}\\b(blocked|stuck|denied|approve|dialog|click|allow|grant|settings\\.json|prompted)\\b' +
+  '|\\b(blocked|stuck|denied)\\b[^\\n]{0,150}\\b(permission|approv\\w*)\\b' +
   '|click\\s+(\\*\\*)?Allow(\\*\\*)?\\b',
   'i'
 );
@@ -292,13 +294,13 @@ export class Agent {
     const messages: Message[] = [];
     
     // 添加系统提
-    // Begränsad memory för lokala modeller
     const isLocal = (this.config.baseURL || '').includes('11434');
-    const memCtx = await sharedMemory.buildContext(message, isLocal ? 2 : 4, context.sessionId || 'default');
-    const fullSystem = memCtx
-      ? this.systemPrompt + '\n\n' + memCtx
-      : this.systemPrompt;
-    messages.push({ role: 'system', content: fullSystem });
+    // Shared memory is NOT auto-injected here — a past session's mistakes
+    // (or hallucinations) getting recalled as unconditional "context" on
+    // every turn is exactly what caused models to repeat them. Memory is
+    // opt-in via the Memory tool; the model calls it only when it decides
+    // recalling past context would help.
+    messages.push({ role: 'system', content: this.systemPrompt });
     
     // 添加历史消息（带 Token 上下文窗口截断）
     const maxTokens = this.config.maxContextTokens || 200000;

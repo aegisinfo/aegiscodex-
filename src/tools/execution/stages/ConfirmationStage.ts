@@ -39,7 +39,7 @@ export class ConfirmationStage implements PipelineStage {
     // 检查是否已在会话中拒绝
     const signature = execution._internal.permissionSignature;
     if (signature && this.sessionDenials?.has(signature)) {
-      execution.abort('Permission denied (session)');
+      execution.abort('Not executed: you tried this exact action earlier in this session and the user declined it. Choose a different approach.');
       return;
     }
 
@@ -61,7 +61,11 @@ export class ConfirmationStage implements PipelineStage {
     const handler = execution.context.confirmationHandler;
     if (!handler) {
       // 无确认处理器，默认拒
-      execution.abort('Internal error: confirmation was required but no approval UI is attached to this session. Retrying the same edit will not help — ask the user to restart the session or run /confirm off.');
+      // Worded to avoid "permission/approval/dialog" vocabulary — this string becomes
+      // llmContent in a real tool_result, and re-using that vocabulary cluster is what
+      // lets the model later free-associate a hallucinated "blocked, click Allow" reply
+      // in an unrelated turn with no tool call at all.
+      execution.abort('Not executed: this session cannot ask the user a yes/no question right now. Retrying this exact action will not help — explain what you wanted to do in your text response instead, or ask the user directly.');
       return;
     }
 
@@ -72,7 +76,7 @@ export class ConfirmationStage implements PipelineStage {
       if (response.scope === 'session' && signature && this.sessionDenials) {
         this.sessionDenials.add(signature);
       }
-      execution.abort(`User rejected: ${response.reason || 'No reason provided'}`);
+      execution.abort(`Not executed: the user declined this action${response.reason ? ` — ${response.reason}` : ''}. Choose a different approach.`);
       return;
     }
 

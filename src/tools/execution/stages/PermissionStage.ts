@@ -60,7 +60,10 @@ export class PermissionStage implements PipelineStage {
 
     // 3. 检查会话拒绝列
     if (this.sessionDenials?.has(signature)) {
-      execution.abort('Permission denied (session)');
+      // Phrased to avoid "permission/denied" vocabulary: this exact string becomes
+      // llmContent in a real tool_result, and the model can later free-associate a
+      // hallucinated continuation of it in an unrelated turn with no tool call.
+      execution.abort('Not executed: you tried this exact action earlier in this session and the user declined it. Choose a different approach.');
       return;
     }
 
@@ -84,7 +87,7 @@ export class PermissionStage implements PipelineStage {
     // 7. 根据结果采取行
     switch (checkResult.result) {
       case PermissionResult.DENY:
-        execution.abort(checkResult.reason || 'Permission denied');
+        execution.abort(checkResult.reason || 'Not executed: this action is not allowed under current settings. Choose a different approach.');
         return;
 
       case PermissionResult.ASK:
@@ -95,7 +98,7 @@ export class PermissionStage implements PipelineStage {
           break;
         } else if (hookDecision === 'deny') {
           // Hook 拒
-          execution.abort('Permission denied by hook');
+          execution.abort('Not executed: a configured hook excludes this action. Choose a different approach.');
           return;
         }
         // Hook 返回 ask 或无 hook，继续标记需要确
@@ -237,7 +240,7 @@ export class PermissionStage implements PipelineStage {
 
     if (highSensitive.length > 0) {
       const files = highSensitive.map(f => f.path).join(', ');
-      execution.abort(`Access to highly sensitive files denied: ${files}`);
+      execution.abort(`Not executed: these files are excluded for safety — ${files}. Choose a different approach.`);
       return;
     }
 

@@ -58,7 +58,7 @@ export class PermissionChecker {
         return {
           result: PermissionResult.DENY,
           matchedRule: rule,
-          reason: `Denied by rule: ${rule}`,
+          reason: `Not executed: rule "${rule}" excludes this action. Choose a different approach.`,
         };
       }
     }

@@ -17,6 +17,9 @@ export { bashTool } from './bash.js';
 // Skills 工
 export { skillTool } from './skill.js';
 
+// Memory 工
+export { memoryTool } from './memory.js';
+
 // Multi-agent orchestration 工
 export { taskTool } from './task.js';
 export { councilTool } from './council.js';
@@ -28,6 +31,7 @@ import { grepTool } from './grep.js';
 import { globTool } from './glob.js';
 import { bashTool } from './bash.js';
 import { skillTool } from './skill.js';
+import { memoryTool } from './memory.js';
 import { taskTool } from './task.js';
 import { councilTool } from './council.js';
 import type { Tool } from '../types.js';
@@ -48,6 +52,8 @@ export function getBuiltinTools(): Tool[] {
     bashTool,
     // Skills 工
     skillTool,
+    // Memory 工
+    memoryTool,
     // Multi-agent orchestration 工
     taskTool,
     councilTool,
