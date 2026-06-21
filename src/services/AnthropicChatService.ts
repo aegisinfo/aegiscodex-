@@ -25,7 +25,9 @@ import type {
 import type { ChatServiceConfig } from './ChatService.js';
 import type { AnthropicStreamEvent } from './streaming/types.js';
 
-const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'max']);
+const EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
+/** 'max' maps to a fixed budget_tokens ceiling when sent via extended thinking. */
+const MAX_BUDGET_TOKENS = 128000;
 
 /** Effort + adaptive thinking are unsupported on Haiku (errors per Anthropic API). */
 function modelSupportsThinking(model: string): boolean {
@@ -156,9 +158,14 @@ export class AnthropicChatService implements IChatService {
       body.tools = anthropicTools;
     }
 
-    if (this.thinkingBudget !== 'off' && modelSupportsThinking(this.model) && EFFORT_LEVELS.has(this.thinkingBudget)) {
-      body.thinking = { type: 'adaptive' };
-      body.output_config = { effort: this.thinkingBudget };
+    if (this.thinkingBudget !== 'off' && modelSupportsThinking(this.model)) {
+      if (this.thinkingBudget === 'max') {
+        // 'max' is not a valid Anthropic effort value — use token-based approach instead
+        body.thinking = { type: 'enabled', budget_tokens: MAX_BUDGET_TOKENS };
+      } else if (EFFORT_LEVELS.has(this.thinkingBudget)) {
+        body.thinking = { type: 'adaptive' };
+        body.output_config = { effort: this.thinkingBudget };
+      }
     }
 
     let content = '';
