@@ -39,7 +39,7 @@ if (cjs) {
     minify,
     external: ['sql.js', '@xenova/transformers'],
     banner: {
-      js: `#!/usr/bin/env node --no-deprecation
+      js: `#!/usr/bin/env -S node --no-deprecation
 import __aegis_mod from'node:module';if(typeof require==='undefined'){globalThis.require=__aegis_mod.createRequire(import.meta.url);}
 `,
     },

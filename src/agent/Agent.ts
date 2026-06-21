@@ -42,8 +42,47 @@ import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
 import { ensureOllama } from '../services/OllamaInstaller.js';
 import { TokenCounter } from '../context/TokenCounter.js';
+import fs from 'fs/promises';
 
-// ========== 常
+// ========== Hallucination logger ===
+
+/** Hallucination log path — written as JSONL in debug mode so the dev can grep patterns. */
+const HALLUCINATION_LOG_PATH = process.env.AEGIS_HALLUCINATION_LOG || '';
+
+interface HallucinationLogEntry {
+  ts: string;
+  sessionId: string;
+  family: HallucinationFamily;
+  snippet: string;       // first 200 chars of the matched text
+  model: string;
+  turn: number;
+}
+
+function writeHallucinationLog(entry: HallucinationLogEntry): void {
+  if (!HALLUCINATION_LOG_PATH) return;
+  const line = JSON.stringify(entry) + '\n';
+  fs.appendFile(HALLUCINATION_LOG_PATH, line, 'utf-8').catch(() => {});
+}
+
+function logHallucination(
+  families: HallucinationFamily[],
+  content: string,
+  sessionId: string,
+  model: string,
+  turn: number,
+): void {
+  for (const family of families) {
+    agentDebug.warn(`[Hallucination] ${family} detected (turn ${turn}, model ${model})`);
+    writeHallucinationLog({
+      ts: new Date().toISOString(),
+      sessionId,
+      family,
+      snippet: content.slice(0, 200).replace(/\n/g, '\\n'),
+      model,
+      turn,
+    });
+  }
+}
 
 /** 轮次上限（Infinity = 无限制） */
 const TURN_LIMIT = Infinity;
@@ -57,23 +96,66 @@ const INCOMPLETE_INTENT_PATTERNS = [
   /Let me (first|start|check|look|fix)/i,  // 英文意图
 ];
 
-// Matches the model claiming a tool call is stuck behind a human-clickable
-// permission dialog ("click Allow", "approve the prompt", "I need permission
-// to read X before writing — please approve when prompted") without ever
-// issuing a tool call. There is no such dialog in this environment — every
-// permission/confirmation prompt is a real UI element rendered in response
-// to an actual tool call, and Read-kind tools never require approval at all,
-// so this phrasing with zero tool calls is always a hallucination. The gap
-// between trigger words is wide (150 chars, whole-response scope) because
-// paraphrases of this claim routinely separate "permission" and "approve"
-// across a full sentence — a tight window let real occurrences slip past
-// undetected in practice.
+/**
+ * Hallucination detection — multi-pattern matcher for known false-claim families.
+ *
+ * All patterns here target responses *without* tool calls. If the model actually
+ * issues the tool call, the action is real regardless of accompanying text.
+ *
+ * Pattern families:
+ *   1. Permission-dialog hallucination ("click Allow", "approve the prompt")
+ *   2. Sandbox/workspace boundary hallucination ("scoped to X", "can only access Y")
+ *   3. False config-file hallucination ("~/.claude/settings.json has sandbox disabled")
+ *   4. False tool-capability hallucination ("I can't read outside the project")
+ */
 const HALLUCINATED_PERMISSION_BLOCK_PATTERN = new RegExp(
+  // Family 1: Permission-dialog hallucination
   '\\b(permission|approv\\w*)\\b[^\\n]{0,150}\\b(blocked|stuck|denied|approve|dialog|click|allow|grant|settings\\.json|prompted)\\b' +
   '|\\b(blocked|stuck|denied)\\b[^\\n]{0,150}\\b(permission|approv\\w*)\\b' +
-  '|click\\s+(\\*\\*)?Allow(\\*\\*)?\\b',
+  '|click\\s+(\\*\\*)?Allow(\\*\\*)?\\b' +
+  // Family 2: Sandbox/workspace boundary hallucination
+  '|\\b(sandbox\\w*|confine\\w*|restrict\\w*)\\b[^\\n]{0,80}\\b(session|director|workspace|project|path|access|scope|limit)\\b' +
+  '|\\b(session|workspace|project)\\b[^\\n]{0,80}\\b(sandbox\\w*|confine\\w*|restrict\\w*)\\b' +
+  '|\\b(scop\\w*|limit\\w*)\\b[^\\n]{0,60}\\b(tool|read|write|edit|access)\\b[^\\n]{0,60}\\b(director|project|workspace|path)\\b',
   'i'
 );
+
+/** Family 3: False config/settings claims — e.g. "~/.claude/settings.json disables sandbox" */
+const HALLUCINATED_CONFIG_PATTERN = new RegExp(
+  // Unverified claims about ~/.claude/settings.json or similar
+  '~[/\\\\]\\.claude[/\\\\]settings\\.json' +
+  '|\\.claude\\b[^\\n]{0,80}\\bsettings\\.json\\b' +
+  '|(settings\\.json|claude_desktop_config\\.json)\\b[^\\n]{0,80}\\b(sandbox\\w*|restrict\\w*|enabl\\w*|disabl\\w*|false|true)\\b' +
+  '|\\b(sandbox|scope|restrict)\\w*\\b[^\\n]{0,80}\\b(false|disabled|enabled|off|on)\\b' +
+  // Cursor/Windsurf/Sonnet-specific config hallucinations
+  '\\b(cursor|windsurf|sonnet)\\b[^\\n]{0,60}\\b(sandbox|restrict|confine)\\w*\\b',
+  'i'
+);
+
+/** Family 4: False tool-capability denial — "I can't/am not able to access that" */
+const HALLUCINATED_DENIAL_PATTERN = new RegExp(
+  '\\b(I|my|tools?)\\b[^\\n]{0,40}\\b(can\'t|cannot|not able|unable|don\'t have access|no access|restricted from)\\b' +
+  '[^\\n]{0,80}\\b(path|file|director|home|desktop|outside|system|config|tool)\\b' +
+  '|\\b(path|file|director|access|tool)\\b[^\\n]{0,40}\\b(limited|restricted|scoped|confined)\\b[^\\n]{0,40}\\b(current|project|workspace|director)\\b',
+  'i'
+);
+
+/**
+ * Classify a detected hallucination by family for logging and stats.
+ */
+type HallucinationFamily = 'permission_dialog' | 'sandbox_boundary' | 'false_config' | 'tool_denial';
+function classifyHallucination(content: string): HallucinationFamily[] {
+  const families: HallucinationFamily[] = [];
+  if (/click\s+(\*\*)?Allow(\*\*)?\b|permission[^]{0,150}block|blocked[^]{0,150}permission/i.test(content))
+    families.push('permission_dialog');
+  if (/\b(sandbox|confine|restrict)\w*[^]{0,80}\b(session|workspace|project)\b/i.test(content))
+    families.push('sandbox_boundary');
+  if (/~\/\.claude|settings\.json[^]{0,80}(sandbox|false|disabled)/i.test(content))
+    families.push('false_config');
+  if (/\b(can't|cannot|unable)[^]{0,80}\b(access|read|write|path)[^]{0,80}\b(outside|desktop|home)\b/i.test(content))
+    families.push('tool_denial');
+  return families;
+}
 
 // ========== Agent 
 
@@ -433,17 +515,27 @@ export class Agent {
 
         if (
           turnResult.content &&
-          HALLUCINATED_PERMISSION_BLOCK_PATTERN.test(turnResult.content) &&
+          !isLocal &&
+          (
+            HALLUCINATED_PERMISSION_BLOCK_PATTERN.test(turnResult.content) ||
+            HALLUCINATED_CONFIG_PATTERN.test(turnResult.content) ||
+            HALLUCINATED_DENIAL_PATTERN.test(turnResult.content)
+          ) &&
           recentRetries < 3
         ) {
+          const families = classifyHallucination(turnResult.content);
+          logHallucination(families, turnResult.content, context.sessionId || 'unknown', this.config.model || 'unknown', turnsCount);
+
           recentRetries++;
           messages.push({
             role: 'user',
-            content: '[System] You did not make a tool call — there is nothing pending and nothing ' +
-              'was denied. You are describing a permission system that has not been invoked. Issue ' +
-              'the tool call now (e.g. Write with the requested file_path and content); any real ' +
-              'confirmation prompt, if one is needed, appears automatically the instant you call it. ' +
-              'Do not write any more text about permissions — call the tool in this response.',
+            content: '[System] You did not make a tool call — there is nothing pending, nothing was ' +
+              'denied, and there is no sandbox/workspace/config boundary restricting you to any directory. ' +
+              'You just described a permission system, sandbox restriction, or configuration file setting ' +
+              'that does not exist in this application. Issue the tool call now (e.g. Write/Read with the ' +
+              'requested file_path); any real confirmation prompt, if one is needed, appears automatically ' +
+              'the instant you call it. Do not write any more text about permissions, sandboxes, restrictions, ' +
+              'or config settings — call the tool in this response.',
           });
           continue;
         }
