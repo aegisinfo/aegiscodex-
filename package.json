@@ -49,7 +49,8 @@
     "url": "https://github.com/aegisinfo/aegiscode/issues"
   },
   "files": [
-    "dist",
+    "dist/main.js",
+    "gui/run-gui.cjs",
     "README.md",
     "LICENSE"
   ],

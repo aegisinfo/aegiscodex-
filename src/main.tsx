@@ -167,6 +167,7 @@ async function main(): Promise<void> {
   const cli = yargs(hideBin(process.argv))
     .scriptName(cliConfig.scriptName)
     .usage(cliConfig.usage)
+    .version(cliConfig.version)
     // 注册全局选
     .options(globalOptions)
 
