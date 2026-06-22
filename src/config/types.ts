@@ -465,6 +465,14 @@ export const DEFAULT_MODELS = [
     apiKey: '',
   },
   {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    provider: 'openai-compatible' as const,
+    model: 'chatgpt-4o-latest',
+    baseURL: 'https://api.openai.com/v1',
+    apiKey: '',
+  },
+  {
     id: 'openai-gpt-4o',
     name: 'GPT-4o',
     provider: 'openai-compatible' as const,

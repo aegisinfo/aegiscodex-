@@ -45,9 +45,9 @@ export function classifyComplexity(message: string): ComplexityTier {
 
 /** Cheapest → strongest known model ids per tier, used when no explicit tier is set. */
 const TIER_FALLBACKS: Record<ComplexityTier, string[]> = {
-  simple:  ['groq-llama', 'deepseek-chat', 'claude-haiku-4', 'gemini-2.5-flash'],
-  medium:  ['deepseek-chat', 'claude-sonnet-4', 'gemini-2.5-pro', 'openai-gpt-4o'],
-  complex: ['claude-opus-4', 'openai-o3', 'claude-sonnet-4', 'gemini-2.5-pro'],
+  simple:  ['groq-llama', 'deepseek-chat', 'claude-haiku-4', 'gemini-2.5-flash', 'chatgpt'],
+  medium:  ['deepseek-chat', 'claude-sonnet-4', 'gemini-2.5-pro', 'openai-gpt-4o', 'chatgpt'],
+  complex: ['claude-opus-4', 'openai-o3', 'claude-sonnet-4', 'gemini-2.5-pro', 'chatgpt'],
 };
 
 /**
