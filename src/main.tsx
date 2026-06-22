@@ -29,7 +29,10 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
 
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
-dotenvConfig({ path: resolve(process.cwd(), '.env') });
+// --print's whole point is clean, pipeable stdout (text or JSON) — the
+// dotenvx promo banner would otherwise land on stdout ahead of the result.
+const isPrintMode = process.argv.includes('--print') || process.argv.includes('-p');
+dotenvConfig({ path: resolve(process.cwd(), '.env'), quiet: isPrintMode });
 import React from 'react';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -381,6 +384,74 @@ async function main(): Promise<void> {
           resumeSessionId = args.resume;
           if (isDebugMode) {
             console.log('[DEBUG] Resuming session:', resumeSessionId);
+          }
+        }
+
+        // --print: headless mode, no Ink. Runs one turn, writes the result to
+        // stdout (text or JSON per --output-format), and exits — no TUI chrome,
+        // no spinners, no escape codes, so the output is safe to pipe/script.
+        if (args.print) {
+          if (!initialMessage) {
+            process.stderr.write('Error: --print requires a message, e.g. aegis --print "your question"\n');
+            process.exit(1);
+          }
+
+          const { ContextManager } = await import('./context/index.js');
+          const { Agent } = await import('./agent/Agent.js');
+
+          const ctxManager = new ContextManager({ compressionThreshold: 100000 });
+          let sessionId: string;
+          let priorMessages: { role: 'system' | 'user' | 'assistant' | 'tool'; content: string }[] = [];
+
+          if (resumeSessionId) {
+            const loaded = await ctxManager.loadSession(resumeSessionId);
+            sessionId = loaded ? resumeSessionId : await ctxManager.createSession();
+            if (loaded) {
+              priorMessages = ctxManager.getMessages()
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+            }
+          } else {
+            sessionId = await ctxManager.createSession();
+          }
+
+          try {
+            const agent = await Agent.create({
+              apiKey: modelConfig.apiKey,
+              baseURL: modelConfig.baseURL,
+              model: modelConfig.model,
+              requireConfirmation: false,
+            });
+
+            const result = await agent.chatWithMetadata(initialMessage, {
+              sessionId,
+              messages: priorMessages,
+            });
+
+            if (!result.success) {
+              throw new Error(result.error?.message || 'Agent execution failed');
+            }
+            const finalMessage = result.finalMessage || '';
+
+            await ctxManager.addMessage('user', initialMessage);
+            await ctxManager.addMessage('assistant', finalMessage);
+            await ctxManager.flush();
+
+            if (args.outputFormat === 'json') {
+              process.stdout.write(JSON.stringify({
+                result: finalMessage,
+                session_id: sessionId,
+                num_turns: result.metadata?.turnsCount,
+                num_tool_calls: result.metadata?.toolCallsCount,
+                total_tokens: result.metadata?.totalTokens,
+              }) + '\n');
+            } else {
+              process.stdout.write(finalMessage + '\n');
+            }
+            process.exit(0);
+          } catch (error) {
+            process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+            process.exit(1);
           }
         }
 

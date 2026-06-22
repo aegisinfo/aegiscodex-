@@ -318,6 +318,28 @@ export class Agent {
     context?: ChatContext,
     options?: LoopOptions
   ): Promise<string> {
+    const result = await this.chatWithMetadata(message, context, options);
+
+    if (!result.success) {
+      if (result.error?.type === 'aborted') {
+        return ''; // 用户中
+      }
+      throw new Error(result.error?.message || '执行失败');
+    }
+
+    return result.finalMessage || '';
+  }
+
+  /**
+   * Same as chat(), but returns the full LoopResult (turn/tool-call counts,
+   * token totals) instead of just the final text — used by headless callers
+   * like --print --output-format json that need to report usage.
+   */
+  async chatWithMetadata(
+    message: string,
+    context?: ChatContext,
+    options?: LoopOptions
+  ): Promise<LoopResult> {
     if (!this.isInitialized) {
       throw new Error('Agent 未初始化，请使用 Agent.create() 创建实例');
     }
@@ -329,17 +351,7 @@ export class Agent {
       messages: [],
     };
 
-    // 执行循
-    const result = await this.executeLoop(message, ctx, options);
-
-    if (!result.success) {
-      if (result.error?.type === 'aborted') {
-        return ''; // 用户中
-      }
-      throw new Error(result.error?.message || '执行失败');
-    }
-
-    return result.finalMessage || '';
+    return this.executeLoop(message, ctx, options);
   }
 
   /**
