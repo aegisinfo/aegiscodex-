@@ -24,6 +24,7 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             npm run publish:release
+            npm run obfuscate:agent-sdk
           else
             npm run build
           fi
