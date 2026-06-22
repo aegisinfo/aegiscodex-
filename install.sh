@@ -20,11 +20,26 @@ if [ "$(printf '%s\n' "$NODE_MIN" "$NODE_VER" | sort -V | head -n1)" != "$NODE_M
 fi
 
 cd "$DIR"
-echo "  Installing dependencies..."
-npm install --silent
 
-echo "  Building..."
-npm run build
+# Two distributions ship this same script:
+#  - source clone: no prebuilt bundle yet, needs `npm install && npm run build`
+#    (esbuild.mjs/src/ are present)
+#  - release zip from dl.aegiscloud.org: already has aegiscode.js prebuilt and
+#    node_modules installed (done in CI), but no esbuild.mjs/src/ to build from
+if [ -f "$DIR/aegiscode.js" ]; then
+  ENTRY="$DIR/aegiscode.js"
+  if [ ! -d "$DIR/node_modules" ]; then
+    echo "  Installing dependencies..."
+    npm install --silent --omit=dev
+  fi
+else
+  ENTRY="$DIR/dist/main.js"
+  echo "  Installing dependencies..."
+  npm install --silent
+
+  echo "  Building..."
+  npm run build
+fi
 
 # Create config dir
 mkdir -p "$HOME/.aegiscode"
@@ -34,7 +49,7 @@ mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/aegis" << WRAPPER
 #!/bin/bash
 cd "$DIR"
-exec "$NODE_BIN" "$DIR/dist/main.js" "\$@"
+exec "$NODE_BIN" "$ENTRY" "\$@"
 WRAPPER
 chmod +x "$HOME/.local/bin/aegis"
 
