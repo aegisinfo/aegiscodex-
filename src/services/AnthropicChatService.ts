@@ -140,6 +140,17 @@ export class AnthropicChatService implements IChatService {
   ): Promise<ChatResponse> {
     const { systemText, anthropicMessages } = buildAnthropicMessages(messages);
 
+    // Cache the conversation-history prefix: mark the last content block of the
+    // second-to-last message so everything before the newest turn can hit cache
+    // instead of being reprocessed at full price/latency every turn.
+    if (anthropicMessages.length >= 2) {
+      const prefixMessage = anthropicMessages[anthropicMessages.length - 2];
+      const lastBlock = prefixMessage.content[prefixMessage.content.length - 1];
+      if (lastBlock) {
+        (lastBlock as Record<string, unknown>).cache_control = { type: 'ephemeral' };
+      }
+    }
+
     const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: this.maxOutputTokens,

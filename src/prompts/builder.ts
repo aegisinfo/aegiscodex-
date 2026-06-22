@@ -107,18 +107,7 @@ export async function buildSystemPrompt(
   const parts: string[] = [];
   const sources: PromptSource[] = [];
 
-  // 1. 环境上下文（始终在最前
-  if (includeEnvironment) {
-    const envContext = getEnvironmentContext();
-    parts.push(envContext);
-    sources.push({
-      name: 'environment',
-      loaded: true,
-      length: envContext.length,
-    });
-  }
-
-  // 2. 基础提示词（Plan 模式使用独
+  // 1. 基础提示词（Plan 模式使用独
   const isPlanMode = mode === 'plan';
   let basePrompt: string;
   let baseName: string;
@@ -188,8 +177,18 @@ When a user request matches a skill's description, use the Skill tool to load it
     });
   }
 
+  // 6. 环境上下文（动态内容放最后，避免使前面的静态内容缓存失效）
+  if (includeEnvironment) {
+    const envContext = getEnvironmentContext();
+    parts.push(envContext);
+    sources.push({
+      name: 'environment',
+      loaded: true,
+      length: envContext.length,
+    });
+  }
+
   // 用 --- 分隔各部
-  parts.unshift('Be a good assistant');
   return {
     prompt: parts.join('\n\n---\n\n'),
     sources,
