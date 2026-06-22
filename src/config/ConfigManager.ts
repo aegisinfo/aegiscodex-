@@ -176,7 +176,14 @@ export class ConfigManager {
         m.apiKey = process.env.GROQ_API_KEY;
       } else if (bu.includes('googleapis') && process.env.GEMINI_API_KEY) {
         m.apiKey = process.env.GEMINI_API_KEY;
-      } else if (bu.includes('openai') && process.env.OPENAI_API_KEY) {
+      } else if (bu.includes('openai.com') && process.env.OPENAI_API_KEY) {
+        // Google's OpenAI-compatibility endpoint is
+        // generativelanguage.googleapis.com/v1beta/openai/ — it contains the
+        // bare substring "openai", so when GEMINI_API_KEY isn't set this
+        // branch's old `bu.includes('openai')` check fell through and matched
+        // it anyway, handing Gemini models the OpenAI key (wrong key format,
+        // Google's API rejects it with a bare 400). 'openai.com' only matches
+        // the real api.openai.com host.
         m.apiKey = process.env.OPENAI_API_KEY;
       }
     }
