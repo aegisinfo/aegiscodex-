@@ -153,25 +153,40 @@ function extractHighlight(details?: string): { label: string; highlight: string;
   const lines = details.split('\n').filter(l => l.trim());
   let label = '';
   let highlight = '';
+  const highlightLines: string[] = [];
   const extra: string[] = [];
+  let inHighlight = false;
+
+  const KNOWN_PREFIX = /^(Command|File|Directory|Content Preview|Before|After):\s*/;
 
   for (const raw of lines) {
     const line = strip(raw);
-    // Primary highlight: Command / File path
+    if (line === '```' || line.startsWith('```')) {
+      // skip code fences
+      continue;
+    }
     if (/^Command:\s*/.test(line)) {
       label = 'Command:';
-      highlight = line.replace(/^Command:\s*/, '');
+      highlightLines.push(line.replace(/^Command:\s*/, ''));
+      inHighlight = true;
     } else if (/^File:\s*/.test(line)) {
       label = 'File:';
-      highlight = line.replace(/^File:\s*/, '');
+      highlightLines.push(line.replace(/^File:\s*/, ''));
+      inHighlight = true;
     } else if (/^(Directory|Content Preview|Before|After):\s*/.test(line)) {
+      inHighlight = false;
       extra.push(line);
-    } else if (line === '```' || line.startsWith('```')) {
-      // skip code fences
+    } else if (inHighlight) {
+      // Continuation of a multi-line Command/File value — keep it part of the
+      // highlight instead of dropping it into the unrelated "extra" lines, or
+      // multi-line bash commands get silently truncated to their first line.
+      highlightLines.push(line);
     } else if (line) {
       extra.push(line);
     }
   }
+
+  highlight = highlightLines.join('\n');
 
   return { label, highlight, extra };
 }

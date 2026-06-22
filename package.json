@@ -23,7 +23,7 @@
     "test:mcp": "tsx src/mcp/test.ts",
     "test:store": "tsx src/store/test.ts",
     "gui": "node ./gui/run-gui.cjs",
-    "prepublishOnly": "node esbuild.mjs"
+    "prepublishOnly": "node esbuild.mjs --publish && node scripts/obfuscate-dist-agent.mjs"
   },
   "keywords": [
     "cli",
@@ -76,7 +76,7 @@
     "string-width": "^8.1.1",
     "uuid": "^14.0.0",
     "yaml": "^2.8.2",
-    "yargs": "^18.0.0",
+    "yargs": "^17.7.2",
     "zod": "^3.24.2",
     "zod-to-json-schema": "^3.25.1",
     "zustand": "^5.0.14"

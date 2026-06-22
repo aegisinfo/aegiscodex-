@@ -303,6 +303,65 @@ export async function runLoginClaudePro(): Promise<void> {
   process.stdout.write(`\n  ${C.green}✓ Saved.${C.reset} aegiscode will use your Claude Pro/Max subscription.\n\n`);
 }
 
+// ── Periodic account re-verification ─────────────────────────────────────────
+// A stored api_key never expires on the client, so a revoked/deleted account
+// would otherwise stay "logged in" forever. Re-check against the server at
+// most once per cache window — frequent enough to catch revocation, rare
+// enough that it doesn't add a network round trip to every single run.
+const ACCOUNT_VERIFY_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** Calls /api/me with the stored api_key. Clears the key and returns invalid on a 401. */
+export async function verifyAccount(): Promise<{ valid: boolean; username?: string }> {
+  let cfg: Record<string, any> = {};
+  try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch {}
+
+  const apiKey = cfg?.aegiscloud?.api_key;
+  if (!apiKey) return { valid: false };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${AEGISCLOUD_BASE}/api/me`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (res.status === 401) {
+      delete cfg.aegiscloud.api_key;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+      return { valid: false };
+    }
+    if (!res.ok) return { valid: true }; // server hiccup — fail open, don't lock the user out
+
+    const data = await res.json() as { username?: string };
+    cfg.aegiscloud = { ...cfg.aegiscloud, lastVerified: new Date().toISOString() };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
+    return { valid: true, username: data.username };
+  } catch {
+    clearTimeout(timer);
+    // Network error — fail open so a flaky/offline connection doesn't force a re-login.
+    return { valid: true };
+  }
+}
+
+/**
+ * True if there's a stored api_key and it's either freshly verified (within
+ * the cache window) or just passed a live re-check. False only when the
+ * server explicitly rejected the key (revoked/deleted account).
+ */
+export async function ensureAccountValid(): Promise<boolean> {
+  let cfg: Record<string, any> = {};
+  try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch {}
+  if (!cfg?.aegiscloud?.api_key) return false;
+
+  const lv = cfg?.aegiscloud?.lastVerified;
+  if (lv && Date.now() - new Date(lv).getTime() < ACCOUNT_VERIFY_CACHE_MS) return true;
+
+  const { valid } = await verifyAccount();
+  return valid;
+}
+
 // ── Logout helper ─────────────────────────────────────────────────────────────
 export function runLogout(): void {
   let cfg: Record<string, any> = {};

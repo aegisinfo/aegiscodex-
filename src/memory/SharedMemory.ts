@@ -384,6 +384,33 @@ export class SharedMemory {
     } catch {}
   }
 
+  /**
+   * One-shot full download for external callers (e.g. aegiscode-gui's "Download
+   * from Cloud" button) — pulls every entry the account has on aegiscloud.org,
+   * not just what's newer than the last sync marker, and merges it into the
+   * local db. Unlike syncFromCloud() this is safe to call in AEGIS_MEMORY_READONLY
+   * mode: it's an explicit one-shot the user asked for, not the automatic
+   * startup sync that mode exists to suppress.
+   */
+  async pullAll(): Promise<{ total: number; pulled: number }> {
+    await this.ensureReady();
+    const token = this.getMemoryToken();
+    if (!token) return { total: 0, pulled: 0 };
+
+    const pulled = await pullSince(null, token);
+    if (pulled.length === 0) return { total: 0, pulled: 0 };
+
+    this.import(pulled, true);
+
+    const newest = pulled.reduce((max, e) => (e.timestamp > max ? e.timestamp : max), '');
+    try {
+      fs.mkdirSync(MEMORY_DIR, { recursive: true });
+      fs.writeFileSync(LAST_CLOUD_SYNC_FILE, newest);
+    } catch {}
+
+    return { total: pulled.length, pulled: pulled.length };
+  }
+
   /** Await readiness before any operation */
   private async ensureReady() {
     await this.ready;

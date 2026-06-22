@@ -86,7 +86,15 @@ async function main(): Promise<void> {
   // cloud sync — synchronously on first import) or makes network calls (version
   // check, token verification) that a fast read-only call has no business paying for.
   const earlyArgs = process.argv.slice(2);
-  if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json' || earlyArgs[0] === '--memory-upload-json') {
+  // One-shot account re-verification for external callers (aegiscode-gui) — same
+  // single-source-of-truth reasoning as the memory flags below.
+  if (earlyArgs[0] === '--verify-account-json') {
+    const { verifyAccount } = await import('./auth/login.js');
+    console.log(JSON.stringify(await verifyAccount()));
+    process.exit(0);
+  }
+
+  if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json' || earlyArgs[0] === '--memory-upload-json' || earlyArgs[0] === '--memory-download-json') {
     process.env.AEGIS_MEMORY_READONLY = '1';
     const { sharedMemory } = await import('./memory/SharedMemory.js');
     await sharedMemory.whenReady();
@@ -100,6 +108,8 @@ async function main(): Promise<void> {
       console.log(JSON.stringify(results));
     } else if (earlyArgs[0] === '--memory-upload-json') {
       console.log(JSON.stringify(await sharedMemory.pushAll()));
+    } else if (earlyArgs[0] === '--memory-download-json') {
+      console.log(JSON.stringify(await sharedMemory.pullAll()));
     } else {
       sharedMemory.clear();
       console.log(JSON.stringify({ ok: true }));
@@ -285,7 +295,13 @@ async function main(): Promise<void> {
             hasCredentials = !!(cfg?.aegiscloud?.api_key || cfg?.memory?.token);
           } catch {}
 
-          if (!hasCredentials) {
+          // Re-verify a stored key against the server periodically (cached 24h)
+          // so a revoked/deleted account doesn't stay "logged in" forever.
+          const needsLogin = hasCredentials
+            ? !(await (await import('./auth/login.js')).ensureAccountValid())
+            : true;
+
+          if (needsLogin) {
             const { runLogin } = await import('./auth/login.js');
             try {
               await runLogin();

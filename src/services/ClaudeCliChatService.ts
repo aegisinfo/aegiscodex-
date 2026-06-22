@@ -40,6 +40,8 @@ export interface ClaudeCliChatServiceConfig {
   model?: string;
   /** aegiscode permission mode ('default' | 'autoEdit' | 'yolo' | 'plan'); mapped to claude CLI's --permission-mode. */
   permissionMode?: string;
+  /** Kill the subprocess and reject if no reply within this many ms (default 120000). */
+  timeout?: number;
 }
 
 // spawn('claude', ...) relies on process.env.PATH, which is fine in an interactive
@@ -139,6 +141,15 @@ export class ClaudeCliChatService implements IChatService {
       const { ANTHROPIC_API_KEY, ...env } = process.env;
       const child = spawn(resolveClaudeBin(), args, { stdio: ['ignore', 'pipe', 'pipe'], env });
 
+      const timeoutMs = this.config.timeout ?? 120000;
+      const timeoutTimer = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(
+          `claude CLI timed out after ${Math.round(timeoutMs / 1000)}s with no response ` +
+          `(likely blocked waiting on a tool-permission prompt that nothing can answer in this context)`
+        ));
+      }, timeoutMs);
+
       let stderr = '';
       let stdoutBuffer = '';
       let finalResult: { result?: string; usage?: { input_tokens?: number; output_tokens?: number }; is_error?: boolean } | null = null;
@@ -177,6 +188,7 @@ export class ClaudeCliChatService implements IChatService {
       signal?.addEventListener('abort', onAbort);
 
       child.on('error', err => {
+        clearTimeout(timeoutTimer);
         signal?.removeEventListener('abort', onAbort);
         reject(new Error(
           `Failed to launch the claude CLI (${err.message}). Install it with: ` +
@@ -186,6 +198,7 @@ export class ClaudeCliChatService implements IChatService {
       });
 
       child.on('close', code => {
+        clearTimeout(timeoutTimer);
         signal?.removeEventListener('abort', onAbort);
         if (stdoutBuffer.trim()) handleLine(stdoutBuffer);
         if (signal?.aborted) {

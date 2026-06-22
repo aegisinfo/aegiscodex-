@@ -278,8 +278,7 @@ export class OpenAIChatService implements IChatService {
           throw new Error(
             `${reason} — gave up after ${MAX_RETRIES} retries.\n` +
             (status === 429
-              ? `Your account hit Anthropic's rate limit. Wait a few minutes and try again,\n` +
-                `or check usage at https://claude.ai/settings/usage`
+              ? `The API is rate-limiting this key. Wait a few minutes or check usage.\n`
               : (error as Error).message)
           );
         }
@@ -337,7 +336,7 @@ export function createChatService(config: ChatServiceConfig): IChatService {
   // real `claude` binary — Anthropic rejects direct API calls using them
   // from anything else. Same model selection, different transport.
   if (config.apiKey?.startsWith('sk-ant-oat')) {
-    return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode });
+    return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode, timeout: config.timeout });
   }
   // Native Anthropic transport — required for cache_control, thinking, and
   // citations, none of which the OpenAI-compatible shim below can carry.

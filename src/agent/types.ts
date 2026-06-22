@@ -250,6 +250,9 @@ export interface AgentConfig {
 
   /** Show confirmation prompts before sensitive tool calls (default true) */
   requireConfirmation?: boolean;
+
+  /** aegiscode's own permission mode; only consulted for OAuth (claude CLI) transport. */
+  permissionMode?: string;
 }
 
 /**
