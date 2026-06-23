@@ -42,7 +42,7 @@ export interface ClaudeCliChatServiceConfig {
   model?: string;
   /** aegiscode permission mode ('default' | 'autoEdit' | 'yolo' | 'plan'); mapped to claude CLI's --permission-mode. */
   permissionMode?: string;
-  /** Kill the subprocess and reject if no reply within this many ms (default 120000). */
+  /** Kill the subprocess and reject if no reply within this many ms (default 600000). */
   timeout?: number;
 }
 
@@ -150,7 +150,7 @@ export class ClaudeCliChatService implements IChatService {
       const { ANTHROPIC_API_KEY, ...env } = process.env;
       const child = spawn(resolveClaudeBin(), args, { stdio: ['ignore', 'pipe', 'pipe'], env });
 
-      const timeoutMs = this.config.timeout ?? 120000;
+      const timeoutMs = this.config.timeout ?? 600000;
       const timeoutTimer = setTimeout(() => {
         child.kill('SIGTERM');
         reject(new Error(
