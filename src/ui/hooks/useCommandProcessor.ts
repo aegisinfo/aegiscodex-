@@ -429,6 +429,13 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
       return;
     }
 
+    // Acquire the lock synchronously, before processCommand's first await
+    // (dynamic imports, auto-router's Agent.create, etc.). Without this,
+    // isThinking stays false across that gap and a second Enter press in
+    // the same window slips past the check above instead of queueing,
+    // producing two concurrent in-flight commands.
+    sessionActions().setThinking(true);
+
     await processCommand(value);
   }, [processCommand]);
 
