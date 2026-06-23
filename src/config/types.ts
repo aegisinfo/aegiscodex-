@@ -528,6 +528,32 @@ export const DEFAULT_MODELS = [
     baseURL: 'https://api.sakana.ai/v1',
     apiKey: '',
   },
+  // Nexus - AEGIS's pooled aegis-key. Auto-routes server-side (smart_router) to the
+  // cheapest backend that fits the tier; OpenAI-wire-compatible, billed via token bank.
+  {
+    id: 'nexus-fast',
+    name: 'Nexus (Fast)',
+    provider: 'openai-compatible' as const,
+    model: 'nexus-fast',
+    baseURL: 'https://aegisintel.up.railway.app/api/v1',
+    apiKey: '',
+  },
+  {
+    id: 'nexus-smart',
+    name: 'Nexus (Smart)',
+    provider: 'openai-compatible' as const,
+    model: 'nexus-smart',
+    baseURL: 'https://aegisintel.up.railway.app/api/v1',
+    apiKey: '',
+  },
+  {
+    id: 'nexus-neo',
+    name: 'Nexus (NEO)',
+    provider: 'openai-compatible' as const,
+    model: 'nexus-neo',
+    baseURL: 'https://aegisintel.up.railway.app/api/v1',
+    apiKey: '',
+  },
 ];
 
 export const DEFAULT_CONFIG: ClawdConfig = {

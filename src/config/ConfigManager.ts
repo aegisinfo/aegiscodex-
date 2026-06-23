@@ -178,6 +178,10 @@ export class ConfigManager {
         m.apiKey = process.env.SAKANA_API_KEY;
       } else if (bu.includes('googleapis') && process.env.GEMINI_API_KEY) {
         m.apiKey = process.env.GEMINI_API_KEY;
+      } else if (bu.includes('aegisintel') && process.env.NEXUS_API_KEY) {
+        // Nexus - AEGIS's pooled aegis-key, auto-routed across providers server-side.
+        // OpenAI-wire-compatible (streaming + tool_calls), billed via the token bank.
+        m.apiKey = process.env.NEXUS_API_KEY;
       } else if (bu.includes('openai.com') && process.env.OPENAI_API_KEY) {
         // Google's OpenAI-compatibility endpoint is
         // generativelanguage.googleapis.com/v1beta/openai/ — it contains the
@@ -218,6 +222,10 @@ export class ConfigManager {
         defaultConfig.apiKey  = process.env.ANTHROPIC_API_KEY;
         defaultConfig.baseURL = 'https://api.anthropic.com/v1';
         defaultConfig.model   = defaultConfig.model || 'claude-sonnet-4-6';
+      } else if (process.env.NEXUS_API_KEY) {
+        defaultConfig.apiKey  = process.env.NEXUS_API_KEY;
+        defaultConfig.baseURL = 'https://aegisintel.up.railway.app/api/v1';
+        defaultConfig.model   = defaultConfig.model || 'nexus-smart';
       }
     }
   }
