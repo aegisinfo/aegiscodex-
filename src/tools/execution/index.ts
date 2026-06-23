@@ -30,6 +30,7 @@ export { ExecutionPipeline, type ExecutionPipelineEvents } from './ExecutionPipe
 // 阶
 export {
   DiscoveryStage,
+  CacheStage,
   PermissionStage,
   HookStage,
   ConfirmationStage,

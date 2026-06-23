@@ -174,6 +174,8 @@ export class ConfigManager {
         m.apiKey = process.env.DEEPSEEK_API_KEY;
       } else if (bu.includes('groq') && process.env.GROQ_API_KEY) {
         m.apiKey = process.env.GROQ_API_KEY;
+      } else if (bu.includes('sakana') && process.env.SAKANA_API_KEY) {
+        m.apiKey = process.env.SAKANA_API_KEY;
       } else if (bu.includes('googleapis') && process.env.GEMINI_API_KEY) {
         m.apiKey = process.env.GEMINI_API_KEY;
       } else if (bu.includes('openai.com') && process.env.OPENAI_API_KEY) {

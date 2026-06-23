@@ -11,9 +11,11 @@
  *
  * `claude --print` doesn't emit OpenAI-style tool-call JSON aegiscode's own
  * Read/Write/Bash loop could intercept, so instead the spawned claude binary
- * runs its own tools directly against this directory. aegiscode's
- * permission mode is passed through via --permission-mode so the
- * subscription session honors the same approval policy the user configured.
+ * runs its own tools directly against this directory. There's no stdin
+ * channel for the subprocess to ask the user a permission question (it's
+ * spawned headless), so it always runs with bypassPermissions regardless of
+ * aegiscode's own permission mode — except 'plan', which is read-only by
+ * design and passed through as-is.
  *
  * Each `claude --print` call exits after one response, so a fresh process
  * has no memory of tool calls the previous turn started. We capture the
@@ -66,9 +68,16 @@ function resolveClaudeBin(): string {
   return cachedClaudeBin ?? 'claude';
 }
 
+// Anything other than 'bypassPermissions' makes the CLI block on an interactive
+// tool-permission prompt — but this subprocess is spawned headless (stdin
+// 'ignore'), so there's no channel to ever answer that prompt. It just hangs
+// until ClaudeCliChatService's own timeout kills it. So regardless of
+// aegiscode's own permission mode, the subprocess always runs with
+// bypassPermissions; 'plan' is the only mode kept distinct since it's
+// read-only by design and doesn't need permission prompts at all.
 const PERMISSION_MODE_MAP: Record<string, string> = {
-  default: 'default',
-  autoEdit: 'acceptEdits',
+  default: 'bypassPermissions',
+  autoEdit: 'bypassPermissions',
   yolo: 'bypassPermissions',
   plan: 'plan',
 };

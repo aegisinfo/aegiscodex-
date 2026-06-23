@@ -512,6 +512,22 @@ export const DEFAULT_MODELS = [
     baseURL: 'http://localhost:11434/v1',
     apiKey: 'ollama',
   },
+  {
+    id: 'sakana-fugu',
+    name: 'Sakana Fugu',
+    provider: 'openai-compatible' as const,
+    model: 'fugu',
+    baseURL: 'https://api.sakana.ai/v1',
+    apiKey: '',
+  },
+  {
+    id: 'sakana-fugu-ultra',
+    name: 'Sakana Fugu Ultra',
+    provider: 'openai-compatible' as const,
+    model: 'fugu-ultra',
+    baseURL: 'https://api.sakana.ai/v1',
+    apiKey: '',
+  },
 ];
 
 export const DEFAULT_CONFIG: ClawdConfig = {

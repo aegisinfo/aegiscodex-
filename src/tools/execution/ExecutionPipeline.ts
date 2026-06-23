@@ -17,6 +17,7 @@ import type { ToolResult, ToolErrorType } from '../types.js';
 import type { ToolRegistry } from '../registry.js';
 import {
   DiscoveryStage,
+  CacheStage,
   PermissionStage,
   HookStage,
   ConfirmationStage,
@@ -41,6 +42,7 @@ export interface ExecutionPipelineEvents {
  */
 export class ExecutionPipeline {
   private stages: PipelineStage[];
+  private cacheStage: CacheStage;
   private executionHistory: ExecutionHistoryEntry[] = [];
   private readonly sessionApprovals = new Set<string>();
   private readonly sessionDenials = new Set<string>();
@@ -52,14 +54,16 @@ export class ExecutionPipeline {
   ) {
 
     const defaultMode = config.defaultMode || PermissionMode.DEFAULT;
+    this.cacheStage = new CacheStage();
 
-    // 初始化七个执行阶
+    // 初始化八个执行阶
     this.stages = [
       new DiscoveryStage(this.registry, config.allowedTools, config.disallowedTools),
+      this.cacheStage,
       new PermissionStage(config.permissions, this.sessionApprovals, this.sessionDenials, defaultMode),
       new HookStage(),
       new ConfirmationStage(this.sessionApprovals, this.sessionDenials),
-      new ExecutionStage(),
+      new ExecutionStage(this.cacheStage),
       new PostHookStage(),
       new FormattingStage(),
     ];
@@ -245,5 +249,15 @@ export class ExecutionPipeline {
    */
   getStageNames(): string[] {
     return this.stages.map(s => s.name);
+  }
+
+  /** Stats for the session-scoped Read/Grep/Glob result cache */
+  getCacheStats(): { size: number; maxSize: number } {
+    return this.cacheStage.stats();
+  }
+
+  /** Clear cached entries for a specific session */
+  clearSessionCache(sessionId: string): void {
+    this.cacheStage.clearSession(sessionId);
   }
 }

@@ -135,6 +135,9 @@ export interface ToolExecutionInternal {
    * the prompt regardless of either.
    */
   forceConfirmation?: boolean;
+
+  /** Cache key set by CacheStage — ExecutionStage uses it to store results */
+  cacheKey?: string;
 }
 
 /**

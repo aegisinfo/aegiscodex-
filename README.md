@@ -58,7 +58,7 @@ aegiscode also ships as a native Electron desktop app — same AI engine, same m
 
 ```bash
 # Linux
-wget https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/aegiscode-gui.deb
+wget https://dl.aegiscloud.org/aegiscode-gui.deb
 sudo dpkg -i aegiscode-gui.deb
 ```
 
@@ -138,6 +138,8 @@ aegis --model deepseek-chat  # use a specific model
 aegis --router               # start with the auto-router on
 aegis --continue             # resume last session
 aegis --resume <session-id>  # resume specific session
+aegis --print "what does this repo do?"            # headless — print response, exit
+aegis --print --output-format json "summarize this" # headless JSON output, for scripts
 ```
 
 ---
@@ -181,34 +183,40 @@ Any OpenAI-compatible API can be added as a custom model.
 
 ## Commands
 
+Full reference with copy-paste examples: **[aegiscloud.org/aegiscode/commands](https://aegiscloud.org/aegiscode/commands)**
+
 | Command | Alias | Description |
 |---------|-------|-------------|
-| `/help` | `/?` `/h` | Show all commands |
-| `/model` | `/m` | Interactive model switcher |
-| `/model <id>` | | Switch to model by ID |
+| `/help [command]` | `/?` `/h` | Show all commands, or detailed help for one |
+| `/model [id]` | `/m` | Interactive model switcher, or switch by ID |
 | `/model list` | | List all configured models |
 | `/model add <id> <name> <model> <baseURL> <apiKey>` | | Add a custom model |
 | `/model remove <id>` | | Remove a model |
-| `/router` | | Show auto-router status and tier mapping |
-| `/router on` / `/router off` | | Toggle automatic per-message model routing |
+| `/router [on\|off\|stats]` | | Show/toggle auto-router status and tier mapping |
 | `/router set <tier> <id>` | | Pin a model to the simple/medium/complex tier |
+| `/effort [off\|low\|medium\|high\|max]` | | Set Claude's extended-thinking effort level |
+| `/confirm [on\|off] [model-id]` | `/confirmations` | Toggle tool-call confirmation prompt |
+| `/yolo [on\|off]` | | Toggle auto-approve for all tool calls |
 | `/clear` | `/cls` | Clear chat history |
 | `/compact` | | Compress context to save tokens |
 | `/status` | `/st` | Show session info and token usage |
-| `/theme` | `/t` | Switch UI theme |
+| `/tokens` | `/tok` | Token usage graph and estimated spend |
+| `/theme [name]` | `/t` | Show or switch UI theme |
 | `/thinking` | | Toggle thinking blocks |
-| `/copy` | `/cp` | Copy last code block to clipboard |
-| `/copy N` | | Copy Nth code block |
-| `/yolo` | | Toggle auto-approve for all tool calls |
+| `/copy [n\|last\|list]` | `/cp` | Copy a code block to clipboard |
 | `/multi <task>` | | Run task across multiple agents in parallel |
-| `/multiyolo <task>` | | Same as /multi with auto-approved tool calls |
+| `/multiyolo <task>` | | Same as `/multi` with auto-approved tool calls |
 | `/build <description>` | `/forge` | Build an app with multiple AI models in parallel |
+| `/clone <url> [--name <project>]` | `/fetch-site` `/websnap` | Clone a website using DeepSeek |
 | `/council <question>` | | Multi-model majority vote |
-| `/debate <question>` | | Structured multi-model debate across rounds |
+| `/debate <topic> [--rounds N]` | `/db` | Structured multi-model debate across rounds |
 | `/research <question>` | | Multi-agent research |
-| `/memory` | | Manage semantic memory |
-| `/skills` | `/sk` | List loaded skills |
-| `/hooks` | | View and manage hooks |
+| `/memory [activate\|stats\|clear]` | | Manage semantic memory |
+| `/cloud [activate\|status]` | | Manage AEGIS Cloud sync |
+| `/billing` | | Show subscription and billing info |
+| `/skills [refresh]` | `/sk` | List and manage loaded skills |
+| `/hooks [status\|list]` | | View and manage hooks |
+| `/mcp [tools\|<server>]` | | Show MCP server status and tools |
 | `/version` | `/v` | Show version info |
 
 ---
