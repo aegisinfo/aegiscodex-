@@ -210,8 +210,8 @@ function handleMemoryGraph(query: string, scope?: string, limit?: number): strin
     const apiUrl = process.env.AEGIS_API_URL || 'http://localhost:5000';
     const body = JSON.stringify({ query, limit: limit || 10, scope: scope || 'project' });
     const result = execSync(
-      `curl -s -X POST "${apiUrl}/api/memory/search" -H "Content-Type: application/json" -d '${body.replace(/'/g, "'\\''")}'`,
-      { encoding: 'utf-8', timeout: 10000 }
+      `curl -s -X POST "${apiUrl}/api/memory/search" -H "Content-Type: application/json" --data-binary @-`,
+      { encoding: 'utf-8', timeout: 10000, input: body }
     );
     return result;
   } catch {
