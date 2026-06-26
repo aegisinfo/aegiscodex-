@@ -187,6 +187,21 @@ export class ConfigManager {
         m.apiKey = process.env.OPENAI_API_KEY;
       }
     }
+
+    // currentModelId defaults to a Claude model regardless of which provider's key
+    // the user actually set (env var, .env, or SetupWizard — none of them touch
+    // currentModelId). If the selected model still has no key but a key was found
+    // for a different provider above, switch to that model so getDefaultModel()
+    // doesn't keep returning a keyless Claude entry and reporting "No API key configured".
+    {
+      const currentId = (this.config as any).currentModelId;
+      const selected = allModels.find((m: any) => m.id === currentId);
+      if (!selected?.apiKey) {
+        const fallback = allModels.find((m: any) => m.apiKey);
+        if (fallback) (this.config as any).currentModelId = fallback.id;
+      }
+    }
+
     // Use currentModelId to pick the right default — don't override with env key priority
     if (!defaultConfig.apiKey) {
       const currentId = (this.config as any).currentModelId;
