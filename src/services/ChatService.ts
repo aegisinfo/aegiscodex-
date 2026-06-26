@@ -336,7 +336,7 @@ export function createChatService(config: ChatServiceConfig): IChatService {
   // real `claude` binary — Anthropic rejects direct API calls using them
   // from anything else. Same model selection, different transport.
   if (config.apiKey?.startsWith('sk-ant-oat')) {
-    return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode, timeout: config.timeout });
+    return new ClaudeCliChatService({ model: config.model, permissionMode: config.permissionMode });
   }
   // Native Anthropic transport — required for cache_control, thinking, and
   // citations, none of which the OpenAI-compatible shim below can carry.
