@@ -29,10 +29,15 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
 
 import { config as dotenvConfig } from 'dotenv';
 import { resolve } from 'path';
+import { homedir } from 'os';
 // --print's whole point is clean, pipeable stdout (text or JSON) — the
 // dotenvx promo banner would otherwise land on stdout ahead of the result.
 const isPrintMode = process.argv.includes('--print') || process.argv.includes('-p');
-dotenvConfig({ path: resolve(process.cwd(), '.env'), quiet: isPrintMode });
+// SetupWizard saves keys to ~/.aegiscode/.env (the only place a globally-installed
+// `aegis` binary can reliably find them — process.cwd() is wherever the user happens
+// to invoke it from). Load that first, then ./.env so a project-local file can override it.
+dotenvConfig({ path: resolve(homedir(), '.aegiscode', '.env'), quiet: isPrintMode });
+dotenvConfig({ path: resolve(process.cwd(), '.env'), quiet: isPrintMode, override: true });
 import React from 'react';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
