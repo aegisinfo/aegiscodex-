@@ -294,8 +294,14 @@ async function main(): Promise<void> {
         }
 
         // ── Mandatory login check ─────────────────────────────────────────
-        // If no aegiscloud credentials exist at all, force login before proceeding.
-        {
+        // If no aegiscloud credentials exist at all, force login before proceeding —
+        // unless the user already has a working BYOK LLM key configured (env var,
+        // ~/.aegiscode/.env, or config.json). AEGIS CLI is BYOK (see billing.ts):
+        // aegiscloud login is only required for cloud memory sync, not for running
+        // the agent against your own API key. Forcing it on every standalone install
+        // blocked exactly that use case.
+        const hasOwnApiKey = !!configManager.getDefaultModel().apiKey;
+        if (!hasOwnApiKey) {
           const { readFileSync } = await import('node:fs');
           const { homedir } = await import('node:os');
           let hasCredentials = false;
