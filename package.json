@@ -1,6 +1,6 @@
 {
   "name": "aegiscode",
-  "version": "3.1.7",
+  "version": "3.1.8",
   "description": "A CLI Coding Agent inspired by Claude Code - An AI-powered coding assistant that can read, write, and execute code",
   "type": "module",
   "main": "dist/main.js",
@@ -12,8 +12,7 @@
   "scripts": {
     "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "build": "node esbuild.mjs",
-    "publish:release": "node esbuild.mjs --publish",
-    "obfuscate:agent-sdk": "node scripts/obfuscate-dist-agent.mjs",
+    "publish:release": "node esbuild.mjs",
     "start": "node --no-deprecation dist/main.js",
     "typecheck": "tsc --noEmit",
     "test:prompts": "tsx src/prompts/test.ts",
@@ -23,7 +22,7 @@
     "test:mcp": "tsx src/mcp/test.ts",
     "test:store": "tsx src/store/test.ts",
     "gui": "node ./gui/run-gui.cjs",
-    "prepublishOnly": "node esbuild.mjs --publish && node scripts/obfuscate-dist-agent.mjs"
+    "prepublishOnly": "node esbuild.mjs"
   },
   "keywords": [
     "cli",
@@ -92,7 +91,6 @@
     "@types/yargs": "^17.0.33",
     "electron": "^42.4.1",
     "esbuild": "^0.28.0",
-    "javascript-obfuscator": "^5.4.3",
     "react-devtools-core": "^7.0.1",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2"

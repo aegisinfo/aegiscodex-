@@ -22,6 +22,7 @@ import {
   type SubAgentConfig,
 } from '../agent/orchestrator/index.js';
 import { getOllamaModels, isLocalOllamaUrl, type OllamaModelInfo } from '../services/OllamaInstaller.js';
+import { copyToClipboard } from '../utils/clipboard.js';
 
 // ─── Auto-register AppBuilder apps ───
 const BUILTIN_APPS: AppDefinition[] = createBuiltinApps();
@@ -1307,27 +1308,6 @@ export const hooksCommand: SlashCommand = {
     };
   },
 };
-
-/**
- * Helper: copy text to clipboard
- */
-async function copyToClipboard(text: string): Promise<void> {
-  const { execSync } = await import('child_process');
-  const platform = process.platform;
-  if (platform === 'darwin') {
-    execSync('pbcopy', { input: text });
-  } else if (platform === 'linux') {
-    try {
-      execSync('xclip -selection clipboard', { input: text });
-    } catch {
-      execSync('xsel --clipboard --input', { input: text });
-    }
-  } else if (platform === 'win32') {
-    execSync('clip', { input: text });
-  } else {
-    throw new Error(`unsupported platform: ${platform}`);
-  }
-}
 
 /**
  * /copy - 复制代码块或文本到剪贴板

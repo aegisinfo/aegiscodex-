@@ -426,7 +426,7 @@ async function main(): Promise<void> {
 
           try {
             const agent = await Agent.create({
-              apiKey: modelConfig.apiKey,
+              apiKey: modelConfig.apiKey ?? '',
               baseURL: modelConfig.baseURL,
               model: modelConfig.model,
               requireConfirmation: false,
@@ -531,7 +531,7 @@ async function main(): Promise<void> {
           const { render } = await import('ink');
           render(
             <App
-              apiKey={modelConfig.apiKey}
+              apiKey={modelConfig.apiKey ?? ''}
               baseURL={modelConfig.baseURL}
               model={modelConfig.model}
               initialMessage={initialMessage}

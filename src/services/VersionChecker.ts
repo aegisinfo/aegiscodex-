@@ -354,15 +354,27 @@ export async function clearSkipVersion(): Promise<void> {
  * 
  * 
  */
+const NPM_GLOBAL_PREFIX = path.join(os.homedir(), '.npm-global');
+const NPM_GLOBAL_BIN = path.join(NPM_GLOBAL_PREFIX, 'bin');
+
+function isPrefixBinInPath(): boolean {
+  const pathEntries = (process.env.PATH || '').split(path.delimiter);
+  return pathEntries.some((p) => p && path.resolve(p) === NPM_GLOBAL_BIN);
+}
+
 export function getUpgradeCommand(): string {
-  return `npm install -g ${PACKAGE_NAME}@latest --prefer-online`;
+  // Install into a per-user prefix so the upgrade never needs root and
+  // always lands under the home directory instead of a system npm dir.
+  return `npm install -g ${PACKAGE_NAME}@latest --prefer-online --prefix "${NPM_GLOBAL_PREFIX}"`;
 }
 
 /**
- * 
+ *
  */
 export async function performUpgrade(): Promise<{ success: boolean; message: string }> {
   const { spawn } = await import('child_process');
+
+  await fsPromises.mkdir(NPM_GLOBAL_PREFIX, { recursive: true }).catch(() => {});
 
   return new Promise((resolve) => {
     const command = getUpgradeCommand();
@@ -374,9 +386,12 @@ export async function performUpgrade(): Promise<{ success: boolean; message: str
 
     child.on('close', (code) => {
       if (code === 0) {
+        const pathWarning = isPrefixBinInPath()
+          ? ''
+          : `\n⚠️  Add ${NPM_GLOBAL_BIN} to your PATH to use the updated '${PACKAGE_NAME}' command, e.g.:\n   export PATH="${NPM_GLOBAL_BIN}:$PATH"`;
         resolve({
           success: true,
-          message: '✅ Upgrade successful! Restarting...',
+          message: `✅ Upgrade successful! Restarting...${pathWarning}`,
         });
       } else {
         resolve({
@@ -403,10 +418,16 @@ export function restartApp(): void {
   // 启动新的 aegis 进
   // 使用 detached: true 让子进程独立运
   // 使用 stdio: 'inherit' 让新进程继承终
+  const childEnv = { ...process.env };
+  if (!isPrefixBinInPath()) {
+    childEnv.PATH = `${NPM_GLOBAL_BIN}${path.delimiter}${childEnv.PATH || ''}`;
+  }
+
   const child = spawn(PACKAGE_NAME, process.argv.slice(2), {
     stdio: 'inherit',
     shell: true,
     detached: true,
+    env: childEnv,
   });
 
   // 让子进程脱离父进

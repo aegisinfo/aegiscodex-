@@ -46,6 +46,7 @@ import { ErrorBoundary } from './common/ErrorBoundary.js';
 
 // Focus
 import { FocusId, focusActions } from '../focus/index.js';
+import { copyToClipboard } from '../../utils/clipboard.js';
 
 // Heartbeat (online status ping)
 import { startHeartbeat, stopHeartbeat } from '../../services/Heartbeat.js';
@@ -261,16 +262,25 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
         .replace(/^>\s+/gm, '')
         .trim();
       if (!plain) return;
-      import('child_process').then(({ execSync }) => {
-        const platform = process.platform;
-        try {
-          if (platform === 'darwin') execSync('pbcopy', { input: plain });
-          else if (platform === 'linux') {
-            try { execSync('xclip -selection clipboard', { input: plain }); }
-            catch { execSync('xsel --clipboard --input', { input: plain }); }
-          } else if (platform === 'win32') execSync('clip', { input: plain });
-        } catch {}
-      }).catch(() => {});
+      copyToClipboard(plain)
+        .then(async () => {
+          const { nanoid } = await import('nanoid');
+          sessionActions().addMessage({
+            id: nanoid(),
+            role: 'system',
+            content: '✓ Copied last reply to clipboard',
+            timestamp: Date.now(),
+          });
+        })
+        .catch(async (err) => {
+          const { nanoid } = await import('nanoid');
+          sessionActions().addMessage({
+            id: nanoid(),
+            role: 'system',
+            content: `✗ Copy failed: ${err instanceof Error ? err.message : String(err)}`,
+            timestamp: Date.now(),
+          });
+        });
     }
   });
 
