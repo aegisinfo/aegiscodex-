@@ -2298,73 +2298,22 @@ const billingCommand: SlashCommand = {
 
 const memoryCommand: SlashCommand = {
   name: 'memory',
-  description: 'View or manage semantic memory — /memory activate <token> | /memory load <url|path> | /memory upload | /memory clear | /memory stats',
+  description: 'View or manage semantic memory — /memory stats | /memory load | /memory upload | /memory clear',
   category: 'config',
-  usage: '/memory [activate <token> | load <url|path> | upload | clear | stats]',
+  usage: '/memory [stats | load <url|path> | upload | clear]',
   async handler(args: string): Promise<SlashCommandResult> {
     const fs   = await import('fs');
     const path = await import('path');
     const os   = await import('os');
-    const { exec } = await import('child_process');
     const { sharedMemory } = await import('../memory/SharedMemory.js');
 
     const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
-    const tokenPath = path.join(os.homedir(), '.aegiscode', 'memory.token');
     let cfg: any = {};
     try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch {}
-    const mem        = cfg?.memory ?? {};
-    const subscribed = mem.subscribed === true || Boolean(process.env.AEGIS_MEMORY_TOKEN) || fs.existsSync(tokenPath);
+    const apiKey = cfg?.aegiscloud?.api_key;
 
-    // /memory activate <token>
-    if (args?.startsWith('activate ')) {
-      const token = args.replace('activate ', '').trim();
-      if (token.length < 20) {
-        return { success: false, type: 'error', error: 'Invalid token — paste the full token from your activation email' };
-      }
-
-      // Write token file AND config.json
-      try {
-        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
-        fs.writeFileSync(tokenPath, token);
-      } catch {}
-
-      // Activate locally first — token is proof of payment from Stripe
-      let email = 'stripe-user';
-      let plan  = 'semantic-memory';
-      let expiresAt: string | null = null;
-
-      // Best-effort remote verification (enriches config with email/plan, but doesn't block)
-      const verifyUrl = cfg?.memory?.verifyUrl || process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/verify-token';
-      const apiKey = cfg?.aegiscloud?.api_key || process.env.AEGISCLOUD_API_KEY || '';
-      try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (apiKey) headers['X-API-Key'] = apiKey;
-        const res = await fetch(verifyUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ token }),
-        });
-        const result = await res.json();
-        if (result.valid) {
-          email = result.email || email;
-          plan  = result.plan || plan;
-          expiresAt = result.expiresAt || expiresAt;
-        }
-      } catch {
-        // Remote verification unavailable — proceed with local activation
-      }
-
-      cfg.memory = {
-        ...mem,
-        subscribed: true,
-        token,
-        activatedAt: new Date().toISOString(),
-        verifiedEmail: email,
-        plan,
-        expiresAt,
-      };
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-      return { success: true, type: 'success', message: `✓ Memory activated — semantic search enabled (${email})` };
+    if (!apiKey) {
+      return { success: false, type: 'error', error: 'Not logged in — run `/login` first' };
     }
 
     // /memory load <url|path> — load aegis export into local memory
@@ -2373,10 +2322,9 @@ const memoryCommand: SlashCommand = {
       try {
         let data: any;
         if (target.startsWith('http')) {
-          const apiKey = cfg?.apiKey || '';
           const { default: nodeFetch } = await import('node-fetch' as any).catch(() => ({ default: fetch }));
           const fetchFn: any = nodeFetch || fetch;
-          const res = await fetchFn(target, { headers: apiKey ? { 'X-API-Key': apiKey } : {} });
+          const res = await fetchFn(target, { headers: { 'X-API-Key': apiKey } });
           data = await res.json();
         } else {
           data = JSON.parse(fs.readFileSync(target, 'utf8'));
@@ -2410,7 +2358,6 @@ const memoryCommand: SlashCommand = {
 
     // /memory upload — push every local memory to aegiscloud.org at once
     if (args?.trim() === 'upload') {
-      if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed' };
       const { total, pushed } = await sharedMemory.pushAll();
       if (total === 0) {
         return { success: true, type: 'info', message: 'No local memories to upload' };
@@ -2423,65 +2370,11 @@ const memoryCommand: SlashCommand = {
 
     // /memory clear
     if (args?.trim() === 'clear') {
-      if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed' };
       sharedMemory.clear();
-      cfg.memory = { ...mem, lastCleared: new Date().toISOString() };
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
       return { success: true, type: 'success', message: 'Memory cleared' };
     }
 
-    // /memory stats
-    if (args?.trim() === 'stats') {
-      if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed' };
-      const stats = sharedMemory.getStats();
-      return {
-        success: true,
-        type: 'info',
-        content: [
-          '## ⬡ AEGIS Memory Statistics',
-          '',
-          `**Total Entries:** ${stats.total}`,
-          `**Sessions:** ${stats.sessions}`,
-          `**Summaries:** ${stats.summaries}`,
-          `**Avg Importance:** ${stats.avgImportance}`,
-          `**Status:** ${stats.enabled ? '✓ Enabled' : '✗ Disabled'}`,
-        ].join('\n'),
-      };
-    }
-
-    // Ej prenumerant — öppna Stripe
-    if (!subscribed) {
-      const stripeUrl = 'https://buy.stripe.com/14A4gB4J53vxcaV74S9R601';
-      const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-      exec(`${openCmd} "${stripeUrl}"`, () => {});
-      return {
-        success: true,
-        type: 'info',
-        content: [
-          '## ⬡ AEGIS Semantic Memory',
-          '',
-          '**Status:** Inactive',
-          '',
-          'Semantic memory stores and retrieves context across sessions.',
-          'Price: **$2/month** via Stripe.',
-          '',
-          `Opening payment page...`,
-          `  ${stripeUrl}`,
-          '',
-          'After payment you receive a token via email / success page.',
-          'Place the token in a file to activate:',
-          `  mkdir -p ~/.aegiscode && echo '<your-token>' > ~/.aegiscode/memory.token`,
-          '',
-          'Or run:',
-          '  `/memory activate <token>`',
-          '',
-          'No cloud server required — activation works offline.',
-          'The token file is checked automatically on every command.',
-        ].join('\n'),
-      };
-    }
-
-    // Prenumerant — visa status
+    // /memory stats (default view)
     const stats = sharedMemory.getStats();
     const recent = sharedMemory.recent(3);
 
@@ -2492,7 +2385,6 @@ const memoryCommand: SlashCommand = {
       `  ${stats.total} memories stored across ${stats.sessions} sessions`,
       `  ${stats.summaries} session summaries`,
     ];
-    if (mem.activatedAt) lines.push(`  Activated: ${mem.activatedAt.slice(0, 10)}`);
     if (recent.length > 0) {
       lines.push('  Recent:');
       recent.slice(-3).reverse().forEach((e: any) => {

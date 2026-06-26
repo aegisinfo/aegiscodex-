@@ -1,1 +1,0 @@
-{"version":3,"file":"focusSlice.d.ts","sourceRoot":"","sources":["../../../src/store/slices/focusSlice.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAC5C,OAAO,KAAK,EAAE,UAAU,EAAE,UAAU,EAAW,MAAM,aAAa,CAAC;AAOnE,eAAO,MAAM,gBAAgB,EAAE,YAAY,CACzC,UAAU,EACV;CAAE,EACF;CAAE,EACF,UAAU,CA+CV,CAAC"}

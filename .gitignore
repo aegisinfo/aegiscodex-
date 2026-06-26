@@ -1,8 +1,5 @@
 .env
-dist/standalone/
-dist/main.js
-dist/main.js.map
-dist/package.json
+dist/
 node_modules/
 *.log
 .aegiscode/

@@ -22,12 +22,12 @@ function stripEmbedding(entries: MemoryEntry[]): Omit<MemoryEntry, 'embedding'>[
   return entries.map(({ embedding, ...rest }) => rest);
 }
 
-export async function pushEntries(entries: MemoryEntry[], token: string): Promise<void> {
+export async function pushEntries(entries: MemoryEntry[], apiKey: string): Promise<void> {
   if (entries.length === 0) return;
   try {
     await fetch(`${MEMORY_API_BASE}/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({ entries: stripEmbedding(entries) }),
     });
   } catch {
@@ -36,7 +36,7 @@ export async function pushEntries(entries: MemoryEntry[], token: string): Promis
 }
 
 /** Like pushEntries, but reports how many entries the server actually saved (for bulk uploads). */
-export async function pushBatch(entries: MemoryEntry[], token: string): Promise<number> {
+export async function pushBatch(entries: MemoryEntry[], apiKey: string): Promise<number> {
   if (entries.length === 0) return 0;
   try {
     // A bulk upload can be many sequential batches — one slow/hung request
@@ -48,7 +48,7 @@ export async function pushBatch(entries: MemoryEntry[], token: string): Promise<
     try {
       res = await fetch(`${MEMORY_API_BASE}/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({ entries: stripEmbedding(entries) }),
         signal: controller.signal,
       });
@@ -63,27 +63,11 @@ export async function pushBatch(entries: MemoryEntry[], token: string): Promise<
   }
 }
 
-/** Returns true/false if the server could check, null if the request failed (caller should fail open). */
-export async function claimFreeTrial(fingerprint: string, sessionId: string): Promise<boolean | null> {
-  try {
-    const res = await fetch(`${MEMORY_API_BASE}/claim-free-trial`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fingerprint, sessionId }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { allowed?: boolean };
-    return typeof data.allowed === 'boolean' ? data.allowed : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function pullSince(since: string | null, token: string): Promise<MemoryEntry[]> {
+export async function pullSince(since: string | null, apiKey: string): Promise<MemoryEntry[]> {
   try {
     const res = await fetch(`${MEMORY_API_BASE}/pull`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify(since ? { since } : {}),
     });
     if (!res.ok) return [];
@@ -99,11 +83,11 @@ export async function pullSince(since: string | null, token: string): Promise<Me
  * another device since the last `pullSince`). Caller is responsible for merging
  * with local results — this never throws, just returns [] on any failure.
  */
-export async function searchCloud(query: string, limit: number, token: string): Promise<MemoryEntry[]> {
+export async function searchCloud(query: string, limit: number, apiKey: string): Promise<MemoryEntry[]> {
   try {
     const res = await fetch(`${MEMORY_API_BASE}/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({ query, limit }),
     });
     if (!res.ok) return [];

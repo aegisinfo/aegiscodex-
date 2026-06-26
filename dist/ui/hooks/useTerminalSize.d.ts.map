@@ -1,1 +1,0 @@
-{"version":3,"file":"useTerminalSize.d.ts","sourceRoot":"","sources":["../../../src/ui/hooks/useTerminalSize.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAIH,UAAU,YAAY;IACpB,KAAK,EAAE,MAAM,CAAC;IACd,MAAM,EAAE,MAAM,CAAC;CAChB;AAWD,wBAAgB,eAAe,IAAI,YAAY,CAwC9C;AAGD,eAAO,MAAM,gBAAgB,QAAO,MAAiC,CAAC;AACtE,eAAO,MAAM,iBAAiB,QAAO,MAAkC,CAAC"}

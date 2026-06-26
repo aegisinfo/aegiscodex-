@@ -1,1 +1,0 @@
-{"version":3,"file":"appSlice.d.ts","sourceRoot":"","sources":["../../../src/store/slices/appSlice.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAC5C,OAAO,KAAK,EAAE,UAAU,EAAE,QAAQ,EAA+C,MAAM,aAAa,CAAC;AAarG,eAAO,MAAM,cAAc,EAAE,YAAY,CACvC,UAAU,EACV;CAAE,EACF;CAAE,EACF,QAAQ,CAuHR,CAAC"}

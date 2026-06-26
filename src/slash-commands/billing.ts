@@ -49,7 +49,8 @@ export async function runBilling(args: string): Promise<string> {
   const lines: string[] = [
     '## ⬡ API Billing',
     '',
-    '> AEGIS CLI is BYOK — you pay your AI provider directly.',
+    '> AEGIS CLI uses auto-routing — cheapest provider selected per request.',
+    '> Pricing includes a margin on provider cost.',
     '',
   ];
 
@@ -63,13 +64,7 @@ export async function runBilling(args: string): Promise<string> {
   }
 
   lines.push('---');
-  lines.push('## ⬡ AEGIS Memory');
-  lines.push('');
-  lines.push('Semantic memory across sessions: **$2/month**');
-  lines.push('Run `/memory` to subscribe.');
-
-  lines.push('');
-  lines.push('`/billing claude` · `/billing deepseek` · `/billing groq` — opens billing page');
+  lines.push('Run `/billing claude` · `/billing deepseek` · `/billing groq` to open billing page');
 
   return lines.join('\n');
 }

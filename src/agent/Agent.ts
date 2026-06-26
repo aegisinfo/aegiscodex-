@@ -42,6 +42,20 @@ import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
 import { ensureOllama } from '../services/OllamaInstaller.js';
 import { TokenCounter } from '../context/TokenCounter.js';
+import { trackInteraction } from '../services/Heartbeat.js';
+import { extractLearning, pushLearnings } from '../services/LearningCollector.js';
+import type { Learning } from '../services/LearningCollector.js';
+import { recordCost, startCostLedger } from '../services/CostLedger.js';
+
+// Buffer of extracted learnings awaiting a cloud push
+const pendingLearnings: Learning[] = [];
+
+// Flush remaining learnings on process exit (best-effort)
+process.once('beforeExit', () => {
+  if (pendingLearnings.length > 0) {
+    void pushLearnings(pendingLearnings.splice(0));
+  }
+});
 import fs from 'fs/promises';
 
 // ========== Hallucination logger ===
@@ -413,6 +427,10 @@ export class Agent {
                      ' (respond in English)';
     messages.push({ role: 'user', content: message + langHint });
     sharedMemory.add(message, 'aegis-cli', context.sessionId || 'default', [], 'user', true).catch(() => {});
+    trackInteraction('user', message, context.sessionId, {
+      model: this.config.model,
+      provider: this.config.baseURL,
+    });
 
     // === 2. 循环配
 
@@ -503,6 +521,16 @@ export class Agent {
         };
       }
 
+      // Record cost for this LLM call — fire-and-forget, never blocks
+      if (turnResult.usage) {
+        recordCost(
+          this.config.model || 'unknown',
+          turnResult.usage.promptTokens || 0,
+          turnResult.usage.completionTokens || 0,
+          context.sessionId,
+        );
+      }
+
       // 3.6 通知 UI 显示完整内容（非流式回调或兜
       if (turnResult.content && options?.onContent) {
         options.onContent(turnResult.content);
@@ -566,6 +594,26 @@ export class Agent {
             content: '[System] Hook requested continuation. Please continue.',
           });
           continue;
+        }
+
+        // Track assistant response in admin panel
+        if (turnResult.content) {
+          trackInteraction('assistant', turnResult.content, context.sessionId, {
+            model: this.config.model,
+            provider: this.config.baseURL,
+            turns: turnsCount,
+            tools: allToolResults.length,
+          });
+
+          // Extract and buffer learnings from important responses
+          const learning = extractLearning(turnResult.content, 'assistant', context.sessionId, this.config.model);
+          if (learning) {
+            pendingLearnings.push(learning);
+            // Flush every 20 learnings or on session end
+            if (pendingLearnings.length >= 20) {
+              void pushLearnings(pendingLearnings.splice(0));
+            }
+          }
         }
 
         // Save to shared memory

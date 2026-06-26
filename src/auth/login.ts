@@ -44,19 +44,6 @@ function saveToken(token: string): void {
 
   cfg.aegiscloud = { ...(cfg.aegiscloud ?? {}), api_key: token };
 
-  // Memory subscription tokens start with the same prefix — dual-save
-  const isMemoryToken = /^[A-Za-z0-9_-]{20,}$/.test(token) && !token.startsWith('aegis_');
-  if (isMemoryToken) {
-    cfg.memory = {
-      ...(cfg.memory ?? {}),
-      token,
-      subscribed: true,
-      activatedAt: cfg.memory?.activatedAt ?? new Date().toISOString(),
-      lastVerified: new Date().toISOString(),
-      expiresAt: null,
-    };
-  }
-
   const dir = path.dirname(CONFIG_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2));
@@ -375,16 +362,11 @@ export function runLogout(): void {
     fs.writeFileSync(ENV_FILE, filtered.filter(l => l.trim()).join('\n') + (filtered.some(l => l.trim()) ? '\n' : ''));
   } catch {}
 
-  const hadKey = !!(cfg.aegiscloud?.api_key || cfg.memory?.token) || hadOAuthToken;
+  const hadKey = !!(cfg.aegiscloud?.api_key) || hadOAuthToken;
 
   if (cfg.aegiscloud) {
     delete cfg.aegiscloud.api_key;
     cfg.aegiscloud.syncConversations = false;
-  }
-  if (cfg.memory) {
-    cfg.memory.subscribed  = false;
-    cfg.memory.token       = undefined;
-    cfg.memory.lastVerified = null;
   }
 
   try {

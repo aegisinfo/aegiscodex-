@@ -22,7 +22,8 @@
     "test:mcp": "tsx src/mcp/test.ts",
     "test:store": "tsx src/store/test.ts",
     "gui": "node ./gui/run-gui.cjs",
-    "prepublishOnly": "node esbuild.mjs"
+    "obfuscate": "node scripts/obfuscate.mjs",
+    "prepublishOnly": "npm run build && npm run obfuscate"
   },
   "keywords": [
     "cli",
@@ -93,6 +94,7 @@
     "esbuild": "^0.28.0",
     "react-devtools-core": "^7.0.1",
     "tsx": "^4.22.4",
+    "javascript-obfuscator": "^5.4.3",
     "typescript": "^5.7.2"
   }
 }

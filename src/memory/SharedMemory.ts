@@ -11,23 +11,18 @@ import * as path from 'path';
 import * as os   from 'os';
 import { v4 as uuid } from 'uuid';
 import initSqlJs, { Database as SqlJsDb } from 'sql.js';
-import { pushEntries, pushBatch, pullSince, claimFreeTrial, searchCloud } from './CloudSync.js';
+import { pushEntries, pushBatch, pullSince, searchCloud } from './CloudSync.js';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const MEMORY_DIR       = path.join(os.homedir(), '.aegiscode', 'memory');
 const DB_PATH          = path.join(MEMORY_DIR, 'memory.db');
 const CONFIG_FILE      = path.join(os.homedir(), '.aegiscode', 'config.json');
 const SESSION_FILE     = path.join(MEMORY_DIR, 'last-session.txt');
-const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
 const LAST_CLOUD_SYNC_FILE = path.join(MEMORY_DIR, '.last-cloud-sync');
 
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
 const OLLAMA_EMBED_URL  = process.env.AEGIS_OLLAMA_EMBED_URL || 'http://localhost:11434/api/embed';
-
-// ── Token verification ───────────────────────────────────────────────────────
-const VERIFY_URL          = 'https://aegiscloud.org/api/verify-token';
-const VERIFY_CACHE_MS     = 24 * 60 * 60 * 1000; // 24 hours
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const VECTOR_DIM_XENOVA = 384;  // all-MiniLM-L6-v2 output dimension
@@ -72,11 +67,6 @@ const JUNK_PATTERNS = [
   /^\/billing/i, /^\/council/i, /^\/help/i, /^\/theme/i,
   /^\/clear/i, /^\| sid/i, /^\|──/i, /^\| tok/i, /^\s*$/,
 ];
-
-function isExpired(expiresAt: string | null | undefined): boolean {
-  if (!expiresAt) return false;
-  return new Date(expiresAt).getTime() < Date.now();
-}
 
 function isJunk(content: string): boolean {
   if (content.length < 8) return true;
@@ -344,26 +334,21 @@ export class SharedMemory {
 
     this.embedder = await getEmbedder();
     this.applyTTL();
-    if (this.isSubscribed()) void this.syncFromCloud();
+    if (this.hasApiKey()) void this.syncFromCloud();
   }
 
-  // ── Cloud sync (cross-device, subscribed users only) ────────────────────
-  private getMemoryToken(): string | null {
-    const fromEnv = (process.env.AEGIS_MEMORY_TOKEN || '').trim();
-    if (fromEnv) return fromEnv;
+  // ── Cloud sync (all logged-in users) ────────────────────────────────────
+  private getApiKeyFromConfig(): string | null {
     try {
-      if (fs.existsSync(MEMORY_TOKEN_FILE)) {
-        const t = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
-        if (t) return t;
-      }
-    } catch {}
-    return null;
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      return cfg?.aegiscloud?.api_key ?? null;
+    } catch { return null; }
   }
 
   /** Pull entries newer than the last sync marker and merge them in. Never blocks startup. */
   private async syncFromCloud(): Promise<void> {
-    const token = this.getMemoryToken();
-    if (!token) return;
+    const apiKey = this.getApiKeyFromConfig();
+    if (!apiKey) return;
 
     let since: string | null = null;
     try {
@@ -372,7 +357,7 @@ export class SharedMemory {
       }
     } catch {}
 
-    const pulled = await pullSince(since, token);
+    const pulled = await pullSince(since, apiKey);
     if (pulled.length === 0) return;
 
     this.import(pulled, true);
@@ -394,10 +379,10 @@ export class SharedMemory {
    */
   async pullAll(): Promise<{ total: number; pulled: number }> {
     await this.ensureReady();
-    const token = this.getMemoryToken();
-    if (!token) return { total: 0, pulled: 0 };
+    const apiKey = this.getApiKeyFromConfig();
+    if (!apiKey) return { total: 0, pulled: 0 };
 
-    const pulled = await pullSince(null, token);
+    const pulled = await pullSince(null, apiKey);
     if (pulled.length === 0) return { total: 0, pulled: 0 };
 
     this.import(pulled, true);
@@ -459,9 +444,6 @@ export class SharedMemory {
     await this.ensureReady();
 
     if (!this.isWriteAllowed(session)) return null;
-    // Record this session as the free-tier session on first write
-    this.recordFreeSession(session);
-    void this.claimFreeTrialIfNeeded(session);
 
     const cleaned = stripInvalidChars(content);
     if (isJunk(cleaned)) return null;
@@ -521,10 +503,8 @@ export class SharedMemory {
       embedding: embeddingBuf ? Array.from(new Float32Array(embeddingBuf.buffer, embeddingBuf.byteOffset, embeddingBuf.byteLength / 4)) : null,
     };
 
-    if (this.isSubscribed()) {
-      const token = this.getMemoryToken();
-      if (token) void pushEntries([entry], token);
-    }
+    const apiKey = this.getApiKeyFromConfig();
+    if (apiKey) void pushEntries([entry], apiKey);
 
     return entry;
   }
@@ -533,7 +513,7 @@ export class SharedMemory {
   async search(query: string, limit = 6): Promise<MemoryEntry[]> {
     await this.ensureReady();
 
-    if (!this.isEnabled()) return [];
+    if (!this.hasApiKey()) return [];
 
     const q = query.toLowerCase();
     const words = q.split(/\s+/).filter(w =>
@@ -599,12 +579,11 @@ export class SharedMemory {
    */
   private async mergeCloudResults(localResults: MemoryEntry[], query: string, limit: number): Promise<MemoryEntry[]> {
     if (localResults.length >= limit) return localResults;
-    if (!this.isSubscribed()) return localResults;
-    const token = this.getMemoryToken();
-    if (!token) return localResults;
+    const apiKey = this.getApiKeyFromConfig();
+    if (!apiKey) return localResults;
 
     const timeout = new Promise<MemoryEntry[]>(resolve => setTimeout(() => resolve([]), 1500));
-    const cloudResults = await Promise.race([searchCloud(query, limit, token), timeout]);
+    const cloudResults = await Promise.race([searchCloud(query, limit, apiKey), timeout]);
     if (cloudResults.length === 0) return localResults;
 
     const seenIds = new Set(localResults.map(e => e.id));
@@ -720,12 +699,12 @@ export class SharedMemory {
   async buildContext(query: string, maxEntries = 4, currentSession?: string): Promise<string> {
     await this.ensureReady();
 
-    const subscribed = this.isEnabled();
+    const apiKey = this.getApiKeyFromConfig();
     const seen = new Set<string>();
     const combined: MemoryEntry[] = [];
 
-    if (subscribed) {
-      // Subscribed: full cross-session memory with search, summaries, recent
+    if (apiKey) {
+      // Logged-in user: full cross-session memory with search, summaries, recent
       const relevant  = await this.search(query, Math.min(4, maxEntries));
       const recent    = this.recent(Math.min(2, maxEntries));
       const summaryRows = this.db.exec(
@@ -744,7 +723,7 @@ export class SharedMemory {
       }
     }
 
-    // Alla får alltid minnen från aktuell session (även utan prenumeration)
+    // All users always get current session context
     if (currentSession) {
       const sessionRows = this.db.exec(
         `SELECT * FROM memories WHERE session = ? AND summary = 0 ORDER BY timestamp DESC LIMIT 4`,
@@ -831,174 +810,21 @@ export class SharedMemory {
     } catch {}
   }
 
-  // ── Subscription / free-tier helpers ────────────────────────────────────
+  // ── Simple logged-in check ─────────────────────────────────────────────
 
-  isSubscribed(): boolean {
-    try {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      if (cfg?.memory?.subscribed !== true) return false;
-      if (isExpired(cfg?.memory?.expiresAt)) return false;
-      // Require a server-verified timestamp within the cache window
-      const lv = cfg?.memory?.lastVerified;
-      if (!lv) return false;
-      return Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS;
-    } catch { return false; }
+  /** True if user has a stored API key (paid through Aegis, logged in). */
+  hasApiKey(): boolean {
+    return this.getApiKeyFromConfig() !== null;
   }
 
-  /**
-   * Call once at startup. Finds the token (env var or memory.token file),
-   * verifies it against aegiscloud.org, and caches the result in config.json.
-   * No-op if verification is still fresh (< 24 h).
-   * Clears subscription if the server rejects the token.
-   */
-  async initVerification(): Promise<void> {
-    const token =
-      (process.env.AEGIS_MEMORY_TOKEN || '').trim() ||
-      (fs.existsSync(MEMORY_TOKEN_FILE)
-        ? fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim()
-        : '');
-
-    if (!token || token.length < 10) return;
-
-    // Check cache — skip network call if still fresh
-    try {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      const lv  = cfg?.memory?.lastVerified;
-      if (cfg?.memory?.subscribed && lv && Date.now() - new Date(lv).getTime() < VERIFY_CACHE_MS) {
-        return; // still valid
-      }
-    } catch {}
-
-    // Call server
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(VERIFY_URL, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': token },
-        body:    JSON.stringify({ token }),
-        signal:  controller.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json() as { valid?: boolean; expiresAt?: string };
-
-      const cfg = (() => { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; } })();
-
-      if (data.valid) {
-        const updated = {
-          ...cfg,
-          memory: {
-            ...cfg.memory,
-            subscribed:    true,
-            token,
-            lastVerified:  new Date().toISOString(),
-            activatedAt:   cfg?.memory?.activatedAt || new Date().toISOString(),
-            expiresAt:     data.expiresAt || null,
-          },
-        };
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-      } else {
-        // Invalid token — revoke subscription
-        const updated = {
-          ...cfg,
-          memory: { ...cfg.memory, subscribed: false, lastVerified: null },
-        };
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-      }
-    } catch {
-      // Network error — do not revoke (allow offline use if previously verified)
-    }
+  /** Write permission: any logged-in user can write memory. */
+  isWriteAllowed(_sessionId: string): boolean {
+    return this.hasApiKey();
   }
 
-  /** Returns true only for write operations: subscribed, or this IS the free-tier session. */
-  isWriteAllowed(sessionId: string): boolean {
-    if (this.isSubscribed()) return true;
-    try {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      // Some other device already claimed the free trial for this machine fingerprint —
-      // blocks even if this device never recorded a local freeSessionId (closes the
-      // "just delete config.json" loophole).
-      if (cfg?.memory?.freeTrialClaimed === false) return false;
-      const freeId = cfg?.memory?.freeSessionId ?? null;
-      // Free tier not yet used — this session will be the free one
-      if (!freeId) return true;
-      return freeId === sessionId;
-    } catch { return true; }
-  }
-
-  /**
-   * Best-effort server-side check (anonymous machine fingerprint) that this device
-   * hasn't already burned the free trial elsewhere. No-op for subscribed users or
-   * once already resolved. Fails open on network errors — this is an anti-abuse
-   * soft gate, not a security boundary, so a legitimate offline user is never blocked.
-   */
-  private async claimFreeTrialIfNeeded(sessionId: string): Promise<void> {
-    if (this.isSubscribed()) return;
-    let cfg: any;
-    try {
-      cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    } catch {
-      cfg = {};
-    }
-    if (typeof cfg?.memory?.freeTrialClaimed === 'boolean') return; // already resolved
-
-    const { getMachineFingerprint } = await import('./machineFingerprint.js');
-    const fingerprint = getMachineFingerprint();
-    const allowed = await claimFreeTrial(fingerprint, sessionId);
-    if (allowed === null) return; // network error — fail open, retry next time
-
-    try {
-      const raw = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf8') : '{}';
-      const latest = JSON.parse(raw);
-      const updated = { ...latest, memory: { ...latest.memory, freeTrialClaimed: allowed } };
-      fs.mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-    } catch {}
-  }
-
-  /** Returns true for reads: subscribed, OR free session was ever used (let them see value). */
+  /** Read permission: any logged-in user can read memory. */
   isEnabled(): boolean {
-    if (this.isSubscribed()) return true;
-    try {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      // Allow reads if a free session was recorded (show stored memories to motivate upgrade)
-      return cfg?.memory?.freeSessionId != null;
-    } catch { return false; }
-  }
-
-  /**
-   * Returns an upgrade reminder if the session has exhausted the free tier.
-   * Returns null if subscribed or still within the free session.
-   * Call once at session start; reminder is suppressed after the first call this process.
-   */
-  private _reminderShownThisProcess = false;
-  getUpgradeReminder(sessionId: string): string | null {
-    if (this._reminderShownThisProcess) return null;
-    if (this.isSubscribed()) return null;
-    if (this.isWriteAllowed(sessionId)) return null; // still in free tier
-    this._reminderShownThisProcess = true;
-    return [
-      '◎ Memory · free tier used',
-      '',
-      'Your 1 free memory session has been used. Past context is still visible but new',
-      'sessions will not be remembered without a subscription.',
-      '',
-      '  aegiscloud.org  →  /memory  →  €2/month  ·  cancel anytime',
-      '',
-      'Or set AEGIS_MEMORY_TOKEN in your .env to activate.',
-    ].join('\n');
-  }
-
-  /** Record the free-tier session ID the first time this session writes to memory. */
-  private recordFreeSession(sessionId: string): void {
-    try {
-      const raw = fs.existsSync(CONFIG_FILE) ? fs.readFileSync(CONFIG_FILE, 'utf8') : '{}';
-      const cfg = JSON.parse(raw);
-      if (!cfg?.memory?.freeSessionId) {
-        const updated = { ...cfg, memory: { ...cfg.memory, freeSessionId: sessionId } };
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
-      }
-    } catch {}
+    return this.hasApiKey();
   }
 
   size(): number {
@@ -1019,13 +845,13 @@ export class SharedMemory {
   /** Push every local entry to the cloud in batches, regardless of last-sync state. */
   async pushAll(batchSize = 500): Promise<{ total: number; pushed: number }> {
     await this.ensureReady();
-    const token = this.getMemoryToken();
+    const apiKey = this.getApiKeyFromConfig();
     const entries = this.export();
-    if (!token || entries.length === 0) return { total: entries.length, pushed: 0 };
+    if (!apiKey || entries.length === 0) return { total: entries.length, pushed: 0 };
 
     let pushed = 0;
     for (let i = 0; i < entries.length; i += batchSize) {
-      pushed += await pushBatch(entries.slice(i, i + batchSize), token);
+      pushed += await pushBatch(entries.slice(i, i + batchSize), apiKey);
     }
     return { total: entries.length, pushed };
   }
@@ -1097,7 +923,7 @@ export class SharedMemory {
       summaries,
       byRole,
       avgImportance: avgImportance.toFixed(2),
-      enabled: this.isEnabled(),
+      enabled: this.hasApiKey(),
       withEmbeddings,
       embeddingsEnabled: EMBEDDINGS_ENABLED,
     };

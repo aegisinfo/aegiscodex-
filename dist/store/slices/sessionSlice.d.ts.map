@@ -1,1 +1,0 @@
-{"version":3,"file":"sessionSlice.d.ts","sourceRoot":"","sources":["../../../src/store/slices/sessionSlice.ts"],"names":[],"mappings":"AAAA;;;;;;;;;;;;;;;;;;;;GAoBG;AAEH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAC5C,OAAO,KAAK,EAAE,UAAU,EAAE,YAAY,EAA4D,MAAM,aAAa,CAAC;AA2BtH,eAAO,MAAM,kBAAkB,EAAE,YAAY,CAC3C,UAAU,EACV;CAAE,EACF;CAAE,EACF,YAAY,CAiXZ,CAAC"}

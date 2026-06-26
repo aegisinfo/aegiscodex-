@@ -128,9 +128,7 @@ async function main(): Promise<void> {
   // 2. 启动版本检查（不等待，与后续流程并行执
   versionCheckPromise = checkVersionOnStartup();
 
-  // Verify memory token against server (cached 24 h — runs in parallel with startup)
-  const { sharedMemory } = await import('./memory/SharedMemory.js');
-  sharedMemory.initVerification().catch(() => {});
+  // Memory is available for all logged-in users — no separate token verification needed
 
   // Handle --model flag: aegis --model deepseek "question"
   // or aegis --model council "question" for council vote
@@ -293,41 +291,30 @@ async function main(): Promise<void> {
           process.exit(0)
         }
 
-        // ── Mandatory login check ─────────────────────────────────────────
-        // If no aegiscloud credentials exist at all, force login before proceeding —
-        // unless the user already has a working BYOK LLM key configured (env var,
-        // ~/.aegiscode/.env, or config.json). AEGIS CLI is BYOK (see billing.ts):
-        // aegiscloud login is only required for cloud memory sync, not for running
-        // the agent against your own API key. Forcing it on every standalone install
-        // blocked exactly that use case.
-        const hasOwnApiKey = !!configManager.getDefaultModel().apiKey;
-        if (!hasOwnApiKey) {
-          const { readFileSync } = await import('node:fs');
-          const { homedir } = await import('node:os');
-          let hasCredentials = false;
+        // ── Mandatory login check (Aegiscode Pro) ────────────────────────
+        // Aegiscode Pro requires login. No login = no API access.
+        const { readFileSync } = await import('node:fs');
+        const { homedir } = await import('node:os');
+        let hasCredentials = false;
+        try {
+          const cfg = JSON.parse(readFileSync(`${homedir()}/.aegiscode/config.json`, 'utf8'));
+          hasCredentials = !!(cfg?.aegiscloud?.api_key);
+        } catch {}
+
+        const needsLogin = hasCredentials
+          ? !(await (await import('./auth/login.js')).ensureAccountValid())
+          : true;
+
+        if (needsLogin) {
+          const { runLogin } = await import('./auth/login.js');
           try {
-            const cfg = JSON.parse(readFileSync(`${homedir()}/.aegiscode/config.json`, 'utf8'));
-            hasCredentials = !!(cfg?.aegiscloud?.api_key || cfg?.memory?.token);
-          } catch {}
-
-          // Re-verify a stored key against the server periodically (cached 24h)
-          // so a revoked/deleted account doesn't stay "logged in" forever.
-          const needsLogin = hasCredentials
-            ? !(await (await import('./auth/login.js')).ensureAccountValid())
-            : true;
-
-          if (needsLogin) {
-            const { runLogin } = await import('./auth/login.js');
-            try {
-              await runLogin();
-              console.log('\n\x1b[32m✓ Logged in.\x1b[0m Starting ÆGIS...\n');
-              // Re-initialize config with the newly saved credentials
-              await configManager.initialize(process.cwd());
-            } catch (err) {
-              console.error('\n\x1b[31m✗ Login failed:\x1b[0m', (err as Error).message);
-              console.error('Run \x1b[1maegis login\x1b[0m to try again.');
-              process.exit(1);
-            }
+            await runLogin();
+            console.log('\n\x1b[32m✓ Logged in.\x1b[0m Starting ÆGIS...\n');
+            await configManager.initialize(process.cwd());
+          } catch (err) {
+            console.error('\n\x1b[31m✗ Login failed:\x1b[0m', (err as Error).message);
+            console.error('Run \x1b[1maegis login\x1b[0m to try again.');
+            process.exit(1);
           }
         }
 
@@ -404,6 +391,11 @@ async function main(): Promise<void> {
             process.stderr.write('Error: --print requires a message, e.g. aegis --print "your question"\n');
             process.exit(1);
           }
+
+          const { startCostLedger } = await import('./services/CostLedger.js');
+          startCostLedger();
+          const { startHeartbeat } = await import('./services/Heartbeat.js');
+          startHeartbeat();
 
           const { ContextManager } = await import('./context/index.js');
           const { Agent } = await import('./agent/Agent.js');
@@ -526,6 +518,12 @@ async function main(): Promise<void> {
           renderStdin = mockStdin as unknown as typeof process.stdin;
           if (isDebugMode) console.log('[DEBUG] Using mock stdin for Ink render');
         }
+
+        // Start background services (fire-and-forget, silent on failure)
+        const { startCostLedger } = await import('./services/CostLedger.js');
+        startCostLedger();
+        const { startHeartbeat } = await import('./services/Heartbeat.js');
+        startHeartbeat();
 
         try {
           const { render } = await import('ink');

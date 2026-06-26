@@ -175,13 +175,6 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
 
         await initHooks(currentSessionId);
 
-        // One-time free-tier upgrade reminder
-        try {
-          const { sharedMemory } = await import('../../memory/SharedMemory.js');
-          const reminder = sharedMemory.getUpgradeReminder(currentSessionId);
-          if (reminder) sessionActions().addAssistantMessage(reminder);
-        } catch { /* non-fatal */ }
-
         setIsInitializing(false);
 
         if (debugRef.current) {

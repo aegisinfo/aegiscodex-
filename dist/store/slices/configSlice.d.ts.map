@@ -1,1 +1,0 @@
-{"version":3,"file":"configSlice.d.ts","sourceRoot":"","sources":["../../../src/store/slices/configSlice.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,SAAS,CAAC;AAC5C,OAAO,KAAK,EAAE,UAAU,EAAE,WAAW,EAAE,MAAM,aAAa,CAAC;AAG3D,eAAO,MAAM,iBAAiB,EAAE,YAAY,CAC1C,UAAU,EACV;CAAE,EACF;CAAE,EACF,WAAW,CAiCX,CAAC"}

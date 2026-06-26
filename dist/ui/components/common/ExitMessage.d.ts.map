@@ -1,1 +1,0 @@
-{"version":3,"file":"ExitMessage.d.ts","sourceRoot":"","sources":["../../../../src/ui/components/common/ExitMessage.tsx"],"names":[],"mappings":"AAAA;;GAEG;AAEH,OAAO,KAA8B,MAAM,OAAO,CAAC;AAKnD,UAAU,gBAAgB;IACxB,SAAS,EAAE,MAAM,CAAC;IAClB,SAAS,CAAC,EAAE,MAAM,CAAC;CACpB;AAED,eAAO,MAAM,WAAW,EAAE,KAAK,CAAC,EAAE,CAAC,gBAAgB,CAuGlD,CAAC;AAEF,eAAe,WAAW,CAAC"}
