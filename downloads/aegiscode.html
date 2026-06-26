@@ -165,16 +165,17 @@ footer .links a:hover{color:var(--teal)}
 
   <!-- Quick install -->
   <div class="quick">
-    <h3>⚡ Quick Install — Linux & macOS</h3>
-    <p>One-line install via curl. Node.js 22+ required.</p>
-    <div class="code-block" style="text-align:left;margin-bottom:12px;display:inline-block;text-align:left">curl -fsSL https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/install.sh | bash</div>
+    <h3>⚡ Quick Install — npm (all platforms)</h3>
+    <p>Install via npm. Node.js 22+ required.</p>
+    <div class="code-block" style="text-align:left;margin-bottom:12px;display:inline-block;text-align:left"><span class="prompt">$</span> <span class="hl">npm install -g aegiscode</span></div>
     <div>
-      <button class="copy-btn" onclick="copyInstall()">📋 Copy command</button>
-      <span class="copy-ok" id="copy-ok">✓ Copied</span>
+      <button class="copy-btn" onclick="copyNpm()">📋 Copy command</button>
+      <span class="copy-ok" id="copy-ok-npm">✓ Copied</span>
     </div>
     <div style="margin-top:12px;padding:10px 16px;background:rgba(0,200,180,.06);border:1px solid rgba(0,200,180,.2);border-radius:6px;display:inline-block">
       <span style="font-size:13px;color:var(--teal);font-weight:700">Then just type <code style="background:rgba(0,200,180,.15);padding:3px 10px;border-radius:4px;font-family:monospace;font-size:14px;color:#fff">aegis</code> in any terminal → CLI launches instantly</span>
     </div>
+    <p style="margin-top:14px;font-size:11px;color:var(--text2)">Or install via curl: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px;font-family:monospace;font-size:11px">curl -fsSL https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/install.sh | bash</code></p>
   </div>
 
   <!-- Platform downloads -->
@@ -287,6 +288,11 @@ function copyInstall(){
   navigator.clipboard.writeText('curl -fsSL https://pub-a975e7eee93c4432a2bf952f50705bf1.r2.dev/install.sh | bash');
   document.getElementById('copy-ok').style.display='inline';
   setTimeout(()=>{document.getElementById('copy-ok').style.display='none'},2000);
+}
+function copyNpm(){
+  navigator.clipboard.writeText('npm install -g aegiscode');
+  document.getElementById('copy-ok-npm').style.display='inline';
+  setTimeout(()=>{document.getElementById('copy-ok-npm').style.display='none'},2000);
 }
 // DeepSeek demo animation
 (function(){
