@@ -331,20 +331,18 @@ async function main(): Promise<void> {
           }
         }
 
-        // 获取最终配
         const modelConfig = configManager.getDefaultModel()
 
-        // 检
-        if (!modelConfig.apiKey) {
-          const P = '\x1b[38;2;0;229;192m';
-          const R = '\x1b[0m';
-          const D = '\x1b[2m';
+        // No API key yet — don't exit here. App.tsx already detects this on mount
+        // (initializeStoreState) and renders the interactive SetupWizard, which
+        // creates ~/.aegiscode/.env for the user. Exiting here with print-only
+        // instructions skipped that wizard entirely and left fresh installs
+        // stuck telling users to hand-create a hidden folder themselves.
+        // --print mode has no UI to fall back on, so it still needs to fail fast.
+        if (!modelConfig.apiKey && isPrintMode) {
           process.stderr.write(
-            `\n${P}◆ ÆGIS — No API key configured${R}\n\n` +
-            `  Run ${P}aegis login${R} to authenticate via browser, or:\n\n` +
-            `  ${D}• Add an API key interactively:  aegis --init${R}\n` +
-            `  ${D}• Set an environment variable:   export OPENAI_API_KEY=sk-...${R}\n` +
-            `  ${D}• Pass it directly:              aegis --api-key sk-...${R}\n\n`,
+            'No API key configured. Run `aegis` once (without --print) to set one up, ' +
+            'or set an environment variable: export OPENAI_API_KEY=sk-...\n',
           );
           process.exit(1);
         }
