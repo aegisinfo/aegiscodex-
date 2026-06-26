@@ -9,12 +9,14 @@
  * - Sub-agents can use real tools (Read, Edit, Write, Bash, Grep, Glob)
  */
 
+import { randomUUID } from 'node:crypto';
 import type { AgentConfig, Message, ToolCall, ToolDefinition } from '../types.js';
 import { createChatService } from '../../services/ChatService.js';
 import { sharedMemory } from '../../memory/SharedMemory.js';
 import { agentMemoryBus } from '../../memory/AgentMemoryBus.js';
 import { agentDebug } from '../../utils/debug.js';
 import { configManager } from '../../config/ConfigManager.js';
+import { SubAgentMetadataStore } from '../../orchestrator/SubAgentMetadata.js';
 import {
   createToolRegistry,
   getBuiltinTools,
@@ -69,6 +71,8 @@ export interface OrchestrationResult {
   };
 }
 
+const subAgentMetadataStore = new SubAgentMetadataStore();
+
 // ========== Tool-Enabled Sub-Agent Runner ==========
 
 /**
@@ -117,6 +121,16 @@ class SubAgentRunner {
     const startTime = Date.now();
     const sid = sessionId || 'default';
     this.currentSessionId = sid;
+
+    const spawnId = randomUUID();
+    await subAgentMetadataStore.spawn({
+      spawnId,
+      agentName: this.config.name,
+      role: this.config.role,
+      task,
+      sessionId: sid,
+      agentType: 'subagent',
+    }).catch(() => {});
 
     // ── Inject cross-session persistent memory ──
     const memCtx = await sharedMemory.buildContext(task, 3, sid);
@@ -169,12 +183,18 @@ class SubAgentRunner {
       // If no tool calls — just return content
       if (!result.toolCalls || result.toolCalls.length === 0) {
         await this.publishResult(task, result.content, result.usage?.totalTokens, startTime);
+        const durationMs = Date.now() - startTime;
+        await subAgentMetadataStore.finish(spawnId, 'success', {
+          durationMs,
+          tokensUsed: result.usage?.totalTokens,
+          toolCallsCount: 0,
+        }).catch(() => {});
         return {
           agentName: this.config.name,
           content: result.content,
           metadata: {
             tokensUsed: result.usage?.totalTokens,
-            durationMs: Date.now() - startTime,
+            durationMs,
           },
         };
       }
@@ -189,13 +209,19 @@ class SubAgentRunner {
       totalToolCalls = result.toolCalls.length;
 
       await this.publishResult(task, finalContent, result.usage?.totalTokens, startTime);
+      const durationMs = Date.now() - startTime;
+      await subAgentMetadataStore.finish(spawnId, 'success', {
+        durationMs,
+        tokensUsed: result.usage?.totalTokens,
+        toolCallsCount: totalToolCalls,
+      }).catch(() => {});
       return {
         agentName: this.config.name,
         content: finalContent,
         toolCalls: result.toolCalls,
         metadata: {
           tokensUsed: result.usage?.totalTokens,
-          durationMs: Date.now() - startTime,
+          durationMs,
           toolCallsCount: totalToolCalls,
         },
       };
@@ -212,11 +238,17 @@ class SubAgentRunner {
         tags: ['error', 'llm-failure'],
       }).catch(() => {});
 
+      const durationMs = Date.now() - startTime;
+      await subAgentMetadataStore.finish(spawnId, 'error', {
+        durationMs,
+        error: errMsg,
+      }).catch(() => {});
+
       return {
         agentName: this.config.name,
         content: `[Error: ${errMsg}]`,
         metadata: {
-          durationMs: Date.now() - startTime,
+          durationMs,
         },
       };
     }

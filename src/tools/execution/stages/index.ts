@@ -3,6 +3,7 @@
  */
 
 export { DiscoveryStage } from './DiscoveryStage.js';
+export { CacheStage } from './CacheStage.js';
 export { PermissionStage } from './PermissionStage.js';
 export { HookStage } from './HookStage.js';
 export { ConfirmationStage } from './ConfirmationStage.js';

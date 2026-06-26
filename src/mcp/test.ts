@@ -294,8 +294,8 @@ async function runTests() {
   // 安
   const testServerConfig: McpServerConfig = {
     type: 'stdio',
-    command: 'mcp-server-filesystem',
-    args: [__dirname],  // 使用当前目录作为根目
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', __dirname],
   };
 
   try {

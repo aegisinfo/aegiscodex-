@@ -166,16 +166,13 @@ async function testPipelineStages() {
   const pipeline = new ExecutionPipeline(registry);
   const context = createTestContext(PermissionMode.YOLO);
   
-  const stagesExecuted: string[] = [];
-  
-  // Note: ExecutionPipeline doesn't expose on() - stages run automatically
-  // This test verifies the pipeline processes through all stages
-  
+  const stagesExecuted = pipeline.getStageNames();
+
   const testFile = path.join(testDir, 'test.txt');
   await pipeline.execute('Read', { file_path: testFile }, context);
-  
+
   console.log(`   Stages: ${stagesExecuted.join(' → ')}`);
-  console.log(`   All 7 stages executed: ${stagesExecuted.length === 7}`);
+  console.log(`   All ${stagesExecuted.length} stages executed: ${stagesExecuted.length === 8}`);
 }
 
 async function testExecutionHistory() {

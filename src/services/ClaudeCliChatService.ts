@@ -11,9 +11,11 @@
  *
  * `claude --print` doesn't emit OpenAI-style tool-call JSON aegiscode's own
  * Read/Write/Bash loop could intercept, so instead the spawned claude binary
- * runs its own tools directly against this directory. aegiscode's
- * permission mode is passed through via --permission-mode so the
- * subscription session honors the same approval policy the user configured.
+ * runs its own tools directly against this directory. There's no stdin
+ * channel for the subprocess to ask the user a permission question (it's
+ * spawned headless), so it always runs with bypassPermissions regardless of
+ * aegiscode's own permission mode — except 'plan', which is read-only by
+ * design and passed through as-is.
  *
  * Each `claude --print` call exits after one response, so a fresh process
  * has no memory of tool calls the previous turn started. We capture the
@@ -24,9 +26,9 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import type {
   Message,
   ToolDefinition,
@@ -40,6 +42,8 @@ export interface ClaudeCliChatServiceConfig {
   model?: string;
   /** aegiscode permission mode ('default' | 'autoEdit' | 'yolo' | 'plan'); mapped to claude CLI's --permission-mode. */
   permissionMode?: string;
+  /** Kill the subprocess and reject if no reply within this many ms (default 600000). */
+  timeout?: number;
 }
 
 // spawn('claude', ...) relies on process.env.PATH, which is fine in an interactive
@@ -64,9 +68,16 @@ function resolveClaudeBin(): string {
   return cachedClaudeBin ?? 'claude';
 }
 
+// Anything other than 'bypassPermissions' makes the CLI block on an interactive
+// tool-permission prompt — but this subprocess is spawned headless (stdin
+// 'ignore'), so there's no channel to ever answer that prompt. It just hangs
+// until ClaudeCliChatService's own timeout kills it. So regardless of
+// aegiscode's own permission mode, the subprocess always runs with
+// bypassPermissions; 'plan' is the only mode kept distinct since it's
+// read-only by design and doesn't need permission prompts at all.
 const PERMISSION_MODE_MAP: Record<string, string> = {
-  default: 'default',
-  autoEdit: 'acceptEdits',
+  default: 'bypassPermissions',
+  autoEdit: 'bypassPermissions',
   yolo: 'bypassPermissions',
   plan: 'plan',
 };
@@ -120,7 +131,19 @@ export class ClaudeCliChatService implements IChatService {
     // aegiscode already resolved.
     const { systemPrompt, prompt: fullPrompt } = transcriptFor(messages);
     const appendedSystem = [systemPrompt, ASK_DONT_DIG_INSTRUCTION].filter(Boolean).join('\n\n');
-    if (appendedSystem) args.push('--append-system-prompt', appendedSystem);
+
+    // Large system/memory context plus a full resent transcript can blow past
+    // the OS argv size limit (ARG_MAX) when passed as CLI arguments, killing
+    // spawn() with E2BIG. Write the system prompt to a temp file and send the
+    // prompt over stdin instead — neither touches argv, so there's no size cap.
+    let systemPromptFile: string | undefined;
+    let systemPromptDir: string | undefined;
+    if (appendedSystem) {
+      systemPromptDir = mkdtempSync(join(tmpdir(), 'aegis-sysprompt-'));
+      systemPromptFile = join(systemPromptDir, 'system-prompt.txt');
+      writeFileSync(systemPromptFile, appendedSystem);
+      args.push('--append-system-prompt-file', systemPromptFile);
+    }
 
     let prompt: string;
     if (this.sessionId) {
@@ -131,13 +154,27 @@ export class ClaudeCliChatService implements IChatService {
     } else {
       prompt = fullPrompt;
     }
-    args.push('--', prompt);
+
+    const cleanupSystemPromptFile = () => {
+      if (systemPromptDir) { try { rmSync(systemPromptDir, { recursive: true, force: true }); } catch { /* best effort */ } }
+    };
 
     const result = await new Promise<{ content: string; usage?: ChatResponse['usage'] }>((resolve, reject) => {
       // Strip ANTHROPIC_API_KEY so the child claude binary uses its own
       // OAuth subscription login instead of our (possibly out-of-credit) key.
       const { ANTHROPIC_API_KEY, ...env } = process.env;
-      const child = spawn(resolveClaudeBin(), args, { stdio: ['ignore', 'pipe', 'pipe'], env });
+      const child = spawn(resolveClaudeBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], env });
+      child.stdin.write(prompt);
+      child.stdin.end();
+
+      const timeoutMs = this.config.timeout ?? 600000;
+      const timeoutTimer = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(
+          `claude CLI timed out after ${Math.round(timeoutMs / 1000)}s with no response ` +
+          `(likely blocked waiting on a tool-permission prompt that nothing can answer in this context)`
+        ));
+      }, timeoutMs);
 
       let stderr = '';
       let stdoutBuffer = '';
@@ -177,7 +214,9 @@ export class ClaudeCliChatService implements IChatService {
       signal?.addEventListener('abort', onAbort);
 
       child.on('error', err => {
+        clearTimeout(timeoutTimer);
         signal?.removeEventListener('abort', onAbort);
+        cleanupSystemPromptFile();
         reject(new Error(
           `Failed to launch the claude CLI (${err.message}). Install it with: ` +
           `npm install -g @anthropic-ai/claude-code — then run "claude setup-token" ` +
@@ -186,7 +225,9 @@ export class ClaudeCliChatService implements IChatService {
       });
 
       child.on('close', code => {
+        clearTimeout(timeoutTimer);
         signal?.removeEventListener('abort', onAbort);
+        cleanupSystemPromptFile();
         if (stdoutBuffer.trim()) handleLine(stdoutBuffer);
         if (signal?.aborted) {
           const err = new Error('Aborted');
