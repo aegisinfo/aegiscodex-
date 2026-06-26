@@ -1,76 +1,107 @@
 #!/bin/bash
-set -e
-DIR="$(cd "$(dirname "$0")" && pwd)"
-NODE_BIN="$(which node 2>/dev/null || which nodejs 2>/dev/null)"
+set -euo pipefail
 
-echo "⬡ Installing aegiscode..."
+# install.sh — Downloads & installs the prebuilt aegis-cli binary for your platform.
+# Supports: Linux x64/arm64, macOS x64/arm64, Windows x64 (via Git Bash/Cygwin)
+#
+# Usage:
+#   curl -fsSL https://dl.aegiscloud.org/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/aegisinfo/aegiscode/main/install.sh | bash
 
-# Check node
-if [ -z "$NODE_BIN" ]; then
-  echo "  ❌ Node.js not found. Install via: https://nodejs.org or nvm"
-  exit 1
-fi
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+VERSION="${VERSION:-latest}"
+BASE_URL="https://github.com/aegisinfo/aegiscode/releases/${VERSION}/download"
 
-NODE_VER=$($NODE_BIN -v 2>/dev/null | sed 's/v//' || echo "0")
-NODE_MIN="22.0.0"
-if [ "$(printf '%s\n' "$NODE_MIN" "$NODE_VER" | sort -V | head -n1)" != "$NODE_MIN" ]; then
-  echo "  ❌ Node.js >= $NODE_MIN required (got v$NODE_VER)"
-  echo "  Install via: https://nodejs.org or nvm"
-  exit 1
-fi
+# ── Platform detection ──────────────────────────────────────────────────────
 
-cd "$DIR"
+detect_binary() {
+  local os arch key
 
-# Two distributions ship this same script:
-#  - source clone: no prebuilt bundle yet, needs `npm install && npm run build`
-#    (esbuild.mjs/src/ are present)
-#  - release zip from dl.aegiscloud.org: already has aegiscode.js prebuilt and
-#    node_modules installed (done in CI), but no esbuild.mjs/src/ to build from
-if [ -f "$DIR/aegiscode.js" ]; then
-  ENTRY="$DIR/aegiscode.js"
-  if [ ! -d "$DIR/node_modules" ]; then
-    echo "  Installing dependencies..."
-    npm install --silent --omit=dev
+  case "$(uname -s)" in
+    Linux)  os="linux"  ;;
+    Darwin) os="darwin" ;;
+    MINGW*|MSYS*|CYGWIN*) os="win" ;;
+    *)
+      echo "❌ Unsupported OS: $(uname -s)"
+      exit 1
+      ;;
+  esac
+
+  case "$(uname -m)" in
+    x86_64|amd64) arch="x64"   ;;
+    aarch64|arm64) arch="arm64" ;;
+    armv7l|armv8l) arch="arm64" ;;  # treat 32-bit ARM as arm64 fallback
+    *)
+      echo "❌ Unsupported architecture: $(uname -m)"
+      exit 1
+      ;;
+  esac
+
+  if [ "$os" = "win" ]; then
+    echo "aegis-cli-win-x64.exe"
+  else
+    echo "aegis-cli-${os}-${arch}"
   fi
-else
-  ENTRY="$DIR/dist/main.js"
-  echo "  Installing dependencies..."
-  npm install --silent
+}
 
-  echo "  Building..."
-  npm run build
+BINARY_NAME=$(detect_binary)
+DOWNLOAD_URL="${BASE_URL}/${BINARY_NAME}"
+
+# ── Install ─────────────────────────────────────────────────────────────────
+
+echo "⬡ Installing aegis-cli for $(uname -s)-$(uname -m)..."
+
+mkdir -p "$INSTALL_DIR"
+TARGET="${INSTALL_DIR}/aegis"
+
+# Download
+echo "  Downloading ${DOWNLOAD_URL}..."
+if command -v curl &>/dev/null; then
+  curl -fsSL "$DOWNLOAD_URL" -o "$TARGET"
+elif command -v wget &>/dev/null; then
+  wget -q "$DOWNLOAD_URL" -O "$TARGET"
+else
+  echo "❌ Need curl or wget to download."
+  exit 1
 fi
 
-# Create config dir
+chmod +x "$TARGET"
+
+# ── PATH setup ──────────────────────────────────────────────────────────────
+
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+  SHELL_CONFIG=""
+  case "${SHELL:-}" in
+    */zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
+    */bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+  esac
+  if [ -n "$SHELL_CONFIG" ] && [ -f "$SHELL_CONFIG" ]; then
+    echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$SHELL_CONFIG"
+    echo "  ✅ Added ${INSTALL_DIR} to PATH in ${SHELL_CONFIG}"
+  fi
+  export PATH="${PATH}:${INSTALL_DIR}"
+fi
+
+# ── Config dir ──────────────────────────────────────────────────────────────
+
 mkdir -p "$HOME/.aegiscode"
 
-# Create wrapper — always cd to project dir so .env loads correctly
-mkdir -p "$HOME/.local/bin"
-cat > "$HOME/.local/bin/aegis" << WRAPPER
-#!/bin/bash
-cd "$DIR"
-exec "$NODE_BIN" "$ENTRY" "\$@"
-WRAPPER
-chmod +x "$HOME/.local/bin/aegis"
-
-# Add to PATH
-if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-  echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> ~/.bashrc
-  export PATH="$HOME/.local/bin:$PATH"
-fi
+# ── Done ────────────────────────────────────────────────────────────────────
 
 echo ""
-echo "✓ aegiscode installed"
+echo "✓ aegis-cli installed to ${TARGET}"
 echo ""
 echo "  Run:          aegis"
 echo "  Switch model: /model claude | /model deepseek | /model groq"
 echo "  Council:      /council \"your question\""
 echo "  Memory:       /memory"
 echo ""
-echo "  Add API keys to: $DIR/.env"
-echo "    ANTHROPIC_API_KEY=sk-ant-..."
-echo "    DEEPSEEK_API_KEY=sk-..."
-echo "    GROQ_API_KEY=gsk_..."
-echo "    AEGISCLOUD_API_KEY=aegis_..."
+echo "  Set API keys (one of):"
+echo "    export ANTHROPIC_API_KEY=sk-ant-..."
+echo "    export DEEPSEEK_API_KEY=sk-..."
+echo "    export OPENAI_API_KEY=sk-..."
+echo "    export AEGISCLOUD_API_KEY=aegis_..."
+echo ""
+echo "  Or create ~/.aegiscode/config.json"
 echo ""
 echo "  More info: https://aegiscloud.org"

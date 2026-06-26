@@ -20,31 +20,42 @@ mkdir -p "$DIST_DIR"
 echo "[2/5] Building Windows .exe..."
 npx pkg dist/main.js \
   --targets node22-win-x64 \
-  --output "$DIST_DIR/$APP_NAME.exe" \
+  --output "$DIST_DIR/$APP_NAME-win-x64.exe" \
   --compress Brotli
 
-# Step 4: Build Linux binary (for .deb)
-echo "[3/5] Building Linux binary..."
+# Step 4: Build Linux binaries
+echo "[3/5] Building Linux x64 binary..."
 npx pkg dist/main.js \
   --targets node22-linux-x64 \
-  --output "$DIST_DIR/$APP_NAME-linux" \
+  --output "$DIST_DIR/$APP_NAME-linux-x64" \
   --compress Brotli
 
-# Step 5: Build macOS binary
-echo "[4/5] Building macOS binary..."
+echo "[3b/5] Building Linux arm64 binary..."
+npx pkg dist/main.js \
+  --targets node22-linux-arm64 \
+  --output "$DIST_DIR/$APP_NAME-linux-arm64" \
+  --compress Brotli
+
+# Step 5: Build macOS binaries
+echo "[4/5] Building macOS x64 binary..."
 npx pkg dist/main.js \
   --targets node22-macos-x64 \
-  --output "$DIST_DIR/$APP_NAME-macos" \
+  --output "$DIST_DIR/$APP_NAME-darwin-x64" \
   --compress Brotli
 
-# Step 6: Create .deb package
+echo "[4b/5] Building macOS arm64 binary..."
+npx pkg dist/main.js \
+  --targets node22-macos-arm64 \
+  --output "$DIST_DIR/$APP_NAME-darwin-arm64" \
+  --compress Brotli
+
+# Step 6: Create .deb package (uses linux-x64 binary)
 echo "[5/5] Creating .deb package..."
-DEB_DIR="$DIST_DIR/deb-build/$APP_NAME_$VERSION-1_amd64"
+DEB_DIR="$DIST_DIR/deb-build/${APP_NAME}_${VERSION}-1_amd64"
 mkdir -p "$DEB_DIR/DEBIAN"
 mkdir -p "$DEB_DIR/usr/bin"
 mkdir -p "$DEB_DIR/usr/share/doc/$APP_NAME"
 
-# Control file
 cat > "$DEB_DIR/DEBIAN/control" <<EOF
 Package: $APP_NAME
 Version: $VERSION
@@ -58,19 +69,11 @@ Description: AEGIS CLI - An AI-powered coding assistant
 Homepage: https://github.com/aegisinfo/aegiscode
 EOF
 
-# Install the binary
-cp "$DIST_DIR/$APP_NAME-linux" "$DEB_DIR/usr/bin/$APP_NAME"
+cp "$DIST_DIR/$APP_NAME-linux-x64" "$DEB_DIR/usr/bin/$APP_NAME"
 chmod 755 "$DEB_DIR/usr/bin/$APP_NAME"
-
-# Copy license
 cp -f "$ROOT_DIR/LICENSE" "$DEB_DIR/usr/share/doc/$APP_NAME/" 2>/dev/null || true
-
-# Build .deb
-dpkg-deb --build "$DEB_DIR" "$DIST_DIR/$APP_NAME_$VERSION-1_amd64.deb"
-
-# Clean up build files
+dpkg-deb --build "$DEB_DIR" "$DIST_DIR/${APP_NAME}_${VERSION}-1_amd64.deb"
 rm -rf "$DIST_DIR/deb-build"
-rm -f "$DIST_DIR/$APP_NAME-linux"
 
 # Summary
 echo ""
@@ -81,13 +84,14 @@ echo ""
 ls -lh "$DIST_DIR/"
 echo ""
 
-# Verify
-if [ -f "$DIST_DIR/$APP_NAME.exe" ]; then
-  echo "✅ Windows: $DIST_DIR/$APP_NAME.exe"
-fi
-if [ -f "$DIST_DIR/$APP_NAME-macos" ]; then
-  echo "✅ macOS:   $DIST_DIR/$APP_NAME-macos"
-fi
-if [ -f "$DIST_DIR/${APP_NAME}_${VERSION}-1_amd64.deb" ]; then
-  echo "✅ Linux:   $DIST_DIR/${APP_NAME}_${VERSION}-1_amd64.deb"
-fi
+for f in "$DIST_DIR"/*; do
+  name="$(basename "$f")"
+  case "$name" in
+    $APP_NAME-win-x64.exe)    echo "✅ Windows x64:   $name ($(du -h "$f" | cut -f1))" ;;
+    $APP_NAME-linux-x64)      echo "✅ Linux x64:     $name ($(du -h "$f" | cut -f1))" ;;
+    $APP_NAME-linux-arm64)    echo "✅ Linux arm64:   $name ($(du -h "$f" | cut -f1))" ;;
+    $APP_NAME-darwin-x64)     echo "✅ macOS x64:     $name ($(du -h "$f" | cut -f1))" ;;
+    $APP_NAME-darwin-arm64)   echo "✅ macOS arm64:   $name ($(du -h "$f" | cut -f1))" ;;
+    *.deb)                    echo "✅ .deb package:  $name ($(du -h "$f" | cut -f1))" ;;
+  esac
+done

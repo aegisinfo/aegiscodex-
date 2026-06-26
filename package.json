@@ -1,18 +1,18 @@
 {
   "name": "aegiscode",
-  "version": "3.1.10",
-  "description": "A CLI Coding Agent inspired by Claude Code - An AI-powered coding assistant that can read, write, and execute code",
+  "version": "3.2.0",
+  "description": "AEGIS CLI — AI-powered coding assistant. Downloads and runs the prebuilt aegis-cli binary.",
   "type": "module",
-  "main": "dist/main.js",
   "bin": {
-    "aegis": "./dist/main.js",
-    "aegis-cli": "./dist/main.js",
-    "aegis-gui": "./gui/run-gui.cjs"
+    "aegis": "./bin/cli.js",
+    "aegis-cli": "./bin/cli.js"
   },
   "scripts": {
-    "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
+    "postinstall": "node scripts/download-binary.mjs",
+    "prepublishOnly": "node scripts/download-binary.mjs",
     "build": "node esbuild.mjs",
-    "publish:release": "node esbuild.mjs",
+    "build:standalone": "bash build-standalone.sh",
+    "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "start": "node --no-deprecation dist/main.js",
     "typecheck": "tsc --noEmit",
     "test:prompts": "tsx src/prompts/test.ts",
@@ -20,10 +20,7 @@
     "test:pipeline": "tsx src/tools/execution/test.ts",
     "test:context": "tsx src/context/test.ts",
     "test:mcp": "tsx src/mcp/test.ts",
-    "test:store": "tsx src/store/test.ts",
-    "gui": "node ./gui/run-gui.cjs",
-    "obfuscate": "node scripts/obfuscate.mjs",
-    "prepublishOnly": "npm run build && npm run obfuscate"
+    "test:store": "tsx src/store/test.ts"
   },
   "keywords": [
     "cli",
@@ -49,52 +46,18 @@
     "url": "https://github.com/aegisinfo/aegiscode/issues"
   },
   "files": [
-    "dist/main.js",
-    "gui/run-gui.cjs",
+    "bin/",
+    "scripts/",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=22.0.0"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.3",
-    "@xenova/transformers": "^2.17.2",
-    "chalk": "^5.4.1",
-    "dotenv": "^17.4.2",
-    "fuse.js": "^7.4.1",
-    "glob": "^13.0.0",
-    "ink": "^7.0.5",
-    "ink-text-input": "^6.0.0",
-    "js-tiktoken": "^1.0.21",
-    "lowlight": "^3.3.0",
-    "minimatch": "^10.1.1",
-    "nanoid": "^5.1.6",
-    "openai": "^4.77.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "sql.js": "^1.14.1",
-    "string-width": "^8.1.1",
-    "uuid": "^14.0.0",
-    "yaml": "^2.8.2",
-    "yargs": "^17.7.2",
-    "zod": "^3.24.2",
-    "zod-to-json-schema": "^3.25.1",
-    "zustand": "^5.0.14"
-  },
   "devDependencies": {
-    "@types/minimatch": "^6.0.0",
     "@types/node": "^22.19.19",
-    "@types/react": "^19.2.16",
-    "@types/react-dom": "^19.2.3",
-    "@types/sql.js": "^1.4.11",
-    "@types/uuid": "^11.0.0",
-    "@types/yargs": "^17.0.33",
-    "electron": "^42.4.1",
     "esbuild": "^0.28.0",
-    "react-devtools-core": "^7.0.1",
     "tsx": "^4.22.4",
-    "javascript-obfuscator": "^5.4.3",
     "typescript": "^5.7.2"
   }
 }

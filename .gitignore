@@ -10,6 +10,9 @@ SECURITY_FRAMEWORK_README.md
 .env.save
 deepseek-roocode-proxy/
 
+# Downloaded postinstall binary
+/bin/
+
 # Built binaries
 aegiscode-linux
 aegiscode.exe
