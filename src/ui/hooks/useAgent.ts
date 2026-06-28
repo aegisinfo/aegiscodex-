@@ -1,0 +1,284 @@
+/**
+ * useAgent - Agent lifecycle hook
+ *
+ * Extracts agent initialization, context management, and model switching
+ * from AegisInterface into a focused, testable hook.
+ */
+
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { Agent } from '../../agent/Agent.js';
+import { ContextManager } from '../../context/index.js';
+import { sessionActions, appActions, configActions, getState, subscribe } from '../../store/index.js';
+import type { ModelConfig } from '../../config/types.js';
+
+export interface UseAgentOptions {
+  apiKey: string;
+  baseURL?: string;
+  model?: string;
+  debug?: boolean;
+  resumeSessionId?: string;
+}
+
+export interface UseAgentResult {
+  agentRef: React.MutableRefObject<Agent | null>;
+  contextManagerRef: React.MutableRefObject<ContextManager | null>;
+  isInitializing: boolean;
+  initError: string | null;
+  currentModel: string | undefined;
+  setCurrentModel: React.Dispatch<React.SetStateAction<string | undefined>>;
+  handleSetupComplete: () => Promise<void>;
+  getAgent: () => Agent | null;
+  getContextManager: () => ContextManager | null;
+}
+
+async function initHooks(sessionId: string): Promise<void> {
+  try {
+    const { ConfigManager } = await import('../../config/index.js');
+    const cm = ConfigManager.getInstance();
+    const { initializeHooks, onSessionStart } = await import('../../hooks/index.js');
+    initializeHooks(cm.getConfig().hooks || {});
+    await onSessionStart(sessionId, process.cwd());
+  } catch { /* non-fatal */ }
+}
+
+export function useAgent(options: UseAgentOptions): UseAgentResult {
+  const { apiKey, baseURL, model, debug, resumeSessionId } = options;
+
+  const agentRef = useRef<Agent | null>(null);
+  const contextManagerRef = useRef<ContextManager | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
+
+  const currentModelIdRef = useRef(model);
+  const [currentModel, setCurrentModel] = useState(model);
+
+  const getAgent = useCallback(() => agentRef.current, []);
+  const getContextManager = useCallback(() => contextManagerRef.current, []);
+
+  // Stable option refs (prevents recreation of callbacks)
+  const debugRef = useRef(debug);
+  debugRef.current = debug;
+  const modelRef = useRef(model);
+  modelRef.current = model;
+
+  // ==================== Setup Completion ====================
+  const handleSetupComplete = useCallback(async () => {
+    setInitError(null);
+    setIsInitializing(true);
+    try {
+      const { ConfigManager } = await import('../../config/index.js');
+      const cm = ConfigManager.getInstance();
+      await cm.initialize();
+      const newModel = cm.getDefaultModel();
+
+      // If we already have a ContextManager (e.g. session was loaded earlier),
+      // preserve it instead of creating a new one
+      if (!contextManagerRef.current) {
+        contextManagerRef.current = new ContextManager({ compressionThreshold: 100000 });
+      }
+      const ctxManager = contextManagerRef.current;
+
+      // Only create a new session if none exists
+      let sid = ctxManager.getCurrentSessionId();
+      if (!sid) {
+        sid = await ctxManager.createSession();
+      }
+      sessionActions().setSessionId(sid);
+
+      agentRef.current = await Agent.create({
+        apiKey: newModel.apiKey!,
+        baseURL: newModel.baseURL,
+        model: newModel.model!,
+        requireConfirmation: newModel.requireConfirmation,
+      });
+
+      const { initializeCustomCommands } = await import('../../slash-commands/index.js');
+      await initializeCustomCommands(process.cwd());
+
+      import('../../skills/index.js').then(({ initializeSkills }) => {
+        initializeSkills(process.cwd()).catch(() => {});
+      }).catch(() => {});
+
+      await initHooks(sid);
+
+      setIsInitializing(false);
+    } catch (err) {
+      setInitError(err instanceof Error ? err.message : String(err));
+      setIsInitializing(false);
+    }
+  }, []);
+
+  // ==================== Initialization ====================
+  useEffect(() => {
+    const initAgent = async () => {
+      if (getState().app.initializationStatus === 'needsSetup') return;
+      try {
+        if (debugRef.current) {
+          console.log('[DEBUG] Initializing Agent and ContextManager...');
+        }
+
+        const ctxManager = new ContextManager({ compressionThreshold: 100000 });
+        contextManagerRef.current = ctxManager;
+
+        let currentSessionId: string;
+
+        if (resumeSessionId) {
+          const loaded = await ctxManager.loadSession(resumeSessionId);
+          if (loaded) {
+            currentSessionId = resumeSessionId;
+            const contextMessages = ctxManager.getMessages();
+            // Batch-restore all messages in a single store update so MessageList's
+            // scrollLineOffset initializes correctly (showing the bottom of history).
+            // Adding messages one-by-one via addUserMessage/addAssistantMessage skips
+            // auto-scroll for assistant messages, leaving scrollLineOffset at 0 (top).
+            const restoredMessages: import('../../store/types.js').SessionMessage[] =
+              contextMessages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .map((m, i) => ({
+                  id: `restored-${i}-${Date.now()}`,
+                  role: m.role as 'user' | 'assistant',
+                  content: m.content,
+                  timestamp: m.timestamp || Date.now(),
+                }));
+            sessionActions().restoreSession(currentSessionId, restoredMessages);
+            if (debugRef.current) {
+              console.log('[DEBUG] Loaded session with', contextMessages.length, 'messages');
+            }
+          } else {
+            if (debugRef.current) {
+              console.log('[DEBUG] Failed to load session, creating new one');
+            }
+            currentSessionId = await ctxManager.createSession();
+          }
+        } else {
+          currentSessionId = await ctxManager.createSession();
+        }
+
+        sessionActions().setSessionId(currentSessionId);
+
+        const { ConfigManager } = await import('../../config/index.js');
+        const cm = ConfigManager.getInstance();
+        await cm.initialize();
+        const requireConfirmation = cm.getDefaultModel().requireConfirmation;
+
+        agentRef.current = await Agent.create({ apiKey, baseURL, model, requireConfirmation });
+
+        const { initializeCustomCommands } = await import('../../slash-commands/index.js');
+        const customCmdResult = await initializeCustomCommands(process.cwd());
+        if (debugRef.current && customCmdResult.count > 0) {
+          console.log('[DEBUG] Loaded', customCmdResult.count, 'custom commands');
+        }
+
+        import('../../skills/index.js').then(({ initializeSkills }) => {
+          initializeSkills(process.cwd()).catch(() => {});
+        }).catch(() => {});
+
+        await initHooks(currentSessionId);
+
+        setIsInitializing(false);
+
+        if (debugRef.current) {
+          console.log('[DEBUG] Agent initialized successfully, sessionId:', currentSessionId);
+        }
+      } catch (error) {
+        setInitError(error instanceof Error ? error.message : '');
+        setIsInitializing(false);
+      }
+    };
+
+    initAgent();
+
+    return () => {
+      contextManagerRef.current?.cleanup().catch(() => {});
+    };
+  }, [apiKey, baseURL, model, debug, resumeSessionId]);
+
+  // ==================== Model Switch Subscription ====================
+  // Tracks both which model is active AND that model's own settings
+  // (requireConfirmation/allowedTools/disallowedTools), since the running
+  // Agent instance freezes these at creation time. Without watching the
+  // settings too, toggling e.g. `/confirm off` for the *currently active*
+  // model would silently have no effect until the user switched models away
+  // and back.
+  const currentModelSettingsRef = useRef<string>('');
+  useEffect(() => {
+    // Seed the snapshot from current state so the first store change after
+    // mount doesn't look like a settings change and trigger a spurious rebuild.
+    const initialModels = getState().config.config?.models || [];
+    const initialFound = currentModelIdRef.current
+      ? initialModels.find((m: ModelConfig) => m.id === currentModelIdRef.current)
+      : undefined;
+    if (initialFound) {
+      currentModelSettingsRef.current = JSON.stringify({
+        requireConfirmation: initialFound.requireConfirmation,
+        allowedTools: initialFound.allowedTools,
+        disallowedTools: initialFound.disallowedTools,
+      });
+    }
+
+    const rebuildAgent = (found: ModelConfig, displayName: string) => {
+      if (!agentRef.current) return;
+      import('../../agent/Agent.js').then(({ Agent }) => {
+        const apiKey = found.apiKey || process.env.OPENAI_API_KEY || '';
+        if (!apiKey) return;
+        Agent.create({
+          apiKey,
+          baseURL: found.baseURL || (found as ModelConfig & { baseUrl?: string }).baseUrl,
+          model: displayName,
+          requireConfirmation: found.requireConfirmation,
+        }).then(agent => {
+          agentRef.current = agent;
+        }).catch(() => {});
+      }).catch(() => {});
+    };
+
+    const unsubscribe = subscribe((state) => {
+      const newModelId = state.config.config?.currentModelId;
+      if (!newModelId) return;
+      const models = state.config.config?.models || [];
+      const found = models.find((m: ModelConfig) => m.id === newModelId);
+      if (!found) return;
+
+      const settingsSnapshot = JSON.stringify({
+        requireConfirmation: found.requireConfirmation,
+        allowedTools: found.allowedTools,
+        disallowedTools: found.disallowedTools,
+      });
+
+      const modelChanged = newModelId !== currentModelIdRef.current;
+      const settingsChanged = settingsSnapshot !== currentModelSettingsRef.current;
+
+      if (!modelChanged && !settingsChanged) return;
+
+      currentModelIdRef.current = newModelId;
+      currentModelSettingsRef.current = settingsSnapshot;
+
+      const displayName = found.model || found.id || newModelId;
+      setCurrentModel(displayName);
+      modelRef.current = displayName;
+
+      // Apply requireConfirmation synchronously on the live Agent instance so
+      // toggling /confirm takes effect immediately — the full rebuild below
+      // is async and would otherwise leave a window where agentRef.current
+      // still has the stale value if a message is sent before it resolves.
+      if (!modelChanged && agentRef.current) {
+        agentRef.current.setRequireConfirmation(found.requireConfirmation);
+      }
+
+      rebuildAgent(found, displayName);
+    });
+    return unsubscribe;
+  }, []);
+
+  return {
+    agentRef,
+    contextManagerRef,
+    isInitializing,
+    initError,
+    currentModel,
+    setCurrentModel,
+    handleSetupComplete,
+    getAgent,
+    getContextManager,
+  };
+}

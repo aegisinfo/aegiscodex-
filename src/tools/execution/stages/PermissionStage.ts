@@ -1,0 +1,287 @@
+/**
+ * Permission Stage - 权限检查阶段
+ * 
+ */
+
+import { ToolKind } from '../../types.js';
+import {
+  PermissionMode,
+  PermissionResult,
+  type PipelineStage,
+  type ToolExecution,
+  type PermissionConfig,
+  type PermissionCheckResult,
+} from '../types.js';
+import { PermissionChecker } from '../../validation/PermissionChecker.js';
+import { SensitiveFileDetector, SensitivityLevel } from '../../validation/SensitiveFileDetector.js';
+import { onPermissionRequest } from '../../../hooks/index.js';
+
+export class PermissionStage implements PipelineStage {
+  readonly name = 'permission';
+  private permissionChecker: PermissionChecker;
+  private defaultMode: PermissionMode;
+
+  constructor(
+    config?: Partial<PermissionConfig>,
+    private sessionApprovals?: Set<string>,
+    private sessionDenials?: Set<string>,
+    defaultMode: PermissionMode = PermissionMode.DEFAULT
+  ) {
+    this.permissionChecker = new PermissionChecker(config);
+    this.defaultMode = defaultMode;
+  }
+
+  async process(execution: ToolExecution): Promise<void> {
+    const tool = execution._internal.tool;
+
+    if (!tool) {
+      execution.abort('Tool not found in execution context');
+      return;
+    }
+
+    // 1. 创建工具调用实例（含 Zod 验
+    try {
+      const invocation = tool.build(execution.params);
+      execution._internal.invocation = invocation;
+    } catch (error) {
+      execution.abort(
+        `Parameter validation failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return;
+    }
+
+    // 2. 构建权限签
+    const signature = PermissionChecker.buildSignature({
+      toolName: tool.name,
+      params: execution.params,
+      tool,
+    });
+    execution._internal.permissionSignature = signature;
+
+    // 3. 检查会话拒绝列
+    if (this.sessionDenials?.has(signature)) {
+      // Phrased to avoid "permission/denied" vocabulary: this exact string becomes
+      // llmContent in a real tool_result, and the model can later free-associate a
+      // hallucinated continuation of it in an unrelated turn with no tool call.
+      execution.abort('Not executed: you tried this exact action earlier in this session and the user declined it. Choose a different approach.');
+      return;
+    }
+
+    // 4. 检查会话批准列
+    if (this.sessionApprovals?.has(signature)) {
+      // 已在会话中批准，跳过权限检
+      return;
+    }
+
+    // 5. 执行权限检
+    let checkResult = this.permissionChecker.check({
+      toolName: tool.name,
+      params: execution.params,
+      tool,
+    });
+
+    // 6. 应用权限模式覆
+    const currentMode = execution.context.permissionMode || this.defaultMode;
+    checkResult = this.applyModeOverrides(tool.kind, checkResult, currentMode);
+
+    // 7. 根据结果采取行
+    switch (checkResult.result) {
+      case PermissionResult.DENY:
+        execution.abort(checkResult.reason || 'Not executed: this action is not allowed under current settings. Choose a different approach.');
+        return;
+
+      case PermissionResult.ASK:
+        // 执
+        const hookDecision = await this.executePermissionHook(execution, tool.name);
+        if (hookDecision === 'approve') {
+          // Hook 批准，跳过确
+          break;
+        } else if (hookDecision === 'deny') {
+          // Hook 拒
+          execution.abort('Not executed: a configured hook excludes this action. Choose a different approach.');
+          return;
+        }
+        // Hook 返回 ask 或无 hook，继续标记需要确
+        execution._internal.needsConfirmation = true;
+        execution._internal.confirmationReason =
+          checkResult.reason || 'This operation requires confirmation';
+        break;
+
+      case PermissionResult.ALLOW:
+        // 继续执
+        break;
+    }
+
+    // 7. 额外安全检查：敏感文
+    this.checkSensitiveFiles(execution);
+
+    // 8. 额外安全检查：终端操纵（tmux/screen 注入按键到另一个会话
+    this.checkTerminalPiloting(execution);
+  }
+
+  /**
+   * Detects Bash commands that pilot another terminal session by injecting
+   * keystrokes (tmux send-keys, screen -X stuff, etc.). This is the same
+   * vector a model used to mutate ~/.aegiscode/config.json via a second
+   * live aegis instance while looping unattended — the injected keystrokes
+   * are indistinguishable from real user input to the receiving process, so
+   * the only place to catch this is here, before the command runs. Forces
+   * confirmation regardless of requireConfirmation or session approvals.
+   */
+  private checkTerminalPiloting(execution: ToolExecution): void {
+    const tool = execution._internal.tool;
+    if (!tool || tool.name !== 'Bash') return;
+
+    const command = execution.params.command;
+    if (typeof command !== 'string') return;
+
+    const PILOTING_PATTERNS = [
+      /\btmux\s+send-keys\b/,
+      /\btmux\s+(?:run-shell|wait-for)\b/,
+      /\bscreen\s+-S\s+\S+\s+-X\s+stuff\b/,
+      /\bexpect\s+-c\b/,
+    ];
+
+    if (PILOTING_PATTERNS.some((re) => re.test(command))) {
+      execution._internal.needsConfirmation = true;
+      execution._internal.forceConfirmation = true;
+      execution._internal.confirmationReason =
+        'This command injects input into another terminal session — it can mutate shared ' +
+        'config/files exactly like a real user typing, bypassing normal confirmation settings.';
+    }
+  }
+
+  /**
+   * 
+   */
+  private applyModeOverrides(
+    toolKind: ToolKind,
+    checkResult: PermissionCheckResult,
+    permissionMode: PermissionMode
+  ): PermissionCheckResult {
+    // 1. YOLO 模式：批准所有（最高优先
+    if (permissionMode === PermissionMode.YOLO) {
+      return {
+        result: PermissionResult.ALLOW,
+        matchedRule: 'mode:yolo',
+        reason: 'YOLO mode: auto-approve all operations',
+      };
+    }
+
+    // 2. PLAN 模式：拒绝非只读工
+    if (permissionMode === PermissionMode.PLAN) {
+      if (toolKind !== ToolKind.ReadOnly) {
+        return {
+          result: PermissionResult.DENY,
+          matchedRule: 'mode:plan',
+          reason: 'Plan mode: only read-only tools allowed',
+        };
+      }
+    }
+
+    // 3. 已被 deny 规则拒绝，不覆
+    if (checkResult.result === PermissionResult.DENY) {
+      return checkResult;
+    }
+
+    // 4. 已被 allow 规则批准，不覆
+    if (checkResult.result === PermissionResult.ALLOW) {
+      return checkResult;
+    }
+
+    // 5. 只读工具：所有模式下都批
+    if (toolKind === ToolKind.ReadOnly) {
+      return {
+        result: PermissionResult.ALLOW,
+        matchedRule: `mode:${permissionMode}:readonly`,
+        reason: 'Read-only tools are auto-approved',
+      };
+    }
+
+    // 6. AUTO_EDIT 模式：批准 Write 工
+    if (permissionMode === PermissionMode.AUTO_EDIT && toolKind === ToolKind.Write) {
+      return {
+        result: PermissionResult.ALLOW,
+        matchedRule: 'mode:autoEdit:write',
+        reason: 'AUTO_EDIT mode: auto-approve write tools',
+      };
+    }
+
+    // 7. 其他情况：保持原检查结果（通常
+    return checkResult;
+  }
+
+  /**
+   * 
+   */
+  private checkSensitiveFiles(execution: ToolExecution): void {
+    const tool = execution._internal.tool;
+    if (!tool) return;
+
+    // 只检查写入相关工
+    if (tool.kind === ToolKind.ReadOnly) return;
+
+    // 获取受影响的文件路
+    const affectedPaths = this.getAffectedPaths(execution);
+    if (affectedPaths.length === 0) return;
+
+    // 检查敏感文
+    const sensitiveFiles = SensitiveFileDetector.filterSensitive(
+      affectedPaths,
+      SensitivityLevel.MEDIUM
+    );
+
+    if (sensitiveFiles.length === 0) return;
+
+    // 高敏感文件直接拒
+    const highSensitive = sensitiveFiles.filter(
+      f => f.result.level === SensitivityLevel.HIGH
+    );
+
+    if (highSensitive.length > 0) {
+      const files = highSensitive.map(f => f.path).join(', ');
+      execution.abort(`Not executed: these files are excluded for safety — ${files}. Choose a different approach.`);
+      return;
+    }
+
+    // 中敏感文件需要确
+    execution._internal.needsConfirmation = true;
+    const reasons = sensitiveFiles.map(f => `${f.path}: ${f.result.reason}`);
+    execution._internal.confirmationReason = `Sensitive file access detected:\n${reasons.join('\n')}`;
+  }
+
+  /**
+   * 
+   */
+  private getAffectedPaths(execution: ToolExecution): string[] {
+    const params = execution.params;
+
+    // 从常见参数名中提取路
+    const pathKeys = ['file_path', 'path', 'target', 'destination'];
+    const paths: string[] = [];
+
+    for (const key of pathKeys) {
+      if (typeof params[key] === 'string') {
+        paths.push(params[key] as string);
+      }
+    }
+
+    return paths;
+  }
+
+  /**
+   * 
+   */
+  private async executePermissionHook(
+    execution: ToolExecution,
+    toolName: string
+  ): Promise<'approve' | 'deny' | 'ask'> {
+    return onPermissionRequest(
+      toolName,
+      execution.params as Record<string, unknown>,
+      execution.context.sessionId || 'unknown',
+      execution.context.workspaceRoot || process.cwd(),
+      execution.context.permissionMode
+    );
+  }
+}

@@ -1,0 +1,49 @@
+/**
+ * LoadingIndicator - 加载指示器组件
+ */
+
+import React from 'react';
+import { Box, Text } from 'ink';
+
+import { themeManager } from '../../themes/index.js';
+
+interface LoadingIndicatorProps {
+  /** 是否显示 */
+  isVisible?: boolean;
+  /** 加载文本 */
+  text?: string;
+  /** 显示详情 */
+  details?: string;
+}
+
+/**
+ * 
+ */
+export const LoadingIndicator: React.FC<LoadingIndicatorProps> = React.memo(({
+  isVisible = true,
+  text = 'Thinking...',
+  details,
+}) => {
+  const theme = themeManager.getTheme();
+
+  if (!isVisible) {
+    return null;
+  }
+
+  return (
+    <Box flexDirection="row" paddingX={1} marginY={1}>
+      <Box flexDirection="column">
+        <Text color={theme.colors.warning}>{text}</Text>
+        {details && (
+          <Text color={theme.colors.text.muted} dimColor>
+            {details}
+          </Text>
+        )}
+      </Box>
+    </Box>
+  );
+});
+
+LoadingIndicator.displayName = 'LoadingIndicator';
+
+export default LoadingIndicator;

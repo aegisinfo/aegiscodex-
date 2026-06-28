@@ -1,0 +1,361 @@
+/**
+ * InputArea - 输入区域组件
+ * 
+ * 
+ * 
+ */
+
+import React, { useCallback, useState, useMemo, useEffect, useRef, memo } from 'react';
+import { Box, Text, useInput } from 'ink';
+
+const PromptGlyph: React.FC<{ isProcessing: boolean; lockedIn: boolean; glowPhase: number; color: string; idleColor: string }> = memo(({ isProcessing, lockedIn, glowPhase, color, idleColor }) => {
+  const displayColor = (isProcessing && lockedIn)
+    ? ELECTRIC_COLORS[glowPhase % ELECTRIC_COLORS.length]
+    : idleColor;
+  return <Text color={displayColor} bold>□</Text>;
+});
+PromptGlyph.displayName = 'PromptGlyph';
+import { CustomTextInput } from './CustomTextInput.js';
+import { CommandSuggestions } from './CommandSuggestions.js';
+
+import { themeManager } from '../../themes/index.js';
+import { FocusId, focusManager } from '../../focus/index.js';
+import { getState, useIsThinking, usePendingCommands, useCurrentCommand } from '../../../store/index.js';
+import { vanillaStore } from '../../../store/vanilla.js';
+import { getStreamingContent } from '../../../store/streaming-buffer.js';
+
+// Electric blue color ramp — cycles fast to simulate voltage/energy
+const ELECTRIC_COLORS = [
+  '#0055FF', '#0077FF', '#0099FF', '#00AAFF',
+  '#00CCFF', '#00EEFF', '#00FFFF', '#00EEFF',
+  '#00CCFF', '#00AAFF', '#0099FF', '#0077FF',
+];
+
+interface InputAreaProps {
+  /** 提交回调 */
+  onSubmit?: (value: string) => void;
+}
+
+/**
+ * 
+ * 
+ */
+export const InputArea: React.FC<InputAreaProps> = React.memo(
+  ({
+    onSubmit,
+  }) => {
+    // 使用 ref 保持回调引用稳
+    const onSubmitRef = useRef(onSubmit);
+    
+    // 更新 ref（不触发重新渲
+    useEffect(() => {
+      onSubmitRef.current = onSubmit;
+    });
+    
+    // 自管理命令历史（使用 ref 避免状态变化导致重新渲染传播到父组
+    const historyRef = useRef<string[]>([]);
+    const historyIndexRef = useRef(-1);
+    
+    const addToHistory = useCallback((command: string) => {
+      if (command.trim()) {
+        const history = historyRef.current;
+        if (history[history.length - 1] !== command) {
+          history.push(command);
+          if (history.length > 100) history.shift();
+        }
+      }
+      historyIndexRef.current = -1;
+    }, []);
+    
+    const getPreviousCommand = useCallback(() => {
+      const history = historyRef.current;
+      if (history.length === 0) return null;
+      if (historyIndexRef.current < history.length - 1) {
+        historyIndexRef.current++;
+        return history[history.length - 1 - historyIndexRef.current];
+      }
+      return history[0];
+    }, []);
+    
+    const getNextCommand = useCallback(() => {
+      if (historyIndexRef.current > 0) {
+        historyIndexRef.current--;
+        return historyRef.current[historyRef.current.length - 1 - historyIndexRef.current];
+      }
+      historyIndexRef.current = -1;
+      return '';
+    }, []);
+    
+    const theme = themeManager.getTheme();
+    
+    // 自己订阅需要的状
+    const isProcessing = useIsThinking();
+    const pendingCommands = usePendingCommands();
+    const currentCommand = useCurrentCommand();
+
+    const [pasteNotification, setPasteNotification] = useState<string | null>(null);
+    const pasteNotifRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    const [thinkingSeconds, setThinkingSeconds] = useState(0);
+    const [streamingTokens, setStreamingTokens] = useState(0);
+    const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+      if (isProcessing) {
+        setThinkingSeconds(0);
+        setStreamingTokens(0);
+        thinkingTimerRef.current = setInterval(() => {
+          setThinkingSeconds(s => s + 1);
+          const buf = getStreamingContent();
+          if (buf) setStreamingTokens(Math.ceil(buf.content.length / 4));
+        }, 1000);
+      } else {
+        if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; }
+        setThinkingSeconds(0);
+        setStreamingTokens(0);
+      }
+      return () => { if (thinkingTimerRef.current) { clearInterval(thinkingTimerRef.current); thinkingTimerRef.current = null; } };
+    }, [isProcessing]);
+
+    const [hasStreamingMessage, setHasStreamingMessage] = useState(
+      () => getState().session.messages.some(m => m.isStreaming)
+    );
+    useEffect(() => {
+      let prev = hasStreamingMessage;
+      const unsubscribe = vanillaStore.subscribe((state) => {
+        const msgs = state.session.messages;
+        const newVal = msgs[msgs.length - 1]?.isStreaming ?? false;
+        if (newVal !== prev) {
+          prev = newVal;
+          setHasStreamingMessage(newVal);
+        }
+      });
+      return unsubscribe;
+    }, []);
+
+    // Electric glow animation — 200ms ticks, only active while processing
+    const [glowPhase, setGlowPhase] = useState(0);
+    const glowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+      if (isProcessing) {
+        setGlowPhase(0);
+        glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
+      } else {
+        if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
+        setGlowPhase(0);
+      }
+      return () => { if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; } };
+    }, [isProcessing]);
+
+    // Cursor blink at idle (530 ms on/off), piggybacks on glowPhase during generation
+    const [idleBlink, setIdleBlink] = useState(true);
+    const idleBlinkRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+      if (!isProcessing) {
+        setIdleBlink(true);
+        idleBlinkRef.current = setInterval(() => setIdleBlink(v => !v), 530);
+      } else {
+        if (idleBlinkRef.current) { clearInterval(idleBlinkRef.current); idleBlinkRef.current = null; }
+        setIdleBlink(true);
+      }
+      return () => { if (idleBlinkRef.current) { clearInterval(idleBlinkRef.current); idleBlinkRef.current = null; } };
+    }, [isProcessing]);
+    const cursorOn = isProcessing ? Math.floor(glowPhase / 5) % 2 === 0 : idleBlink;
+
+    const thinkingLabel = useMemo(() => {
+      if (!isProcessing) return null;
+      const cmd = currentCommand?.slice(0, 80);
+      const cmdStr = cmd ? ` · locked: ${cmd}` : '';
+      const elapsed = thinkingSeconds >= 2 ? ` · ${thinkingSeconds}s` : '';
+      const tokens = streamingTokens > 0 ? ` · ~${streamingTokens}t` : '';
+      if (hasStreamingMessage) return `generating${tokens}${elapsed}${cmdStr}`;
+      return `thinking${elapsed}${cmdStr}`;
+    }, [isProcessing, hasStreamingMessage, thinkingSeconds, streamingTokens, currentCommand]);
+
+    // 计
+    const placeholder = useMemo(() => {
+      if (isProcessing) {
+        return pendingCommands.length > 0
+          ? `Queued: ${pendingCommands.length} command(s). Type to add more...`
+          : 'Processing... Type to queue next command';
+      }
+      return 'Type a message...';
+    }, [isProcessing, pendingCommands.length]);
+    
+    // 自管理的输入状
+    const [input, setInput] = useState('');
+    const [cursorPosition, setCursorPosition] = useState(0);
+    const inputRef = useRef({ value: '', cursorPosition: 0 });
+    
+    // 更新 ref 保持同
+    useEffect(() => {
+      inputRef.current = { value: input, cursorPosition };
+    }, [input, cursorPosition]);
+    
+
+    
+    // 设置输入
+    const handleChange = useCallback((newValue: string) => {
+      inputRef.current.value = newValue;
+      setInput(newValue);
+      // cursor is always set immediately after via onChangeCursorPosition — no guard needed
+    }, []);
+    
+    // 设置光标位
+    const handleChangeCursorPosition = useCallback((pos: number) => {
+      const newPos = Math.max(0, Math.min(pos, inputRef.current.value.length));
+      inputRef.current.cursorPosition = newPos;
+      setCursorPosition(newPos);
+    }, []);
+    
+    const showSuggestions = input.startsWith('/') && input.length > 0 && !isProcessing;
+    const showPromptSuggestions = false; // Suggestions disabled
+
+    // 选择建议回
+    const handleSelectSuggestion = useCallback((newValue: string) => {
+      handleChange(newValue);
+      handleChangeCursorPosition(newValue.length);
+    }, [handleChange, handleChangeCursorPosition]);
+
+    // 清空输
+    const clearInput = useCallback(() => {
+      setInput('');
+      setCursorPosition(0);
+      inputRef.current = { value: '', cursorPosition: 0 };
+    }, []);
+    
+
+
+    // Paste — mimic Claude Code: show paste size notification
+    // Trimming is handled in CustomTextInput.tsx's handlePasteStable
+    const handlePaste = useCallback((text: string) => {
+      const lines = text.split('\n').length;
+      const chars = text.length;
+      
+      if (lines > 1 || chars > 200) {
+        const msg = lines > 1 ? `pasted ${lines} lines (${chars} chars)` : `pasted ${chars} chars`;
+        setPasteNotification(msg);
+        if (pasteNotifRef.current) clearTimeout(pasteNotifRef.current);
+        pasteNotifRef.current = setTimeout(() => setPasteNotification(null), 2000);
+      }
+    }, []);
+
+    // 提交处
+    const handleSubmit = useCallback(
+      (_value: string) => {
+        // Read from ref, not prop: the prop lags until React re-renders, so holding
+        // Enter fires multiple submits with the same stale value. The ref is
+        // pre-cleared here so any queued handler calls before re-render bail out.
+        const current = inputRef.current.value;
+        if (current.trim() && onSubmitRef.current) {
+          inputRef.current = { value: '', cursorPosition: 0 }; // guard before any async
+          addToHistory(current);
+          clearInput(); // queues setInput('') for React
+          onSubmitRef.current(current);
+        }
+      },
+      [clearInput, addToHistory]
+    );
+    
+    // 处理上下箭
+    const handleArrowUpInternal = useCallback(() => {
+      const prevCmd = getPreviousCommand();
+      if (prevCmd !== null && prevCmd !== undefined) {
+        handleChange(prevCmd);
+        handleChangeCursorPosition(prevCmd.length);
+      }
+    }, [handleChange, handleChangeCursorPosition, getPreviousCommand]);
+    
+    const handleArrowDownInternal = useCallback(() => {
+      const nextCmd = getNextCommand();
+      if (nextCmd !== null && nextCmd !== undefined) {
+        handleChange(nextCmd);
+        handleChangeCursorPosition(nextCmd.length);
+      }
+    }, [handleChange, handleChangeCursorPosition, getNextCommand]);
+    
+    // 处理 Tab — 由 CommandSuggestions 接管
+    useInput((_char, key) => {
+      if (focusManager.getCurrentFocus() !== FocusId.MAIN_INPUT) return;
+      // Tab is handled by CommandSuggestions; just swallow it here
+      // to prevent default browser-like behavior
+    });
+
+
+    return (
+      <Box flexDirection="column">
+        {/* Paste notification — Claude Code style: minimal, brief */}
+        {pasteNotification && (
+          <Box paddingX={0} marginBottom={0}>
+            <Text color={theme.colors.text.muted} dimColor>
+              {pasteNotification}
+            </Text>
+          </Box>
+        )}
+        {/* Thinking indicator — Claude Code style: minimal */}
+        <Box paddingX={0} marginBottom={0}>
+          {thinkingLabel ? (
+            <Text color={theme.colors.text.muted} dimColor>
+              {thinkingLabel}
+              {pendingCommands.length > 0 && <Text dimColor> · queued: {pendingCommands.length}</Text>}
+            </Text>
+          ) : null}
+        </Box>
+
+        {/* 输入框 — Claude Code style: no border, just prompt + input */}
+        <Box
+          flexDirection="row"
+          paddingX={0}
+          paddingY={0}
+        >
+          {/* Spinner while AI works, □ when idle */}
+          <Box marginRight={1}>
+            <PromptGlyph
+              isProcessing={isProcessing}
+              lockedIn={currentCommand !== null}
+              glowPhase={glowPhase}
+              color={theme.colors.primary}
+              idleColor={theme.colors.primary}
+            />
+          </Box>
+
+          {/* 输入框 - 始终启用，支持命令队列 */}
+          <Box flexGrow={1}>
+            <CustomTextInput
+              value={input}
+              cursorPosition={cursorPosition}
+              onChange={handleChange}
+              onChangeCursorPosition={handleChangeCursorPosition}
+              onSubmit={handleSubmit}
+              onPaste={handlePaste}
+              onArrowUp={handleArrowUpInternal}
+              onArrowDown={handleArrowDownInternal}
+              placeholder={placeholder}
+              focusId={FocusId.MAIN_INPUT}
+              disabled={false}
+              cursorOn={cursorOn}
+            />
+          </Box>
+        </Box>
+
+        {/* Command suggestions — below the input bar */}
+        {showSuggestions && (
+          <CommandSuggestions
+            input={input}
+            cursorPosition={cursorPosition}
+            onSelectSuggestion={handleSelectSuggestion}
+            visible={showSuggestions}
+          />
+        )}
+
+        {/* Prompt suggestions — disabled */}
+      </Box>
+    );
+  },
+  // 自定义比较函数：始终返回 true，因为回调通过 ref 访
+  // 这样 props 变化不会触发重新渲
+  () => false
+);
+
+InputArea.displayName = 'InputArea';
+
+export default InputArea;

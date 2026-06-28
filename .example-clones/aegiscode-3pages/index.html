@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, user-scalable=1">
+  <meta name="description" content="AEGIS: Private AI with semantic memory. Run Claude, DeepSeek, Llama with permanent cross-session memory.">
+  <meta name="theme-color" content="#534AB7">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;">
+  <link rel="canonical" href="https://aegiscode.com/">
+  <title>AEGIS — Your AI, your data, your empire</title>
+  <style>
+    @font-face {
+      font-family: 'D-DIN';
+      src: url('../www-spacex-com/fonts/D-DIN.woff2') format('woff2'),
+           url('../www-spacex-com/fonts/D-DIN.woff') format('woff'),
+           url('../www-spacex-com/fonts/D-DIN.otf') format('opentype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+    }
+    :root {
+      --white-100: rgba(240, 240, 250, 1);
+      --white-90: rgba(240, 240, 250, 0.9);
+      --white-80: rgba(240, 240, 250, 0.8);
+      --white-70: rgba(240, 240, 250, 0.7);
+      --white-60: rgba(240, 240, 250, 0.6);
+      --white-50: rgba(240, 240, 250, 0.5);
+      --white-35: rgba(240, 240, 250, 0.35);
+      --white-30: rgba(240, 240, 250, 0.3);
+      --white-25: rgba(255, 255, 255, 0.25);
+      --white-15: rgba(240, 240, 250, 0.15);
+      --white-10: rgba(240, 240, 250, 0.1);
+      --black-50: rgba(0, 0, 0, 0.5);
+      --black-80: rgba(0, 0, 0, 0.8);
+      --gray-80: rgba(37, 38, 40, 0.8);
+      --gray-60: rgba(37, 38, 40, 0.6);
+      --gray-40: rgba(37, 38, 40, 0.4);
+      --accent: #534AB7;
+      --accent-glow: rgba(83, 74, 183, 0.3);
+      --green-accent: #00e5c0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font: 16px/1.5rem 'D-DIN', Arial, Verdana, sans-serif;
+      background-color: #000;
+      color: var(--white-100);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (max-width: 961px) {
+      body { font-size: 0.625rem; line-height: 0.75rem; }
+    }
+    .app-root { flex: 1; display: flex; flex-direction: column; }
+    header {
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--white-15);
+    }
+    .logo {
+      font-size: 1.8rem; font-weight: 700; letter-spacing: 0.08em;
+      color: var(--white-100); text-transform: uppercase;
+    }
+    .nav-links {
+      display: flex; gap: 2rem; list-style: none;
+    }
+    .nav-links a {
+      color: var(--white-70); text-decoration: none;
+      font-size: 0.9rem; letter-spacing: 0.1em; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--white-100); }
+    .hero {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      min-height: 70vh;
+      padding: 3rem 2rem;
+      background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.9) 100%),
+                  radial-gradient(ellipse at 30% 50%, var(--accent-glow) 0%, transparent 60%);
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 16px;
+      border: 1px solid var(--accent-glow);
+      border-radius: 20px;
+      font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--white-60); margin-bottom: 1.5rem; width: fit-content;
+    }
+    .hero-badge-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green-accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .4; transform: scale(.7); }
+    }
+    .hero h1 {
+      font-size: 3.5rem; font-weight: 400; letter-spacing: 0.04em;
+      max-width: 800px; line-height: 1.2; margin-bottom: 0.5rem;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent), var(--green-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.2rem; color: var(--white-60);
+      max-width: 600px; margin-bottom: 2rem; line-height: 1.6;
+    }
+    .hero-actions {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block; padding: 0.75rem 2.2rem;
+      border: 1px solid var(--white-100); color: var(--white-100);
+      text-decoration: none; letter-spacing: 0.15em;
+      font-size: 0.9rem; transition: all 0.2s;
+    }
+    .btn:hover { background: var(--white-100); color: #000; }
+    .btn-primary {
+      background: var(--accent); border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #6b62d4; }
+    .btn-secondary {
+      border-color: var(--white-30); color: var(--white-70);
+    }
+    .btn-secondary:hover { border-color: var(--white-100); color: var(--white-100); }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem; padding: 4rem 2rem; background: #0a0a0a;
+    }
+    .feature-card {
+      background: #111; border: 1px solid var(--white-10);
+      padding: 2rem 1.5rem; transition: border-color 0.3s, transform 0.3s;
+    }
+    .feature-card:hover {
+      border-color: var(--accent-glow);
+      transform: translateY(-4px);
+    }
+    .feature-card h3 {
+      font-size: 1.4rem; font-weight: 400; letter-spacing: 0.03em;
+      margin-bottom: 1rem; color: var(--white-90);
+    }
+    .feature-card p {
+      color: var(--white-50); font-size: 0.95rem; line-height: 1.5;
+    }
+    .feature-card .tag {
+      display: inline-block; font-size: 0.7rem;
+      padding: 2px 10px; margin-top: 1rem;
+      border: 1px solid var(--white-15); border-radius: 12px;
+      color: var(--white-50); letter-spacing: 0.05em;
+    }
+    .quote-section {
+      padding: 4rem 2rem; text-align: center;
+      border-top: 1px solid var(--white-10);
+    }
+    .quote-section blockquote {
+      font-size: 1.5rem; font-weight: 300; letter-spacing: 0.02em;
+      max-width: 700px; margin: 0 auto;
+      color: var(--white-60);
+      font-style: italic;
+      line-height: 1.5;
+    }
+    .quote-section cite {
+      display: block; margin-top: 1rem;
+      font-size: 0.85rem; color: var(--white-35); font-style: normal;
+    }
+    .dark-highlight {
+      padding: 4rem 2rem;
+      background: linear-gradient(180deg, #0a0e1a, #000);
+      border-top: 1px solid var(--accent-glow);
+    }
+    .dark-highlight h2 {
+      font-size: 2.5rem; font-weight: 400; letter-spacing: 0.03em;
+      margin-bottom: 1rem;
+    }
+    .dark-highlight p {
+      color: var(--white-50); max-width: 600px; font-size: 1rem; line-height: 1.6;
+    }
+    .dark-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem; margin-top: 2rem;
+    }
+    .stat-item h4 {
+      font-size: 2rem; font-weight: 400;
+      background: linear-gradient(135deg, var(--accent), var(--green-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-item p { font-size: 0.85rem; color: var(--white-50); }
+    footer {
+      border-top: 1px solid var(--white-15);
+      padding: 2rem; text-align: center;
+      color: var(--white-35); font-size: 0.8rem; letter-spacing: 0.05em;
+    }
+    footer a { color: var(--white-60); text-decoration: none; }
+    footer a:hover { color: var(--white-100); }
+    @media (max-width: 768px) {
+      header { flex-direction: column; gap: 0.8rem; padding: 1rem; }
+      .nav-links { flex-wrap: wrap; justify-content: center; gap: 1rem; }
+      .hero h1 { font-size: 2.2rem; }
+      .hero p { font-size: 1rem; }
+      .features { padding: 2rem 1rem; }
+      .hero-actions { flex-direction: column; }
+      .btn { text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-root">
+    <header>
+      <div class="logo">AEGIS</div>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="pricing.html">Pricing</a></li>
+        <li><a href="#">Docs</a></li>
+        <li><a href="#">Sign in</a></li>
+      </ul>
+    </header>
+
+    <section class="hero">
+      <div class="hero-badge"><span class="hero-badge-dot"></span>Private AI · Semantic Memory</div>
+      <h1>Your AI, your data,<br>your <em>empire</em>.</h1>
+      <p>The AI that never forgets you. Run Llama 3.2, Claude, DeepSeek or any model with permanent cross-session memory. Stop re-explaining yourself — our CLI remembers everything across every session, automatically.</p>
+      <div class="hero-actions">
+        <a href="#" class="btn btn-primary">⬡ GET CLI FREE</a>
+        <a href="products.html" class="btn btn-secondary">VIEW PRODUCTS</a>
+      </div>
+    </section>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3>⬡ My CLI</h3>
+        <p>A terminal AI agent that works with Claude, DeepSeek, Groq and Ollama. Switch models mid-session. Build custom skills. Remembers everything across sessions — automatically.</p>
+        <span class="tag">Claude · DeepSeek · Ollama</span>
+      </div>
+      <div class="feature-card">
+        <h3>⬡ My Extractor</h3>
+        <p>Browser extension that saves conversations from Claude, ChatGPT, Gemini, Perplexity and 22+ platforms. Everything searchable, permanent, yours.</p>
+        <span class="tag">Claude · ChatGPT · Gemini · +22</span>
+      </div>
+      <div class="feature-card">
+        <h3>⚖ Council</h3>
+        <p>Send your question to a council of AI agents — Claude, DeepSeek and Llama deliberate and vote. Get grounded decisions instead of a single perspective.</p>
+        <span class="tag">Deliberation · Voting · Consensus</span>
+      </div>
+      <div class="feature-card">
+        <h3>◈ Orchestration</h3>
+        <p>Delegate complex tasks to specialized agents working in parallel. The architect designs, the implementer builds, the reviewer refines. Build your own AI-powered tools.</p>
+        <span class="tag">Parallel · Chains · Workflows</span>
+      </div>
+    </div>
+
+    <div class="quote-section">
+      <blockquote>"No other terminal agent gives your AI permanent semantic memory across every session. We do."</blockquote>
+      <cite>— AEGIS · The AI that never forgets you</cite>
+    </div>
+
+    <div class="dark-highlight">
+      <h2>100% local. Zero amnesia.</h2>
+      <p>You run Ollama or DeepSeek locally because you don't trust the cloud with your data. But every session starts blank — no context, no history. Our CLI fixes exactly that. Your local model gets cross-session semantic memory without a single byte leaving your machine.</p>
+      <div class="dark-stats">
+        <div class="stat-item">
+          <h4>Ollama</h4>
+          <p>Any local model with persistent memory</p>
+        </div>
+        <div class="stat-item">
+          <h4>DeepSeek R1</h4>
+          <p>Open-source reasoning, fully local</p>
+        </div>
+        <div class="stat-item">
+          <h4>🔐 Private</h4>
+          <p>Your data never hits any server</p>
+        </div>
+        <div class="stat-item">
+          <h4>⚡ Multi-model</h4>
+          <p>Switch mid-session, memory follows</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>© 2026 AEGIS — Private AI with semantic memory. All rights reserved.</p>
+      <p style="margin-top:0.3rem;">
+        <a href="#">Privacy</a> · <a href="#">Terms</a> ·
+        <a href="#">GitHub</a> · <a href="#">Docs</a>
+      </p>
+    </footer>
+  </div>
+  <script>console.log('AEGIS — SpaceX-inspired layout with AegisCloud content');</script>
+</body>
+</html>

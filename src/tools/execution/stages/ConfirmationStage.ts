@@ -1,0 +1,203 @@
+/**
+ * Confirmation Stage - 用户确认阶段
+ * 
+ */
+
+import type {
+  PipelineStage,
+  ToolExecution,
+  ConfirmationDetails,
+} from '../types.js';
+
+export class ConfirmationStage implements PipelineStage {
+  readonly name = 'confirmation';
+
+  constructor(
+    private sessionApprovals: Set<string>,
+    private sessionDenials?: Set<string>
+  ) {}
+
+  async process(execution: ToolExecution): Promise<void> {
+    // 如果不需要确认，直接通
+    if (!execution._internal.needsConfirmation) {
+      return;
+    }
+
+    const forceConfirmation = execution._internal.forceConfirmation === true;
+
+    // 模型级设置：禁用确认提示时直接放行（除非该操作被标记为强制确认
+    if (!forceConfirmation && execution.context.requireConfirmation === false) {
+      return;
+    }
+
+    const tool = execution._internal.tool;
+    if (!tool) {
+      execution.abort('Tool not found in execution context');
+      return;
+    }
+
+    // 检查是否已在会话中拒绝
+    const signature = execution._internal.permissionSignature;
+    if (signature && this.sessionDenials?.has(signature)) {
+      execution.abort('Not executed: you tried this exact action earlier in this session and the user declined it. Choose a different approach.');
+      return;
+    }
+
+    // 检查是否已在会话中批准（强制确认的操作不允许通过"永远允许"跳过
+    if (!forceConfirmation && signature && this.sessionApprovals.has(signature)) {
+      return;
+    }
+
+    // 构建确认详
+    const confirmationDetails: ConfirmationDetails = {
+      title: `Permission Required: ${tool.name}`,
+      message: execution._internal.confirmationReason || 'This operation requires your confirmation',
+      details: this.generatePreview(execution),
+      risks: this.extractRisks(execution),
+      affectedFiles: this.getAffectedPaths(execution),
+    };
+
+    // 请求用户确
+    const handler = execution.context.confirmationHandler;
+    if (!handler) {
+      // 无确认处理器，默认拒
+      // Worded to avoid "permission/approval/dialog" vocabulary — this string becomes
+      // llmContent in a real tool_result, and re-using that vocabulary cluster is what
+      // lets the model later free-associate a hallucinated "blocked, click Allow" reply
+      // in an unrelated turn with no tool call at all.
+      execution.abort('Not executed: this session cannot ask the user a yes/no question right now. Retrying this exact action will not help — explain what you wanted to do in your text response instead, or ask the user directly.');
+      return;
+    }
+
+    const response = await handler.requestConfirmation(confirmationDetails);
+
+    if (!response.approved) {
+      // 如果用户选择"永远拒绝"，保存到会话拒绝列
+      if (response.scope === 'session' && signature && this.sessionDenials) {
+        this.sessionDenials.add(signature);
+      }
+      execution.abort(`Not executed: the user declined this action${response.reason ? ` — ${response.reason}` : ''}. Choose a different approach.`);
+      return;
+    }
+
+    // 如果用户选择"永远允许"，保存到会话批准列
+    if (response.scope === 'session' && signature) {
+      this.sessionApprovals.add(signature);
+    }
+  }
+
+  /**
+   * 
+   */
+  private generatePreview(execution: ToolExecution): string | undefined {
+    const { toolName, params } = execution;
+
+    switch (toolName) {
+      case 'Edit': {
+        const oldString = params.old_string as string;
+        const newString = params.new_string as string;
+        const filePath = params.file_path as string;
+
+        return `**File:** ${filePath}
+
+**Before:**
+\`\`\`
+${this.truncate(oldString, 10)}
+\`\`\`
+
+**After:**
+\`\`\`
+${this.truncate(newString, 10)}
+\`\`\``;
+      }
+
+      case 'Write': {
+        const content = params.contents as string;
+        const filePath = params.file_path as string;
+
+        return `**File:** ${filePath}
+
+**Content Preview:**
+\`\`\`
+${this.truncate(content, 20)}
+\`\`\``;
+      }
+
+      case 'Bash': {
+        const command = params.command as string;
+        const cwd = params.working_directory as string;
+
+        return `**Command:** \`${command}\`${cwd ? `\n**Directory:** ${cwd}` : ''}`;
+      }
+
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * 
+   */
+  private extractRisks(execution: ToolExecution): string[] {
+    const risks: string[] = [];
+    const { toolName, params } = execution;
+    const tool = execution._internal.tool;
+
+    // 基于工具类型的风
+    if (tool?.kind === 'write') {
+      risks.push('This operation will modify files');
+    } else if (tool?.kind === 'execute') {
+      risks.push('This operation will execute system commands');
+    }
+
+    // 基于参数的风
+    if (toolName === 'Bash') {
+      const command = params.command as string;
+      if (command.includes('rm')) {
+        risks.push('Command may delete files');
+      }
+      if (command.includes('sudo')) {
+        risks.push('Command requires elevated privileges');
+      }
+      if (command.includes('|')) {
+        risks.push('Command uses piping');
+      }
+    }
+
+    // 检查敏感文
+    const confirmReason = execution._internal.confirmationReason || '';
+    if (confirmReason.includes('Sensitive file')) {
+      risks.push('Operation involves sensitive files');
+    }
+
+    return risks;
+  }
+
+  /**
+   * 
+   */
+  private getAffectedPaths(execution: ToolExecution): string[] {
+    const params = execution.params;
+    const pathKeys = ['file_path', 'path', 'target', 'destination'];
+    const paths: string[] = [];
+
+    for (const key of pathKeys) {
+      if (typeof params[key] === 'string') {
+        paths.push(params[key] as string);
+      }
+    }
+
+    return paths;
+  }
+
+  /**
+   * 
+   */
+  private truncate(text: string, maxLines: number = 10): string {
+    const lines = text.split('\n');
+    if (lines.length <= maxLines) {
+      return text;
+    }
+    return lines.slice(0, maxLines).join('\n') + `\n... (${lines.length - maxLines} more lines)`;
+  }
+}

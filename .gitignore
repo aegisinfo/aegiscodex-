@@ -1,0 +1,26 @@
+.env
+dist/
+node_modules/
+*.log
+.aegiscode/
+*.backup
+*.backup.*
+Untitled Document
+SECURITY_FRAMEWORK_README.md
+.env.save
+deepseek-roocode-proxy/
+
+# Downloaded postinstall binary
+/bin/
+
+# Built binaries
+aegiscode-linux
+aegiscode.exe
+aegiscode-macos
+sea-prep.blob
+.wrangler/
+main.js
+aegiscode
+aegiscode.js
+aegiscode.zip
+*.deb
