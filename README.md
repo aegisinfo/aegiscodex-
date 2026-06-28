@@ -9,7 +9,7 @@
 
 Multi-model terminal coding assistant. Works with Claude, OpenAI, DeepSeek, Groq, Gemini and Ollama. BYOK — your keys, your cost.
 
-- **Private AI, no keys needed** — run fully local with Ollama. Nothing leaves your machine, no API key, no account.
+- **Private AI, BYOK** — run fully local with Ollama, no API key needed. A free aegiscloud.org account is still required to start the app (one-time Google login), but nothing you run locally leaves your machine.
 - **A model that grows over time** — `/router` auto-picks the cheapest model that can handle each task and learns from every session, so cost drops while quality holds.
 - **Many models, one answer** — `/council` votes and `/debate` makes them argue it out, so you get a reasoned consensus instead of one model's guess.
 - **Cloud sync — $2/month** — keep cross-session semantic memory and sync every session across machines. Activate with a single code.
@@ -50,7 +50,9 @@ Either way, the command is `aegis`.
 
 ## First run
 
-Run `aegis` — if no API keys are configured, an interactive setup guide launches automatically:
+Run `aegis` — the first thing it does is open your browser for a one-time login to your free aegiscloud.org account (Google sign-in). This is required even for fully local/Ollama-only use; once logged in, the session is cached and you won't see it again.
+
+After login, if no API keys are configured, an interactive setup guide launches automatically:
 
 ```
 ◆ aegiscode — Setup
