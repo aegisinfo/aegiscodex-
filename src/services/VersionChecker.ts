@@ -48,7 +48,7 @@ function readPackageJsonSync(): PackageJson {
       const content = fs.readFileSync(pkgPath, 'utf-8');
       const pkg = JSON.parse(content) as PackageJson;
       // 验证是否是正确的 package（名字匹
-      if (pkg.name === 'aegis' || pkg.name === 'aegis-cli' || pkg.name === 'aegiscode') {
+      if (pkg.name === 'aegis' || pkg.name === 'aegis-cli' || pkg.name === 'aegiscode' || pkg.name === 'aegiscode-cli') {
         return pkg;
       }
     } catch {
