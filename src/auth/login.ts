@@ -290,6 +290,17 @@ export async function runLoginClaudePro(): Promise<void> {
   process.stdout.write(`\n  ${C.green}✓ Saved.${C.reset} aegiscode will use your Claude Pro/Max subscription.\n\n`);
 }
 
+/** Synchronous check for whether the user has a stored aegiscloud session or Claude Pro/Max token. */
+export function isLoggedIn(): boolean {
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return true;
+  try {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    return !!cfg?.aegiscloud?.api_key;
+  } catch {
+    return false;
+  }
+}
+
 // ── Periodic account re-verification ─────────────────────────────────────────
 // A stored api_key never expires on the client, so a revoked/deleted account
 // would otherwise stay "logged in" forever. Re-check against the server at

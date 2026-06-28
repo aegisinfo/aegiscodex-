@@ -43,6 +43,7 @@ import { InteractiveSelector, type SelectorOption } from './dialog/InteractiveSe
 import { SetupWizard } from './dialog/SetupWizard.js';
 import { ExitMessage } from './common/ExitMessage.js';
 import { ErrorBoundary } from './common/ErrorBoundary.js';
+import { isLoggedIn } from '../../auth/login.js';
 
 // Focus
 import { FocusId, focusActions } from '../focus/index.js';
@@ -173,6 +174,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   // ==================== Local State ====================
   const [isExiting, setIsExiting] = useState(false);
+  const [loggedIn] = useState(() => isLoggedIn());
   const [exitSessionId, setExitSessionId] = useState<string | null>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [renderLatency, setRenderLatency] = useState(0);
@@ -421,7 +423,7 @@ export const AegisInterface: React.FC<AegisInterfaceProps> = ({
 
   return (
     <Box flexDirection="column" width="100%" paddingX={0} flexGrow={1}>
-      {messages.length === 0 && <WelcomeMessage terminalWidth={terminalWidth - 2} />}
+      {(messages.length === 0 || !loggedIn) && <WelcomeMessage terminalWidth={terminalWidth - 2} />}
 
       {selectorState.isVisible ? (
         <>
