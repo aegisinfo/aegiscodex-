@@ -1,16 +1,16 @@
 {
   "name": "aegiscode",
   "version": "3.2.0",
-  "description": "AEGIS CLI — AI-powered coding assistant. Downloads and runs the prebuilt aegis-cli binary.",
+  "description": "AEGIS CLI — AI-powered coding assistant",
   "type": "module",
   "bin": {
     "aegis": "./bin/cli.js",
     "aegis-cli": "./bin/cli.js"
   },
   "scripts": {
-    "postinstall": "node scripts/download-binary.mjs",
-    "prepublishOnly": "node scripts/download-binary.mjs",
     "build": "node esbuild.mjs",
+    "obfuscate": "node obfuscate.mjs",
+    "build:publish": "npm run build && npm run obfuscate",
     "build:standalone": "bash build-standalone.sh",
     "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "start": "node --no-deprecation dist/main.js",
@@ -57,6 +57,7 @@
   "devDependencies": {
     "@types/node": "^22.19.19",
     "esbuild": "^0.28.0",
+    "javascript-obfuscator": "^4.1.1",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2"
   }

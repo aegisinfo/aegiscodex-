@@ -19,10 +19,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
 
-      - name: Build JS bundle
+      - name: Build + obfuscate
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-        run: node esbuild.mjs
+        run: npm run build:publish
 
       - name: Install pkg
         run: npm install -g @yao-pkg/pkg
