@@ -5,7 +5,7 @@
  * Flow: pick provider → enter key → add another? → done
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -61,7 +61,7 @@ const PROVIDERS: Provider[] = [
   },
 ];
 
-type Step = 'provider' | 'apikey' | 'another' | 'saving' | 'done';
+type Step = 'welcome' | 'provider' | 'apikey' | 'another' | 'saving' | 'done';
 
 interface SetupWizardProps {
   onComplete: () => void;
@@ -85,7 +85,7 @@ function writeEnv(envPath: string, vars: Record<string, string>): void {
 
 export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   const theme = themeManager.getTheme();
-  const [step, setStep] = useState<Step>('provider');
+  const [step, setStep] = useState<Step>('welcome');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +115,11 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   }, [envPath, onComplete]);
 
   useInput((input, key) => {
+    if (step === 'welcome') {
+      if (key.return || input === ' ') setStep('provider');
+      else if (key.escape) process.exit(0);
+      return;
+    }
     if (step === 'provider') {
       if (key.upArrow) {
         setSelectedIdx(i => (i > 0 ? i - 1 : PROVIDERS.length - 1));
@@ -174,6 +179,46 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   const primary = theme.colors.primary;
   const muted = theme.colors.text?.muted ?? 'gray';
   const textPrimary = theme.colors.text?.primary ?? 'white';
+
+  if (step === 'welcome') {
+    return (
+      <Box flexDirection="column" padding={1} gap={1}>
+        <Text color={primary} bold>{`
+  ╔═╗╔═╗╔═╗╦╔═╗
+  ╠═╣║╣ ║ ╦║╚═╗
+  ╩ ╩╚═╝╚═╝╩╚═╝`}</Text>
+        <Box marginLeft={2} flexDirection="column">
+          <Text color={primary} bold>ÆGIS Code  </Text>
+          <Text color={muted} dimColor>Terminal AI coding agent</Text>
+        </Box>
+        <Box marginLeft={2} flexDirection="column" gap={0}>
+          <Text color={textPrimary} bold>Quick setup:</Text>
+          <Box marginTop={1} flexDirection="column" gap={0}>
+            <Box gap={2}>
+              <Text color={primary} bold>1</Text>
+              <Text color={textPrimary}>Install Node.js 22+</Text>
+              <Text color={muted} dimColor>→  nvm install 22</Text>
+            </Box>
+            <Box gap={2}>
+              <Text color={primary} bold>2</Text>
+              <Text color={textPrimary}>Install CLI        </Text>
+              <Text color={muted} dimColor>→  npm install -g aegiscode</Text>
+            </Box>
+            <Box gap={2}>
+              <Text color={primary} bold>3</Text>
+              <Text color={textPrimary}>Add your API key   </Text>
+              <Text color={muted} dimColor>→  next screen</Text>
+            </Box>
+          </Box>
+        </Box>
+        <Box marginLeft={2} marginTop={1}>
+          <Text color={muted} dimColor>Press </Text>
+          <Text color={primary} bold>Enter</Text>
+          <Text color={muted} dimColor> to set up your API key  ·  Esc to exit</Text>
+        </Box>
+      </Box>
+    );
+  }
 
   if (step === 'saving' || step === 'done') {
     return (
