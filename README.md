@@ -37,8 +37,8 @@ npm install -g aegiscode
 Or from source:
 
 ```bash
-git clone https://github.com/aegisinfo/aegiscode
-cd aegiscode
+git clone https://github.com/aegisinfo/aegiscodex-
+cd aegiscodex-
 bash install.sh
 ```
 
