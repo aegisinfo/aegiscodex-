@@ -48,40 +48,6 @@ Either way, the command is `aegis`.
 
 ---
 
-## Desktop GUI
-
-aegiscode also ships as a native Electron desktop app — same AI engine, same memory, with a split-pane terminal + shell.
-
-**Download (Linux / macOS / Windows):**
-
-→ **[aegiscloud.org/aegiscode#download](https://aegiscloud.org/aegiscode#download)**
-
-```bash
-# Linux
-wget https://dl.aegiscloud.org/aegiscode-gui.deb
-sudo dpkg -i aegiscode-gui.deb
-```
-
-**Launch:**
-
-```bash
-aegis
-```
-
-**Tabs:**
-
-| Tab | Description |
-|-----|-------------|
-| Terminal ⌨ | Full aegiscode session with true color and resize support |
-| History ◷ | Browse and resume past sessions |
-| Memory ⬡ | Search stored memory entries, view stats, manage subscription |
-| Cloud ⬡ | Cloud sync status and API key |
-| Settings ⚙ | Configure API key and model |
-
-Memory and cloud sync are activated by pasting your API key in the Memory tab after subscribing at [aegiscloud.org](https://aegiscloud.org).
-
----
-
 ## First run
 
 Run `aegis` — if no API keys are configured, an interactive setup guide launches automatically:
@@ -211,8 +177,8 @@ Full reference with copy-paste examples: **[aegiscloud.org/aegiscode/commands](h
 | `/council <question>` | | Multi-model majority vote |
 | `/debate <topic> [--rounds N]` | `/db` | Structured multi-model debate across rounds |
 | `/research <question>` | | Multi-agent research |
-| `/memory [activate\|stats\|clear]` | | Manage semantic memory |
-| `/cloud [activate\|status]` | | Manage AEGIS Cloud sync |
+| `/memory [activate\|stats\|load\|upload\|clear]` | | Manage semantic memory |
+| `/cloud [status\|key <k>\|activate\|deactivate]` | | Manage AEGIS Cloud sync |
 | `/billing` | | Show subscription and billing info |
 | `/skills [refresh]` | `/sk` | List and manage loaded skills |
 | `/hooks [status\|list]` | | View and manage hooks |
@@ -349,8 +315,8 @@ Skills are Markdown files (`SKILL.md`) that teach aegiscode a specialized capabi
 
 ```
 /skills              # list discovered skills
-/load <name>         # load a skill's full content on demand
-/skill <name> <desc> # scaffold a new skill
+/skills <name>       # show a skill's full details
+/skills refresh      # rescan skill directories
 ```
 
 A `SKILL.md` is just frontmatter + instructions:
