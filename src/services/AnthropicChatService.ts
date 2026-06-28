@@ -312,7 +312,17 @@ export class AnthropicChatService implements IChatService {
       if (error instanceof Error && error.name === 'AbortError') throw error;
 
       const status = (error as { status?: number }).status;
-      const isTransient = status !== undefined && [429, 500, 502, 503, 504].includes(status);
+      const isTransient = (
+        status !== undefined && [429, 500, 502, 503, 504].includes(status)
+      ) || (
+        error instanceof Error && (
+          error.message.includes('Connection error') ||
+          error.message.includes('ECONNRESET') ||
+          error.message.includes('Premature close') ||
+          (error as { code?: string }).code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+          error.message.includes('timeout')
+        )
+      );
 
       if (isTransient) {
         if (content.length > 0) {
@@ -320,7 +330,7 @@ export class AnthropicChatService implements IChatService {
         }
         const MAX_RETRIES = 5;
         if (attempt >= MAX_RETRIES) {
-          const reason = status === 429 ? 'Rate limited' : `Server error (${status})`;
+          const reason = status === 429 ? 'Rate limited' : `Server error (${status ?? 'transient'})`;
           throw new Error(
             `${reason} — gave up after ${MAX_RETRIES} retries.\n` +
             (status === 429
