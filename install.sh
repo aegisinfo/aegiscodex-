@@ -137,18 +137,18 @@ echo "║  Or let the wizard guide you:                       ║"
 echo "║    aegis                                            ║"
 echo "║    → Type /setup to configure API keys interactively ║"
 echo "║                                                     ║"
-║  Quick commands:                                        ║
-║    /model claude     — use Claude                       ║
-║    /model deepseek   — use DeepSeek                     ║
-║    /model groq       — use Groq                         ║
-║    /council \"question\" — get 4-perspective analysis     ║
-║    /memory           — recall past context              ║
-║    /help             — show all commands                ║
-║                                                     ║
-║  Need help?   https://aegiscloud.org                    ║
-║  Report bugs: https://github.com/aegisinfo/aegiscode    ║
-║                                                     ║
-╚══════════════════════════════════════════════════════╝
+echo "║  Quick commands:                                        ║"
+echo "║    /model claude     — use Claude                       ║"
+echo "║    /model deepseek   — use DeepSeek                     ║"
+echo "║    /model groq       — use Groq                         ║"
+echo "║    /council \"question\" — get 4-perspective analysis     ║"
+echo "║    /memory           — recall past context              ║"
+echo "║    /help             — show all commands                ║"
+echo "║                                                     ║"
+echo "║  Need help?   https://aegiscloud.org                    ║"
+echo "║  Report bugs: https://github.com/aegisinfo/aegiscode    ║"
+echo "║                                                     ║"
+echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 echo "  Tip: To load API keys automatically, add this to your ~/.bashrc:"
 echo "    source ~/.aegiscode/.env"

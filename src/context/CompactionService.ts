@@ -10,12 +10,15 @@ import type { CompactionOptions, CompactionResult, FileContent } from './types.j
 import { TokenCounter } from './TokenCounter.js';
 import { FileAnalyzer } from './FileAnalyzer.js';
 import { onCompaction } from '../hooks/index.js';
+import { betterment } from './BettermentService.js';
 
 export class CompactionService {
   /** 压缩阈值百分比（80%） */
   private static readonly THRESHOLD_PERCENT = 0.8;
-  /** 保留比例（20%） */
-  private static readonly RETAIN_PERCENT = 0.2;
+  /** 保留比例（20%）— adaptive via betterment */
+  private static get RETAIN_PERCENT(): number {
+    return betterment.getAdaptiveRetention();
+  }
   /** 降级时保留比例（30%） */
   private static readonly FALLBACK_RETAIN_PERCENT = 0.3;
 
@@ -74,8 +77,9 @@ export class CompactionService {
       const filePaths = fileRefs.map(f => f.path);
       const fileContents = await FileAnalyzer.readFilesContent(filePaths);
 
-      // 2. 调用 LLM 生成总
-      const summary = await this.generateSummary(messages, fileContents, options);
+      // 2. 调用 LLM 生成总 (with betterment prompt bias)
+      const promptBias = betterment.getPromptBias();
+      const summary = await this.generateSummary(messages, fileContents, options, promptBias);
 
       // 3. 计算保留范围并过滤孤儿 tool 消
       const retainCount = Math.ceil(messages.length * this.RETAIN_PERCENT);
@@ -89,6 +93,23 @@ export class CompactionService {
       const postTokens = TokenCounter.countTokens(compactedMessages, options.modelName);
 
       console.log(`[CompactionService] Token 变化: ${preTokens} → ${postTokens}`);
+
+      // 5. Record quality metrics via betterment
+      betterment.recordCompaction({
+        id: nanoid(),
+        timestamp: new Date().toISOString(),
+        trigger: options.trigger,
+        preTokens,
+        postTokens,
+        savedTokens: preTokens - postTokens,
+        savedPercent: preTokens > 0 ? Math.round(((preTokens - postTokens) / preTokens) * 100) : 0,
+        messageCount: messages.length,
+        retainedCount: retainedMessages.length,
+        usedLLMSummary: options.chatService != null,
+        filesIncluded: filePaths.length,
+        sessionId: options.sessionId,
+        projectDir: options.projectDir,
+      });
 
       return {
         success: true,
@@ -110,9 +131,10 @@ export class CompactionService {
   private static async generateSummary(
     messages: Message[],
     fileContents: FileContent[],
-    options: CompactionOptions
+    options: CompactionOptions,
+    promptBias = '',
   ): Promise<string> {
-    const prompt = this.buildCompactionPrompt(messages, fileContents);
+    const prompt = this.buildCompactionPrompt(messages, fileContents) + promptBias;
 
     // 如果提供了 chatService，使用它来生成总
     if (options.chatService && typeof (options.chatService as any).chat === 'function') {

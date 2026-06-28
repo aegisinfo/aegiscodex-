@@ -12,12 +12,19 @@ function openUrl(url: string) {
 
 const PROVIDERS = [
   {
+    id: 'subscribe',
+    name: 'AEGIS Memory Subscription',
+    description: '$2/month — cross-session semantic memory',
+    pricing: '$2/month',
+    url: 'https://buy.stripe.com/14A4gB4J53vxcaV74S9R601',
+    recommend: true,
+  },
+  {
     id: 'claude',
     name: 'Claude (Anthropic)',
     description: 'Best quality — Claude Sonnet 4.5',
     pricing: '$3/MTok input · $15/MTok output',
     url: 'https://console.anthropic.com/settings/billing',
-    recommend: true,
   },
   {
     id: 'deepseek',
@@ -42,7 +49,7 @@ export async function runBilling(args: string): Promise<string> {
   const found = PROVIDERS.find(p => p.id === arg);
   if (found) {
     openUrl(found.url);
-    return `Opening ${found.name} billing...\n${found.url}`;
+    return `Opening ${found.name}...\n${found.url}`;
   }
 
   // Show info
@@ -64,7 +71,8 @@ export async function runBilling(args: string): Promise<string> {
   }
 
   lines.push('---');
-  lines.push('Run `/billing claude` · `/billing deepseek` · `/billing groq` to open billing page');
+  lines.push('Run `/billing subscribe` · `/billing claude` · `/billing deepseek` · `/billing groq` to open billing page');
+  lines.push('After subscribing, activate with: `/memory activate <token>`');
 
   return lines.join('\n');
 }

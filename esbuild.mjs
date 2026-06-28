@@ -24,9 +24,10 @@ if (cjs) {
     external: ['sql.js', '@xenova/transformers'],
     alias: { 'react-devtools-core': stubPath },
     define: {
-      'import.meta.url': 'require("url").pathToFileURL(__filename).href',
+      'import.meta.url': 'void 0',
     },
   });
+  console.log('✓ CJS SEA entry built: dist/sea-entry.cjs');
   console.log('✓ CJS SEA entry built: dist/sea-entry.cjs');
 } else {
   // Standard ESM build for npm/npx usage

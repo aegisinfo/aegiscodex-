@@ -19,6 +19,7 @@ const DB_PATH          = path.join(MEMORY_DIR, 'memory.db');
 const CONFIG_FILE      = path.join(os.homedir(), '.aegiscode', 'config.json');
 const SESSION_FILE     = path.join(MEMORY_DIR, 'last-session.txt');
 const LAST_CLOUD_SYNC_FILE = path.join(MEMORY_DIR, '.last-cloud-sync');
+const MEMORY_TOKEN_FILE = path.join(os.homedir(), '.aegiscode', 'memory.token');
 
 // ── Feature flag — disable embeddings for testing / low-resource ────────────
 const EMBEDDINGS_ENABLED = !process.env.AEGIS_MEMORY_NO_EMBED;
@@ -810,21 +811,77 @@ export class SharedMemory {
     } catch {}
   }
 
-  // ── Simple logged-in check ─────────────────────────────────────────────
+  // ── Subscription / free-tier helpers ────────────────────────────────────
 
   /** True if user has a stored API key (paid through Aegis, logged in). */
   hasApiKey(): boolean {
     return this.getApiKeyFromConfig() !== null;
   }
 
-  /** Write permission: any logged-in user can write memory. */
-  isWriteAllowed(_sessionId: string): boolean {
-    return this.hasApiKey();
+  isSubscribed(): boolean {
+    // 1. Check memory.token file (simplest flow: put token in file after Stripe payment)
+    try {
+      if (fs.existsSync(MEMORY_TOKEN_FILE)) {
+        const fileToken = fs.readFileSync(MEMORY_TOKEN_FILE, 'utf8').trim();
+        if (fileToken.length >= 20) {
+          try {
+            const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            if (this.isExpired(cfg?.memory?.expiresAt)) return false;
+            if (!cfg?.memory?.subscribed) {
+              const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: fileToken, activatedAt: new Date().toISOString() } };
+              fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+            }
+          } catch {}
+          return true;
+        }
+      }
+    } catch {}
+
+    // 2. Check environment variable (env tokens never expire)
+    if (process.env.AEGIS_MEMORY_TOKEN) {
+      try {
+        const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+        if (!cfg?.memory?.subscribed) {
+          const updated = { ...cfg, memory: { ...cfg.memory, subscribed: true, token: process.env.AEGIS_MEMORY_TOKEN, activatedAt: new Date().toISOString() } };
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+        }
+      } catch {}
+      return true;
+    }
+
+    // 3. Check config.json
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (cfg?.memory?.subscribed !== true) return false;
+      return !this.isExpired(cfg?.memory?.expiresAt);
+    } catch { return false; }
   }
 
-  /** Read permission: any logged-in user can read memory. */
+  private isExpired(expiresAt: string | null | undefined): boolean {
+    if (!expiresAt) return false;
+    try {
+      return Date.now() > new Date(expiresAt).getTime();
+    } catch { return false; }
+  }
+
+  /** Write permission: subscribed users, or this IS the free-tier session. */
+  isWriteAllowed(sessionId: string): boolean {
+    if (this.isSubscribed()) return true;
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      const freeId = cfg?.memory?.freeSessionId ?? null;
+      if (!freeId) return true;
+      return freeId === sessionId;
+    } catch { return true; }
+  }
+
+  /** Read permission: subscribed, or free session was ever used. */
   isEnabled(): boolean {
-    return this.hasApiKey();
+    if (this.isSubscribed()) return true;
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      return cfg?.memory?.freeSessionId != null;
+    } catch { return false; }
   }
 
   size(): number {

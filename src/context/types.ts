@@ -266,3 +266,13 @@ export interface MemoryInfo {
   toolCallCount: number;
   lastUpdated: number | null;
 }
+
+// ============================================================================
+// Betterment (compaction quality tracking)
+// ============================================================================
+
+export interface BettermentOptions {
+  trackQuality?: boolean;
+  sessionId?: string;
+  projectDir?: string;
+}

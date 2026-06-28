@@ -9,6 +9,7 @@ export * from './types.js';
 export { ContextManager } from './ContextManager.js';
 export { TokenCounter } from './TokenCounter.js';
 export { CompactionService } from './CompactionService.js';
+export { BettermentService, betterment } from './BettermentService.js';
 export { FileAnalyzer } from './FileAnalyzer.js';
 
 // 存储层导

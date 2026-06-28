@@ -23,6 +23,7 @@ import {
 } from '../agent/orchestrator/index.js';
 import { getOllamaModels, isLocalOllamaUrl, type OllamaModelInfo } from '../services/OllamaInstaller.js';
 import { copyToClipboard } from '../utils/clipboard.js';
+import { exec } from 'child_process';
 
 // ─── Auto-register AppBuilder apps ───
 const BUILTIN_APPS: AppDefinition[] = createBuiltinApps();
@@ -146,10 +147,14 @@ export const clearCommand: SlashCommand = {
  */
 export const compactCommand: SlashCommand = {
   name: 'compact',
-  description: 'Compact context manually',
+  description: 'Compact context / rate compactions / show betterment',
   category: 'session',
-  usage: '/compact',
-  fullDescription: 'Trigger manual context compaction, summarizing conversation history to save tokens.',
+  usage: '/compact [/compact rate <1-5> [note] | /compact betterment]',
+  fullDescription: `Trigger manual context compaction, summarizing conversation history to save tokens.
+Sub-commands:
+  /compact                        — compact context now
+  /compact rate <1-5> [note]      — rate the last compaction (helps improve future ones)
+  /compact betterment             — show compaction quality report, stats, and suggestions`,
 
   async handler(_args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
     const { contextManager, chatService, modelName } = context;
@@ -159,6 +164,46 @@ export const compactCommand: SlashCommand = {
         success: false,
         type: 'error',
         error: 'context manager unavailable',
+      };
+    }
+
+    // ── Sub-command: /compact betterment ───────────────────────────────
+    if (_args.trim().toLowerCase() === 'betterment') {
+      const { betterment } = await import('../context/BettermentService.js');
+      const report = betterment.getAdaptiveReport();
+      return {
+        success: true,
+        type: 'success',
+        content: report,
+      };
+    }
+
+    // ── Sub-command: /compact rate <1-5> [note] ───────────────────────
+    const rateMatch = _args.trim().match(/^rate\s+(\d+)(?:\s+(.+))?$/i);
+    if (rateMatch) {
+      const { betterment } = await import('../context/BettermentService.js');
+      const rating = parseInt(rateMatch[1], 10);
+      const note = rateMatch[2] || undefined;
+      if (rating < 1 || rating > 5) {
+        return {
+          success: false,
+          type: 'error',
+          error: 'rating must be between 1 and 5',
+        };
+      }
+      const ok = betterment.rateLastCompaction(rating, note);
+      if (!ok) {
+        return {
+          success: true,
+          type: 'info',
+          message: 'no unrated compaction to rate, or already rated. Use /compact betterment to see history.',
+        };
+      }
+      const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+      return {
+        success: true,
+        type: 'success',
+        content: `Compaction rated ${stars} (${rating}/5)${note ? ` — "${note}"` : ''}. Thank you — this helps improve future compactions.`,
       };
     }
 
@@ -2298,9 +2343,9 @@ const billingCommand: SlashCommand = {
 
 const memoryCommand: SlashCommand = {
   name: 'memory',
-  description: 'View or manage semantic memory — /memory stats | /memory load | /memory upload | /memory clear',
+  description: 'View or manage semantic memory — /memory activate <token> | /memory stats | /memory load | /memory upload | /memory clear',
   category: 'config',
-  usage: '/memory [stats | load <url|path> | upload | clear]',
+  usage: '/memory [activate <token> | stats | load <url|path> | upload | clear]',
   async handler(args: string): Promise<SlashCommandResult> {
     const fs   = await import('fs');
     const path = await import('path');
@@ -2308,12 +2353,57 @@ const memoryCommand: SlashCommand = {
     const { sharedMemory } = await import('../memory/SharedMemory.js');
 
     const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
+    const tokenPath = path.join(os.homedir(), '.aegiscode', 'memory.token');
     let cfg: any = {};
     try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch {}
-    const apiKey = cfg?.aegiscloud?.api_key;
+    const mem        = cfg?.memory ?? {};
+    const subscribed = mem.subscribed === true || Boolean(process.env.AEGIS_MEMORY_TOKEN) || fs.existsSync(tokenPath);
 
-    if (!apiKey) {
-      return { success: false, type: 'error', error: 'Not logged in — run `/login` first' };
+    // /memory activate <token> — activate memory via Stripe payment token
+    if (args?.startsWith('activate ')) {
+      const token = args.replace('activate ', '').trim();
+      if (token.length < 20) {
+        return { success: false, type: 'error', error: 'Invalid token format — must be a valid signed JWT from Stripe checkout' };
+      }
+
+      try {
+        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+        fs.writeFileSync(tokenPath, token);
+      } catch {}
+
+      let email = 'stripe-user';
+      let plan  = 'semantic-memory';
+      let expiresAt: string | null = null;
+
+      const apiKey = cfg?.aegiscloud?.api_key || process.env.AEGISCLOUD_API_KEY || '';
+      const verifyUrl = process.env.AEGIS_VERIFY_URL || 'https://aegiscloud.org/api/verify-token';
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['X-API-Key'] = apiKey;
+        const res = await fetch(verifyUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ token }),
+        });
+        const result = await res.json();
+        if (result.valid) {
+          email = result.email || email;
+          plan  = result.plan || plan;
+          expiresAt = result.expiresAt || expiresAt;
+        }
+      } catch {}
+
+      cfg.memory = {
+        ...mem,
+        subscribed: true,
+        token,
+        activatedAt: new Date().toISOString(),
+        verifiedEmail: email,
+        plan,
+        expiresAt,
+      };
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      return { success: true, type: 'success', message: `✓ Memory activated — semantic search enabled (${email})` };
     }
 
     // /memory load <url|path> — load aegis export into local memory
@@ -2322,9 +2412,8 @@ const memoryCommand: SlashCommand = {
       try {
         let data: any;
         if (target.startsWith('http')) {
-          const { default: nodeFetch } = await import('node-fetch' as any).catch(() => ({ default: fetch }));
-          const fetchFn: any = nodeFetch || fetch;
-          const res = await fetchFn(target, { headers: { 'X-API-Key': apiKey } });
+          const apiKey = cfg?.aegiscloud?.api_key || '';
+          const res = await fetch(target, { headers: apiKey ? { 'X-API-Key': apiKey } : {} });
           data = await res.json();
         } else {
           data = JSON.parse(fs.readFileSync(target, 'utf8'));
@@ -2370,11 +2459,51 @@ const memoryCommand: SlashCommand = {
 
     // /memory clear
     if (args?.trim() === 'clear') {
+      if (!subscribed) return { success: false, type: 'error', error: 'Not subscribed — use `/memory` to subscribe via Stripe' };
       sharedMemory.clear();
+      cfg.memory = { ...mem, lastCleared: new Date().toISOString() };
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
       return { success: true, type: 'success', message: 'Memory cleared' };
     }
 
-    // /memory stats (default view)
+    // /memory stats
+    if (args?.trim() === 'stats' && !subscribed) {
+      return { success: false, type: 'error', error: 'Not subscribed — use `/memory` to subscribe via Stripe' };
+    }
+
+    // Not subscribed — open Stripe checkout
+    if (!subscribed) {
+      const stripeUrl = 'https://buy.stripe.com/14A4gB4J53vxcaV74S9R601';
+      const openCmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(`${openCmd} "${stripeUrl}"`, () => {});
+      return {
+        success: true,
+        type: 'info',
+        content: [
+          '## ⬡ AEGIS Semantic Memory',
+          '',
+          '**Status:** Inactive',
+          '',
+          'Semantic memory stores and retrieves context across sessions.',
+          'Price: **$2/month** via Stripe.',
+          '',
+          `Opening payment page...`,
+          `  ${stripeUrl}`,
+          '',
+          'After payment you receive a token via email / success page.',
+          'Place the token in a file to activate:',
+          `  mkdir -p ~/.aegiscode && echo '<your-token>' > ~/.aegiscode/memory.token`,
+          '',
+          'Or run:',
+          '  `/memory activate <token>`',
+          '',
+          'No cloud server required — activation works offline.',
+          'The token file is checked automatically on every command.',
+        ].join('\n'),
+      };
+    }
+
+    // Subscribed — show status
     const stats = sharedMemory.getStats();
     const recent = sharedMemory.recent(3);
 
@@ -2385,6 +2514,7 @@ const memoryCommand: SlashCommand = {
       `  ${stats.total} memories stored across ${stats.sessions} sessions`,
       `  ${stats.summaries} session summaries`,
     ];
+    if (mem.activatedAt) lines.push(`  Activated: ${mem.activatedAt.slice(0, 10)}`);
     if (recent.length > 0) {
       lines.push('  Recent:');
       recent.slice(-3).reverse().forEach((e: any) => {

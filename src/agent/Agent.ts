@@ -42,6 +42,7 @@ import { sharedMemory, setOllamaBaseUrl } from '../memory/SharedMemory.js';
 import { syncSessionToDrive } from '../memory/DriveSync.js';
 import { ensureOllama } from '../services/OllamaInstaller.js';
 import { TokenCounter } from '../context/TokenCounter.js';
+import { CompactionService, betterment } from '../context/index.js';
 import { trackInteraction } from '../services/Heartbeat.js';
 import { extractLearning, pushLearnings } from '../services/LearningCollector.js';
 import type { Learning } from '../services/LearningCollector.js';
@@ -401,6 +402,9 @@ export class Agent {
     // 构建消息历
     const messages: Message[] = [];
     
+    // 0) Auto-compact: 在截断前检查是否需要自动压缩上下文
+    await this.autoCompactIfNeeded(context);
+
     // 添加系统提
     const isLocal = (this.config.baseURL || '').includes('11434');
     // Shared memory is NOT auto-injected here — a past session's mistakes
@@ -740,6 +744,82 @@ export class Agent {
   }
 
   // ========== 私有方
+
+  /** Sessions that already had an auto-compact this run (prevents repeated compaction) */
+  private static autoCompactedSessions = new Set<string>();
+
+  /**
+   * Check if context messages exceed the threshold and auto-compact them.
+   * Uses BettermentService for adaptive retention and prompt bias.
+   * Runs at most once per session.
+   */
+  private async autoCompactIfNeeded(context: ChatContext): Promise<void> {
+    const sessionId = context.sessionId || this.agentSessionId || 'default';
+    if (!context.messages || context.messages.length < 8) return;
+    if (Agent.autoCompactedSessions.has(sessionId)) return;
+
+    const modelName = this.config.model || 'gpt-4o';
+    const maxTokens = this.config.maxContextTokens || 200000;
+
+    // Check token usage: auto-compact if over 65% of max
+    const currentTokens = TokenCounter.countTokens(context.messages, modelName);
+    const threshold = Math.floor(maxTokens * 0.65);
+    if (currentTokens < threshold) return;
+
+    console.log(`[Agent] Auto-compact triggered: ${currentTokens.toLocaleString()} tokens (${Math.round(currentTokens / maxTokens * 100)}% of ${maxTokens.toLocaleString()})`);
+
+    try {
+      // Use adaptive retention from BettermentService
+      const adaptiveRetention = betterment.getAdaptiveRetention();
+      const promptBias = betterment.getPromptBias();
+
+      const messages = context.messages.map(m => ({
+        role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+        content: m.content,
+      }));
+
+      const result = await CompactionService.compact(messages, {
+        modelName,
+        maxContextTokens: maxTokens,
+        chatService: this.chatService,
+        trigger: 'auto',
+        actualPreTokens: currentTokens,
+      });
+
+      // Replace context messages with compacted version
+      context.messages = result.compactedMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+      })) as Message[];
+
+      // Record in BettermentService
+      betterment.recordCompaction({
+        id: `auto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+        trigger: 'auto',
+        preTokens: result.preTokens,
+        postTokens: result.postTokens,
+        savedTokens: result.preTokens - result.postTokens,
+        savedPercent: result.preTokens > 0
+          ? Math.round((result.preTokens - result.postTokens) / result.preTokens * 100)
+          : 0,
+        messageCount: context.messages.length,
+        retainedCount: result.compactedMessages.length,
+        usedLLMSummary: !!result.summary && !result.summary.startsWith('## Conversation Summary (Auto-generated)'),
+        filesIncluded: result.filesIncluded.length,
+        sessionId: context.sessionId,
+        projectDir: process.cwd(),
+      });
+
+      Agent.autoCompactedSessions.add(sessionId);
+
+      const saved = result.preTokens - result.postTokens;
+      console.log(`[Agent] Auto-compact done: ${result.preTokens.toLocaleString()} → ${result.postTokens.toLocaleString()} tokens (saved ${saved.toLocaleString()})`);
+    } catch (error) {
+      console.warn('[Agent] Auto-compact failed (non-fatal):', error instanceof Error ? error.message : String(error));
+      // Auto-compact failure is non-fatal — conversation continues
+    }
+  }
 
   /**
    * 
