@@ -1,6 +1,6 @@
 {
   "name": "aegiscode",
-  "version": "4.0.10",
+  "version": "4.0.11",
   "description": "AEGIS CLI — AI-powered coding assistant",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
     "aegiscode": "bin/cli.js"
   },
   "scripts": {
+    "preinstall": "node scripts/ensure-node-version.mjs",
     "build": "node esbuild.mjs",
     "build:publish": "npm run build && node scripts/make-bin.mjs",
     "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
@@ -47,6 +48,7 @@
   },
   "files": [
     "bin/",
+    "scripts/",
     "README.md",
     "LICENSE"
   ],
