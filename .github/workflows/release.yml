@@ -24,56 +24,10 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
         run: npm run build:publish
 
-      - name: Install pkg
-        run: npm install -g @yao-pkg/pkg
-
-      - name: Build standalone binaries
-        run: |
-          mkdir -p dist/standalone
-          npx pkg dist/main.js \
-            --targets node22-linux-x64 \
-            --output dist/standalone/aegis-cli-linux-x64 \
-            --compress Brotli
-          npx pkg dist/main.js \
-            --targets node22-linux-arm64 \
-            --output dist/standalone/aegis-cli-linux-arm64 \
-            --compress Brotli
-          npx pkg dist/main.js \
-            --targets node22-win-x64 \
-            --output dist/standalone/aegis-cli-win-x64.exe \
-            --compress Brotli
-          npx pkg dist/main.js \
-            --targets node22-macos-x64 \
-            --output dist/standalone/aegis-cli-darwin-x64 \
-            --compress Brotli
-          npx pkg dist/main.js \
-            --targets node22-macos-arm64 \
-            --output dist/standalone/aegis-cli-darwin-arm64 \
-            --compress Brotli
-
-      - name: Verify binaries
-        run: |
-          ls -lh dist/standalone/
-          file dist/standalone/aegis-cli-linux-x64
-          file dist/standalone/aegis-cli-win-x64.exe
-
-      - uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: standalone-binaries
-          path: dist/standalone/
-          retention-days: 7
-
       - name: Upload to GitHub Release (tagged only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/standalone/aegis-cli-linux-x64
-            dist/standalone/aegis-cli-linux-arm64
-            dist/standalone/aegis-cli-win-x64.exe
-            dist/standalone/aegis-cli-darwin-x64
-            dist/standalone/aegis-cli-darwin-arm64
           generate_release_notes: true
 
       - name: Publish to npm (tagged only)
@@ -83,22 +37,3 @@ jobs:
         run: |
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
           npm publish --access public
-
-      - name: Deploy binaries to Cloudflare R2 (tagged only)
-        if: startsWith(github.ref, 'refs/tags/')
-        continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_R2_ACCOUNT_ID }}
-          CF_BUCKET: ${{ secrets.CF_R2_BUCKET }}
-        run: |
-          cd dist/standalone
-          for f in *; do
-            npx --yes wrangler r2 object put "${CF_BUCKET}/${f}" \
-              --file "${f}" \
-              --remote
-          done
-          echo "${{ github.sha }}" | npx --yes wrangler r2 object put "${CF_BUCKET}/version.txt" \
-            --content-type "text/plain" \
-            --remote \
-            --pipe
