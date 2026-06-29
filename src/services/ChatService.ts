@@ -4,7 +4,6 @@
 
 import https from 'node:https';
 import http from 'node:http';
-import { URL } from 'node:url';
 import OpenAI from 'openai';
 import type {
   Message,
@@ -20,58 +19,60 @@ import { AnthropicChatService } from './AnthropicChatService.js';
 
 /**
  * HTTP/1.1-only fetch for the OpenAI SDK constructor.
- *
- * The openai npm package uses fetch()/undici internally, which negotiates
- * HTTP/2 by default. Many providers (DeepSeek, Anthropic via OpenAI shim)
- * send RST_STREAM during connection setup, and Node 18/20's undici throws
- * ERR_STREAM_PREMATURE_CLOSE. HTTP/1.1 has no stream-reset concept, so
- * this eliminates the error on all Node versions.
+/**
+ * HTTP/1.1-only fetch — uses Node's native https/http module instead of the
+ * global fetch (which negotiates HTTP/2 via undici). Many providers (DeepSeek,
+ * Groq, OpenAI, etc.) send RST_STREAM on HTTP/2 during connection setup, which
+ * Node 18/20's undici surfaces as ERR_STREAM_PREMATURE_CLOSE. The https module
+ * only speaks HTTP/1.1, eliminating the premature close error.
  */
-async function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-  let urlStr: string;
-  if (typeof input === 'string') urlStr = input;
-  else if (input instanceof URL) urlStr = input.href;
-  else urlStr = (input as Request).url;
-  const parsed = new URL(urlStr);
-  const isHttps = parsed.protocol === 'https:';
-  const mod = isHttps ? https : http;
+function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url);
+  const method = init?.method || 'POST';
+  const headers = init?.headers as Record<string, string> | undefined;
+  const body = init?.body;
+  const signal = init?.signal;
 
   return new Promise((resolve, reject) => {
-    const req = mod.request(
-      {
-        hostname: parsed.hostname,
-        port: parsed.port || (isHttps ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: (init?.method ?? 'GET').toUpperCase(),
-        headers: (init?.headers ?? {}) as Record<string, string>,
-        timeout: 120000,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => {
-          const body = Buffer.concat(chunks);
-          const response = new Response(body, {
-            status: res.statusCode ?? 500,
-            statusText: res.statusMessage ?? '',
-            headers: new Headers(res.headers as Record<string, string>),
-          });
-          resolve(response);
-        });
-        res.on('error', reject);
-      },
-    );
+    const isHttps = url.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const options: http.RequestOptions = {
+      method,
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      headers,
+      timeout: 60000,
+    };
+
+    const req = mod.request(options, (res) => {
+      const stream = new ReadableStream({
+        start(controller) {
+          res.on('data', (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+          res.on('end', () => controller.close());
+          res.on('error', (err) => controller.error(err));
+        },
+      });
+      const responseHeaders = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+      }
+      resolve(new Response(stream, {
+        status: res.statusCode,
+        statusText: res.statusMessage || '',
+        headers: responseHeaders,
+      }));
+    });
+
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.on('timeout', () => { req.destroy(); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); });
 
-    if (init?.signal) {
-      if (init.signal.aborted) { req.destroy(); reject(new Error('AbortError')); return; }
-      init.signal.addEventListener('abort', () => req.destroy(), { once: true });
+    if (signal) {
+      if (signal.aborted) { req.destroy(); return reject(new DOMException('Aborted', 'AbortError')); }
+      signal.addEventListener('abort', () => { req.destroy(); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
     }
 
-    if (init?.body) {
-      req.write(typeof init.body === 'string' ? init.body : String(init.body));
-    }
+    if (body) req.write(typeof body === 'string' ? body : String(body));
     req.end();
   });
 }
@@ -114,7 +115,7 @@ export class OpenAIChatService implements IChatService {
       } : undefined,
       // Use HTTP/1.1 instead of HTTP/2 — avoids ERR_STREAM_PREMATURE_CLOSE
       // from Node's undici client on Node 18/20 (DeepSeek, Groq, etc.)
-      fetch: http1Fetch,
+      fetch: http1Fetch as any,
     });
     this.model = config.model || 'claude-sonnet-4-6';
   }
