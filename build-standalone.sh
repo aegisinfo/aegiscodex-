@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="aegis-cli"
-VERSION="1.8.0"
+VERSION="4.0.3"
 DIST_DIR="dist/standalone"
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -19,33 +19,33 @@ mkdir -p "$DIST_DIR"
 # Step 3: Build Windows .exe
 echo "[2/5] Building Windows .exe..."
 npx pkg dist/sea-entry.cjs \
-  --targets node18-win-x64 \
+  --targets node22-win-x64 \
   --output "$DIST_DIR/$APP_NAME-win-x64.exe" \
   --compress Brotli
 
 # Step 4: Build Linux binaries
 echo "[3/5] Building Linux x64 binary..."
 npx pkg dist/sea-entry.cjs \
-  --targets node18-linux-x64 \
+  --targets node22-linux-x64 \
   --output "$DIST_DIR/$APP_NAME-linux-x64" \
   --compress Brotli
 
 echo "[3b/5] Building Linux arm64 binary..."
 npx pkg dist/sea-entry.cjs \
-  --targets node18-linux-arm64 \
+  --targets node22-linux-arm64 \
   --output "$DIST_DIR/$APP_NAME-linux-arm64" \
   --compress Brotli
 
 # Step 5: Build macOS binaries
 echo "[4/5] Building macOS x64 binary..."
 npx pkg dist/sea-entry.cjs \
-  --targets node18-macos-x64 \
+  --targets node22-macos-x64 \
   --output "$DIST_DIR/$APP_NAME-darwin-x64" \
   --compress Brotli
 
 echo "[4b/5] Building macOS arm64 binary..."
 npx pkg dist/sea-entry.cjs \
-  --targets node18-macos-arm64 \
+  --targets node22-macos-arm64 \
   --output "$DIST_DIR/$APP_NAME-darwin-arm64" \
   --compress Brotli
 

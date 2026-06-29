@@ -6,7 +6,8 @@
   "bin": {
     "aegis": "./bin/cli.js",
     "aegis-cli": "./bin/cli.js",
-    "aegiscli": "./bin/cli.js"
+    "aegiscli": "./bin/cli.js",
+    "aegiscode": "./bin/cli.js"
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -84,5 +85,10 @@
     "esbuild": "^0.28.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "@xenova/transformers": {
+      "sharp": "file:../../../scripts/sharp-stub"
+    }
   }
 }
