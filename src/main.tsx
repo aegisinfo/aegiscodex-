@@ -392,6 +392,27 @@ async function main(): Promise<void> {
             process.exit(1);
           }
 
+          // Slash commands (/memory, /model, /billing, ...) are handled the
+          // same way interactive mode does — without this, "/memory" etc.
+          // fell straight through to the Agent as literal chat text instead
+          // of running its handler.
+          const { isSlashCommand, executeSlashCommand } = await import('./slash-commands/index.js');
+          if (isSlashCommand(initialMessage)) {
+            const result = await executeSlashCommand(initialMessage, { cwd: process.cwd() });
+
+            if (result.sendToAgent && result.content) {
+              initialMessage = result.content;
+            } else {
+              const output = result.content ?? result.message ?? result.error ?? '';
+              if (args.outputFormat === 'json') {
+                process.stdout.write(JSON.stringify({ result: output, success: result.success }) + '\n');
+              } else {
+                process.stdout.write(output + '\n');
+              }
+              process.exit(result.success ? 0 : 1);
+            }
+          }
+
           const { startCostLedger } = await import('./services/CostLedger.js');
           startCostLedger();
           const { startHeartbeat } = await import('./services/Heartbeat.js');

@@ -116,6 +116,60 @@ function buildAnthropicMessages(messages: Message[]): { systemText: string; anth
   return { systemText, anthropicMessages };
 }
 
+/**
+ * HTTP/1.1-only fetch wrapper — avoids Node 18/20 undici HTTP/2 ERR_STREAM_PREMATURE_CLOSE.
+ */
+function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url);
+  const method = init?.method || 'POST';
+  const hdrs = init?.headers as Record<string, string> | undefined;
+  const body = init?.body;
+  const signal = init?.signal;
+
+  return new Promise((resolve, reject) => {
+    const isHttps = url.protocol === 'https:';
+    const mod = isHttps ? https : http;
+    const options: http.RequestOptions = {
+      method,
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      headers: hdrs,
+      timeout: 60000,
+    };
+
+    const req = mod.request(options, (res) => {
+      const stream = new ReadableStream({
+        start(controller) {
+          res.on('data', (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+          res.on('end', () => controller.close());
+          res.on('error', (err) => controller.error(err));
+        },
+      });
+      const responseHeaders = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+      }
+      resolve(new Response(stream, {
+        status: res.statusCode,
+        statusText: res.statusMessage || '',
+        headers: responseHeaders,
+      }));
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); });
+
+    if (signal) {
+      if (signal.aborted) { req.destroy(); return reject(new DOMException('Aborted', 'AbortError')); }
+      signal.addEventListener('abort', () => { req.destroy(); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    }
+
+    if (body) req.write(typeof body === 'string' ? body : String(body));
+    req.end();
+  });
+}
+
 export class AnthropicChatService implements IChatService {
   private apiKey: string;
   private baseURL: string;

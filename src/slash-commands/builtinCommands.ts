@@ -2346,11 +2346,12 @@ const memoryCommand: SlashCommand = {
   description: 'View or manage semantic memory — /memory activate <token> | /memory stats | /memory load | /memory upload | /memory clear',
   category: 'config',
   usage: '/memory [activate <token> | stats | load <url|path> | upload | clear]',
-  async handler(args: string): Promise<SlashCommandResult> {
+  async handler(args: string, _context: SlashCommandContext): Promise<SlashCommandResult> {
     const fs   = await import('fs');
     const path = await import('path');
     const os   = await import('os');
     const { sharedMemory } = await import('../memory/SharedMemory.js');
+    await sharedMemory.whenReady();
 
     const cfgPath = path.join(os.homedir(), '.aegiscode', 'config.json');
     const tokenPath = path.join(os.homedir(), '.aegiscode', 'memory.token');
