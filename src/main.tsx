@@ -32,12 +32,14 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 // --print's whole point is clean, pipeable stdout (text or JSON) — the
 // dotenvx promo banner would otherwise land on stdout ahead of the result.
+// --debate-bridge has the same constraint: its stdout is a JSON event stream.
 const isPrintMode = process.argv.includes('--print') || process.argv.includes('-p');
+const isQuietStdout = isPrintMode || process.argv.includes('--debate-bridge');
 // SetupWizard saves keys to ~/.aegiscode/.env (the only place a globally-installed
 // `aegis` binary can reliably find them — process.cwd() is wherever the user happens
 // to invoke it from). Load that first, then ./.env so a project-local file can override it.
-dotenvConfig({ path: resolve(homedir(), '.aegiscode', '.env'), quiet: isPrintMode });
-dotenvConfig({ path: resolve(process.cwd(), '.env'), quiet: isPrintMode, override: true });
+dotenvConfig({ path: resolve(homedir(), '.aegiscode', '.env'), quiet: isQuietStdout });
+dotenvConfig({ path: resolve(process.cwd(), '.env'), quiet: isQuietStdout, override: true });
 import React from 'react';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -100,6 +102,80 @@ async function main(): Promise<void> {
     const { verifyAccount } = await import('./auth/login.js');
     console.log(JSON.stringify(await verifyAccount()));
     process.exit(0);
+  }
+
+  // Headless debate bridge for aegiscode-gui's Electron main process: read a
+  // debate config from stdin, run a DiscussionRoom, and stream every event to
+  // stdout as one JSON object per line ({ type, data, timestamp }) — the shape
+  // the GUI's debate panel already consumes. Runs without the TUI.
+  if (earlyArgs[0] === '--debate-bridge') {
+    const { DiscussionRoom } = await import('./agent/orchestrator/DiscussionRoom.js');
+    const { readFileSync } = await import('fs');
+
+    const emit = (type: string, data: Record<string, unknown>) => {
+      process.stdout.write(JSON.stringify({ type, data, timestamp: Date.now() }) + '\n');
+    };
+
+    // Read the config the GUI pipes to stdin.
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+    let cfg: any;
+    try {
+      cfg = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    } catch (e) {
+      emit('bridge:error', { content: 'Invalid debate config: ' + (e as Error).message });
+      process.exit(1);
+    }
+
+    // The GUI forwards model ids/metadata but not secrets — resolve apiKey/baseURL
+    // from ~/.aegiscode/config.json by id (same source the rest of the CLI reads).
+    let savedModels: any[] = [];
+    try {
+      const raw = JSON.parse(readFileSync(resolve(homedir(), '.aegiscode', 'config.json'), 'utf8'));
+      savedModels = raw.models || [];
+    } catch { /* fall back to whatever the GUI sent */ }
+
+    const models = (cfg.models || []).map((m: any) => {
+      const mc = m.config || {};
+      const full = savedModels.find((sm) => sm.id === m.id || sm.model === (mc.model || m.name)) || {};
+      return {
+        name: m.name || full.name || m.id || 'model',
+        config: {
+          apiKey: mc.apiKey || full.apiKey || '',
+          baseURL: mc.baseURL || mc.baseUrl || full.baseURL || full.baseUrl,
+          model: mc.model || full.model || m.id,
+        },
+      };
+    });
+
+    if (models.length < 2) {
+      emit('bridge:error', { content: 'Need at least 2 models for a debate.' });
+      process.exit(1);
+    }
+
+    try {
+      const room = new DiscussionRoom({
+        topic: cfg.topic || '',
+        models,
+        rounds: Math.max(1, Math.min(5, cfg.rounds || 2)),
+        format: cfg.format || 'debate',
+        maxTokensPerResponse: 600,
+        timeout: 120000,
+      });
+      // Forward every room event. discussion:complete is re-emitted afterwards so
+      // it carries the summary text the panel needs (the room's own event doesn't).
+      room.onAny((ev) => {
+        if (ev.type === 'discussion:complete') return;
+        const { type, timestamp, ...rest } = ev as any;
+        emit(type, rest as Record<string, unknown>);
+      });
+      const result = await room.run();
+      emit('discussion:complete', { summary: result.summary, content: result.summary, metadata: result.metadata });
+      process.exit(0);
+    } catch (e) {
+      emit('bridge:error', { content: (e as Error).message });
+      process.exit(1);
+    }
   }
 
   if (earlyArgs[0] === '--memory-stats-json' || earlyArgs[0] === '--memory-search-json' || earlyArgs[0] === '--memory-clear-json' || earlyArgs[0] === '--memory-upload-json' || earlyArgs[0] === '--memory-download-json') {
