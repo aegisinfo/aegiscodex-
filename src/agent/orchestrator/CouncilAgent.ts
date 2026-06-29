@@ -45,6 +45,8 @@ export interface DeliberationResult {
   approved: boolean;
   voteResults: VoteResult[];
   summary: string;
+  /** Free-form synthesis written by the orchestrator's synthesiser agent. */
+  synthesis: string;
   config: DeliberationConfig;
   rounds: number;
 }
@@ -142,6 +144,7 @@ export class CouncilAgent {
     }
 
     let allResults: VoteResult[] = [];
+    let synthesis = '';
     const rounds = Math.min(this.config.maxRounds || 1, 3);
 
     for (let round = 0; round < rounds; round++) {
@@ -165,6 +168,8 @@ export class CouncilAgent {
         members[0]?.name,
         sessionId,
       );
+      // Keep the synthesiser's summary (otherwise this LLM call is paid for and thrown away).
+      if (orchestration.summary) synthesis = orchestration.summary;
 
       // Parse votes from responses
       allResults = orchestration.responses.map(r => {
@@ -202,6 +207,7 @@ export class CouncilAgent {
       approved: decision.approved,
       voteResults: allResults,
       summary,
+      synthesis,
       config: this.config,
       rounds,
     };

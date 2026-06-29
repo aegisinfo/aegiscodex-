@@ -332,7 +332,7 @@ export class DiscussionRoom {
       },
     };
 
-    this.emit('discussion:complete', { content: '', metadata: result as unknown as Record<string, unknown> });
+    this.emit('discussion:complete', { content: '', metadata: result.metadata as unknown as Record<string, unknown> });
 
     return result;
   }

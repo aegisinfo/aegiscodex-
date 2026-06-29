@@ -80,14 +80,11 @@ straightforward lookups.`,
         lines.push(v.reasoning);
         lines.push('');
       }
+      lines.push(`### Verdict: ${result.approved ? 'APPROVED ✅' : 'REJECTED ❌'}`);
+      lines.push('');
       lines.push('### Synthesis');
       lines.push('');
-      const summaryLines = result.summary.split('\n');
-      const verdictIdx = summaryLines.findIndex(l => l.includes('APPROVED') || l.includes('REJECTED'));
-      const synthesis = verdictIdx > -1
-        ? summaryLines.slice(verdictIdx + 1).join('\n').trim()
-        : result.summary;
-      lines.push(synthesis || `${result.voteResults.length} perspectives gathered.`);
+      lines.push(result.synthesis.trim() || `${result.voteResults.length} perspectives gathered.`);
 
       const formatted = lines.join('\n').trim();
       return {

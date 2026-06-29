@@ -35,9 +35,13 @@ async function callOpenAICompatible(baseUrl: string, apiKey: string, model: stri
       }],
     }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}${body ? `: ${body.slice(0, 160)}` : ''}`);
+  }
   const data = await res.json() as any;
   const text = data.choices?.[0]?.message?.content || '';
-  const vote = text.includes('VOTE: JA') ? 'JA' : text.includes('VOTE: NEJ') ? 'NEJ' : 'AVSTÅR';
+  const vote = /VOTE:\s*JA/i.test(text) ? 'JA' : /VOTE:\s*NEJ/i.test(text) ? 'NEJ' : 'AVSTÅR';
   const analysis = text.split('ANALYSIS:')[1]?.trim().slice(0, 200) || text.slice(0, 200);
   return { vote, analysis };
 }
@@ -56,8 +60,11 @@ function pickProvider(): { baseUrl: string; apiKey: string; model: string } {
 
 let _provider: ReturnType<typeof pickProvider> | null = null;
 function callPrimary(q: string, p: string)   { if (!_provider) _provider = pickProvider(); return callOpenAICompatible(_provider.baseUrl, _provider.apiKey, _provider.model, q, p); }
-function callDeepSeek(q: string, p: string)  { return callOpenAICompatible('https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY || '', 'deepseek-chat', q, p); }
-function callGroq(q: string, p: string)      { return callOpenAICompatible('https://api.groq.com/openai/v1', process.env.GROQ_API_KEY || '', 'llama-3.3-70b-versatile', q, p); }
+// DeepSeek/Groq personas use their own key when present, otherwise they fall
+// back to the primary provider so the council always has 3 live voters instead
+// of firing empty-bearer requests that come back OFFLINE.
+function callDeepSeek(q: string, p: string)  { return process.env.DEEPSEEK_API_KEY ? callOpenAICompatible('https://api.deepseek.com/v1', process.env.DEEPSEEK_API_KEY, 'deepseek-chat', q, p) : callPrimary(q, p); }
+function callGroq(q: string, p: string)      { return process.env.GROQ_API_KEY ? callOpenAICompatible('https://api.groq.com/openai/v1', process.env.GROQ_API_KEY, 'llama-3.3-70b-versatile', q, p) : callPrimary(q, p); }
 
 const AGENTS: Agent[] = [
   {
@@ -82,13 +89,6 @@ const AGENTS: Agent[] = [
 
 export async function runCouncil(question: string): Promise<string> {
   const results: { name: string; role: string; color: string; vote: string; analysis: string }[] = [];
-  const lines: string[] = [];
-
-  lines.push('## ⬡ AEGIS COUNCIL');
-  lines.push(`**Question:** ${question}`);
-  lines.push('');
-  lines.push('*Agents deliberating...*');
-  lines.push('');
 
   await Promise.all(AGENTS.map(async (agent) => {
     try {
@@ -99,8 +99,7 @@ export async function runCouncil(question: string): Promise<string> {
     }
   }));
 
-  // Rebuild lines with results
-  lines.length = 0;
+  const lines: string[] = [];
   lines.push('## ⬡ AEGIS COUNCIL');
   lines.push(`**Question:** ${question}`);
   lines.push('');

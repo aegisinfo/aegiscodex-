@@ -38,7 +38,7 @@ function resolveModels(modelArg: string | undefined): { models: DebateModelConfi
         m.name?.toLowerCase() === id
       );
       if (found) {
-        selected.push(modelConfigToDebateModel(found));
+        selected.push(modelConfigToDebateModel(found, selected.length));
       } else {
         errors.push(`Model "${id}" not found in config. Use /model list to see available models.`);
       }
@@ -47,22 +47,35 @@ function resolveModels(modelArg: string | undefined): { models: DebateModelConfi
     return { models: selected, errors };
   }
 
-  // No specific models: use all non-Anthropic models (Anthropic often rate-limited for multi-call)
-  // Filter to models that have apiKey configured
+  // No specific models: use every model that has an apiKey configured,
+  // capped at 4 to bound API cost / rate-limit fan-out.
   const configured = allModels.filter(m => m.apiKey && m.apiKey.length > 0);
 
   if (configured.length === 0) {
     return { models: [], errors: ['No configured models found. Add models with /model add or check your config.'] };
   }
 
-  // Take up to 4 models to avoid excessive API cost
-  const selected = configured.slice(0, 4).map(modelConfigToDebateModel);
+  const selected = configured.slice(0, 4).map((m, i) => modelConfigToDebateModel(m, i));
   return { models: selected, errors: [] };
 }
 
-function modelConfigToDebateModel(mc: ModelConfig): DebateModelConfig {
+// Palette mirrors DiscussionRoom's COLORS so the names rendered here match the
+// colors the room assigns internally.
+const DEBATE_COLORS = [
+  '\x1b[38;2;0;229;192m',   // teal
+  '\x1b[38;2;124;111;212m', // purple
+  '\x1b[38;2;244;114;182m', // pink
+  '\x1b[38;2;249;115;22m',  // orange
+  '\x1b[38;2;34;197;94m',   // green
+  '\x1b[38;2;56;189;248m',  // sky
+  '\x1b[38;2;250;204;21m',  // yellow
+  '\x1b[38;2;239;68;68m',   // red
+];
+
+function modelConfigToDebateModel(mc: ModelConfig, index = 0): DebateModelConfig {
   return {
     name: mc.name || mc.id || mc.model || 'Unknown',
+    color: DEBATE_COLORS[index % DEBATE_COLORS.length],
     config: {
       apiKey: mc.apiKey || '',
       baseURL: mc.baseURL,
@@ -125,7 +138,7 @@ function parseArgs(args: string): {
 export const debateCommand: SlashCommand = {
   name: 'debate',
   aliases: ['db'],
-  description: 'Multi-model debate — pítch models against each other on a topic',
+  description: 'Multi-model debate — pitch models against each other on a topic',
   category: 'general',
   usage: '/debate <topic> [--models id1,id2] [--rounds N] [--format debate|discussion|qa|panel]',
   examples: [
@@ -231,9 +244,11 @@ Flags:
       });
 
       room.on('discussion:complete', (ev) => {
-        const meta = ev.metadata as unknown as DiscussionResult['metadata'];
-        if (context.onContentDelta) {
-          context.onContentDelta(`*${meta.modelsUsed} models · ${meta.totalRounds} rounds · ${(meta.totalDurationMs / 1000).toFixed(1)}s · ${meta.totalTokens.toLocaleString()} tokens*\n`);
+        const meta = ev.metadata as unknown as DiscussionResult['metadata'] | undefined;
+        if (context.onContentDelta && meta) {
+          const secs = ((meta.totalDurationMs ?? 0) / 1000).toFixed(1);
+          const tokens = (meta.totalTokens ?? 0).toLocaleString();
+          context.onContentDelta(`*${meta.modelsUsed} models · ${meta.totalRounds} rounds · ${secs}s · ${tokens} tokens*\n`);
           context.onContentDelta(`\n✅ **Debate complete!**\n`);
         }
       });
