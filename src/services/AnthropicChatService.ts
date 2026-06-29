@@ -14,9 +14,6 @@
  * into this one).
  */
 
-import https from 'node:https';
-import { Readable } from 'node:stream';
-
 import type {
   Message,
   ToolDefinition,
@@ -27,9 +24,6 @@ import type {
 } from '../agent/types.js';
 import type { ChatServiceConfig } from './ChatService.js';
 import type { AnthropicStreamEvent } from './streaming/types.js';
-
-/** HTTP/1.1-only agent — forces fetch to skip HTTP/2, avoiding ERR_STREAM_PREMATURE_CLOSE. */
-const http1Agent = new https.Agent({ keepAlive: true, timeout: 60 * 1000 });
 
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
 /** 'max' maps to a fixed budget_tokens ceiling when sent via extended thinking. */
@@ -132,7 +126,7 @@ export class AnthropicChatService implements IChatService {
     this.baseURL = (config.baseURL || 'https://api.anthropic.com/v1').replace(/\/$/, '');
     this.model = config.model || 'claude-sonnet-4-6';
     this.timeout = config.timeout ?? 60000;
-    this.maxRetries = config.maxRetries ?? 3;
+    this.maxRetries = config.maxRetries ?? 2;
     this.thinkingBudget = config.thinkingBudget || 'off';
     this.maxOutputTokens = config.maxOutputTokens || 16384;
   }
@@ -193,14 +187,13 @@ export class AnthropicChatService implements IChatService {
       const response = await fetch(`${this.baseURL}/messages`, {
         method: 'POST',
         signal,
-        agent: http1Agent,
         headers: {
           'x-api-key': this.apiKey,
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),
-      } as RequestInit & { agent: import('node:http').Agent });
+      });
 
       if (!response.ok || !response.body) {
         const text = await response.text().catch(() => '');
@@ -318,18 +311,25 @@ export class AnthropicChatService implements IChatService {
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error;
 
-      const status = (error as { status?: number }).status;
-      const isTransient = (
-        status !== undefined && [429, 500, 502, 503, 504].includes(status)
-      ) || (
+      // Premature close = HTTP/2 stream reset before any events arrived.
+      // Retry once fast (1s), then let Agent.ts surface a clean llm_error.
+      const isPrematureClose =
         error instanceof Error && (
-          error.message.includes('Connection error') ||
-          error.message.includes('ECONNRESET') ||
-          error.message.includes('Premature close') ||
           (error as { code?: string }).code === 'ERR_STREAM_PREMATURE_CLOSE' ||
-          error.message.includes('timeout')
-        )
-      );
+          error.message.includes('Premature close')
+        );
+
+      if (isPrematureClose) {
+        if (attempt === 0) {
+          process.stderr.write('[PREMATURE_CLOSE retrying once]\n');
+          await new Promise(r => setTimeout(r, 1000));
+          return this.chat(messages, tools, signal, streamCallbacks, 1);
+        }
+        throw error;
+      }
+
+      const status = (error as { status?: number }).status;
+      const isTransient = status !== undefined && [429, 500, 502, 503, 504].includes(status);
 
       if (isTransient) {
         if (content.length > 0) {
@@ -337,7 +337,7 @@ export class AnthropicChatService implements IChatService {
         }
         const MAX_RETRIES = 5;
         if (attempt >= MAX_RETRIES) {
-          const reason = status === 429 ? 'Rate limited' : `Server error (${status ?? 'transient'})`;
+          const reason = status === 429 ? 'Rate limited' : `Server error (${status})`;
           throw new Error(
             `${reason} — gave up after ${MAX_RETRIES} retries.\n` +
             (status === 429
@@ -346,13 +346,8 @@ export class AnthropicChatService implements IChatService {
               : (error as Error).message),
           );
         }
-        // Exponential backoff with jitter (±25%) to de-sync competing instances
-        // that share an API key and hit limits simultaneously.
-        const base = Math.min(1000 * 2 ** attempt, 16000);
-        const jitter = 1 + (Math.random() - 0.5) * 0.5; // 0.75–1.25
-        const delay = Math.round(base * jitter);
-        const tag = status === 429 ? 'RATE' : 'PREMATURE_CLOSE';
-        process.stderr.write(`[${tag} RETRY ${attempt + 1}/${MAX_RETRIES}] waiting ${delay}ms\n`);
+        const delay = Math.min(1000 * 2 ** attempt, 16000);
+        process.stderr.write(`[RETRY] attempt ${attempt + 1}/${MAX_RETRIES} after ${delay}ms\n`);
         await new Promise(r => setTimeout(r, delay));
         return this.chat(messages, tools, signal, streamCallbacks, attempt + 1);
       }
