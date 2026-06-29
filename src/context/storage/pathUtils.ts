@@ -21,8 +21,8 @@ export function getStorageRoot(): string {
  */
 export function escapeProjectPath(absPath: string): string {
   const normalized = path.resolve(absPath);
-  // 将路径分隔符替换为 -，移除开头
-  return normalized.replace(/[/\\]/g, '-').replace(/^-/, '');
+  // 将路径分隔符替换为 -，移除开头，移除 Windows 盘符冒号
+  return normalized.replace(/[/\\]/g, '-').replace(/^-/, '').replace(/:/g, '');
 }
 
 /**

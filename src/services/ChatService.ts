@@ -2,6 +2,9 @@
  * ChatService - LLM 通信服务
  */
 
+import https from 'node:https';
+import http from 'node:http';
+import { URL } from 'node:url';
 import OpenAI from 'openai';
 import type {
   Message,
@@ -14,6 +17,64 @@ import type {
 import { OpenAIEventAdapter } from './streaming/OpenAIEventAdapter.js';
 import { ClaudeCliChatService } from './ClaudeCliChatService.js';
 import { AnthropicChatService } from './AnthropicChatService.js';
+
+/**
+ * HTTP/1.1-only fetch for the OpenAI SDK constructor.
+ *
+ * The openai npm package uses fetch()/undici internally, which negotiates
+ * HTTP/2 by default. Many providers (DeepSeek, Anthropic via OpenAI shim)
+ * send RST_STREAM during connection setup, and Node 18/20's undici throws
+ * ERR_STREAM_PREMATURE_CLOSE. HTTP/1.1 has no stream-reset concept, so
+ * this eliminates the error on all Node versions.
+ */
+async function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  let urlStr: string;
+  if (typeof input === 'string') urlStr = input;
+  else if (input instanceof URL) urlStr = input.href;
+  else urlStr = (input as Request).url;
+  const parsed = new URL(urlStr);
+  const isHttps = parsed.protocol === 'https:';
+  const mod = isHttps ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const req = mod.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: (init?.method ?? 'GET').toUpperCase(),
+        headers: (init?.headers ?? {}) as Record<string, string>,
+        timeout: 120000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const body = Buffer.concat(chunks);
+          const response = new Response(body, {
+            status: res.statusCode ?? 500,
+            statusText: res.statusMessage ?? '',
+            headers: new Headers(res.headers as Record<string, string>),
+          });
+          resolve(response);
+        });
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+
+    if (init?.signal) {
+      if (init.signal.aborted) { req.destroy(); reject(new Error('AbortError')); return; }
+      init.signal.addEventListener('abort', () => req.destroy(), { once: true });
+    }
+
+    if (init?.body) {
+      req.write(typeof init.body === 'string' ? init.body : String(init.body));
+    }
+    req.end();
+  });
+}
 
 // For local Ollama models, only include tools when the query looks like a coding task.
 // This avoids sending 350+ tokens of tool schemas on every conversational message,
@@ -51,6 +112,9 @@ export class OpenAIChatService implements IChatService {
         'anthropic-version': '2023-06-01',
         'anthropic-beta': 'messages-2023-12-15',
       } : undefined,
+      // Use HTTP/1.1 instead of HTTP/2 — avoids ERR_STREAM_PREMATURE_CLOSE
+      // from Node's undici client on Node 18/20 (DeepSeek, Groq, etc.)
+      fetch: http1Fetch,
     });
     this.model = config.model || 'claude-sonnet-4-6';
   }
