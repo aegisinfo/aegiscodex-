@@ -1,13 +1,13 @@
 {
-  "name": "aegiscode-cli",
+  "name": "aegiscode",
   "version": "4.0.3",
   "description": "AEGIS CLI — AI-powered coding assistant",
   "type": "module",
   "bin": {
-    "aegis": "./bin/cli.js",
-    "aegis-cli": "./bin/cli.js",
-    "aegiscli": "./bin/cli.js",
-    "aegiscode": "./bin/cli.js"
+    "aegis": "bin/cli.js",
+    "aegis-cli": "bin/cli.js",
+    "aegiscli": "bin/cli.js",
+    "aegiscode": "bin/cli.js"
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -47,7 +47,6 @@
   },
   "files": [
     "bin/",
-    "scripts/",
     "README.md",
     "LICENSE"
   ],
