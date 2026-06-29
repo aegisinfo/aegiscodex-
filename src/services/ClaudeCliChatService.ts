@@ -106,6 +106,22 @@ function transcriptFor(messages: Message[]): { systemPrompt: string; prompt: str
   return { systemPrompt: systemParts.join('\n\n'), prompt: lines.join('\n\n') };
 }
 
+// Network blips between the spawned claude binary and Anthropic's backend surface
+// as a non-zero exit with one of these substrings in stderr/result — never as a
+// JS-level error, since the failure happens inside the subprocess, not this process.
+const TRANSIENT_PATTERNS = [
+  'Premature close',
+  'ERR_STREAM_PREMATURE_CLOSE',
+  'ECONNRESET',
+  'Connection error',
+  'socket hang up',
+  'fetch failed',
+];
+
+function isTransientCliFailure(text: string): boolean {
+  return TRANSIENT_PATTERNS.some(p => text.includes(p));
+}
+
 export class ClaudeCliChatService implements IChatService {
   /** Set once the first reply gives us a session_id; reused via --resume on later turns. */
   private sessionId: string | undefined;
@@ -116,7 +132,8 @@ export class ClaudeCliChatService implements IChatService {
     messages: Message[],
     tools?: ToolDefinition[],
     signal?: AbortSignal,
-    streamCallbacks?: StreamCallbacks
+    streamCallbacks?: StreamCallbacks,
+    attempt = 0
   ): Promise<ChatResponse> {
     const args = ['--print', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'];
     const currentMode = this.config.permissionMode || getStorePermissionMode() || 'default';
@@ -159,6 +176,8 @@ export class ClaudeCliChatService implements IChatService {
       if (systemPromptDir) { try { rmSync(systemPromptDir, { recursive: true, force: true }); } catch { /* best effort */ } }
     };
 
+    let sawStreamEvent = false;
+
     const result = await new Promise<{ content: string; usage?: ChatResponse['usage'] }>((resolve, reject) => {
       // Strip ANTHROPIC_API_KEY so the child claude binary uses its own
       // OAuth subscription login instead of our (possibly out-of-credit) key.
@@ -194,6 +213,7 @@ export class ClaudeCliChatService implements IChatService {
         if (parsed.type === 'stream_event' && parsed.event) {
           // Wire format is identical to AnthropicChatService's SSE events —
           // forward as-is so the UI streams incrementally instead of one block.
+          sawStreamEvent = true;
           streamCallbacks?.onStreamEvent?.(parsed.event);
         } else if (parsed.type === 'result') {
           finalResult = parsed;
@@ -249,6 +269,23 @@ export class ClaudeCliChatService implements IChatService {
           },
         });
       });
+    }).catch(error => {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+
+      // Only retry if nothing reached the UI yet — once partial output has
+      // streamed, a retry would re-send the same turn and duplicate it.
+      if (!sawStreamEvent && error instanceof Error && isTransientCliFailure(error.message)) {
+        const MAX_RETRIES = 5;
+        if (attempt >= MAX_RETRIES) {
+          throw new Error(`Claude CLI connection kept dropping — gave up after ${MAX_RETRIES} retries.\n${error.message}`);
+        }
+        const delay = Math.min(1000 * 2 ** attempt, 16000);
+        process.stderr.write(`[RETRY] claude CLI attempt ${attempt + 1}/${MAX_RETRIES} after ${delay}ms\n`);
+        return new Promise<{ content: string; usage?: ChatResponse['usage'] }>(r => setTimeout(r, delay))
+          .then(() => this.chat(messages, tools, signal, streamCallbacks, attempt + 1));
+      }
+
+      throw error;
     });
 
     return { content: result.content, usage: result.usage };

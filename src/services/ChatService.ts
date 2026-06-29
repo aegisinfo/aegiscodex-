@@ -325,6 +325,8 @@ export class OpenAIChatService implements IChatService {
         error instanceof Error && (
           error.message.includes('Connection error') ||
           error.message.includes('ECONNRESET') ||
+          error.message.includes('Premature close') ||
+          (error as { code?: string }).code === 'ERR_STREAM_PREMATURE_CLOSE' ||
           error.message.includes('timeout')
         )
       );
