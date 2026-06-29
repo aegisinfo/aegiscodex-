@@ -14,6 +14,7 @@
  * into this one).
  */
 
+import https from 'node:https';
 import type {
   Message,
   ToolDefinition,
@@ -24,6 +25,9 @@ import type {
 } from '../agent/types.js';
 import type { ChatServiceConfig } from './ChatService.js';
 import type { AnthropicStreamEvent } from './streaming/types.js';
+
+/** HTTP/1.1-only agent — forces fetch to skip HTTP/2, avoiding ERR_STREAM_PREMATURE_CLOSE. */
+const http1Agent = new https.Agent({ keepAlive: true });
 
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
 /** 'max' maps to a fixed budget_tokens ceiling when sent via extended thinking. */
@@ -187,13 +191,14 @@ export class AnthropicChatService implements IChatService {
       const response = await fetch(`${this.baseURL}/messages`, {
         method: 'POST',
         signal,
+        agent: http1Agent,
         headers: {
           'x-api-key': this.apiKey,
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),
-      });
+      } as RequestInit & { agent: import('node:http').Agent });
 
       if (!response.ok || !response.body) {
         const text = await response.text().catch(() => '');
@@ -339,8 +344,13 @@ export class AnthropicChatService implements IChatService {
               : (error as Error).message),
           );
         }
-        const delay = Math.min(1000 * 2 ** attempt, 16000);
-        process.stderr.write(`[RETRY] attempt ${attempt + 1}/${MAX_RETRIES} after ${delay}ms\n`);
+        // Exponential backoff with jitter (±25%) to de-sync competing instances
+        // that share an API key and hit limits simultaneously.
+        const base = Math.min(1000 * 2 ** attempt, 16000);
+        const jitter = 1 + (Math.random() - 0.5) * 0.5; // 0.75–1.25
+        const delay = Math.round(base * jitter);
+        const tag = status === 429 ? 'RATE' : 'PREMATURE_CLOSE';
+        process.stderr.write(`[${tag} RETRY ${attempt + 1}/${MAX_RETRIES}] waiting ${delay}ms\n`);
         await new Promise(r => setTimeout(r, delay));
         return this.chat(messages, tools, signal, streamCallbacks, attempt + 1);
       }
