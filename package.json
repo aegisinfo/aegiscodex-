@@ -1,6 +1,6 @@
 {
   "name": "aegiscode",
-  "version": "4.0.7",
+  "version": "4.0.8",
   "description": "AEGIS CLI — AI-powered coding assistant",
   "type": "module",
   "bin": {
