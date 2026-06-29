@@ -45,7 +45,7 @@ export class OpenAIChatService implements IChatService {
     this.client = new OpenAI({
       apiKey: config.apiKey,
       baseURL: config.baseURL,
-      maxRetries: config.maxRetries ?? 2,
+      maxRetries: config.maxRetries ?? 3,
       timeout: config.timeout ?? 60000,
       defaultHeaders: isAnthropic ? {
         'anthropic-version': '2023-06-01',

@@ -15,6 +15,8 @@
  */
 
 import https from 'node:https';
+import { Readable } from 'node:stream';
+
 import type {
   Message,
   ToolDefinition,
@@ -27,7 +29,7 @@ import type { ChatServiceConfig } from './ChatService.js';
 import type { AnthropicStreamEvent } from './streaming/types.js';
 
 /** HTTP/1.1-only agent — forces fetch to skip HTTP/2, avoiding ERR_STREAM_PREMATURE_CLOSE. */
-const http1Agent = new https.Agent({ keepAlive: true });
+const http1Agent = new https.Agent({ keepAlive: true, timeout: 60 * 1000 });
 
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
 /** 'max' maps to a fixed budget_tokens ceiling when sent via extended thinking. */
@@ -130,7 +132,7 @@ export class AnthropicChatService implements IChatService {
     this.baseURL = (config.baseURL || 'https://api.anthropic.com/v1').replace(/\/$/, '');
     this.model = config.model || 'claude-sonnet-4-6';
     this.timeout = config.timeout ?? 60000;
-    this.maxRetries = config.maxRetries ?? 2;
+    this.maxRetries = config.maxRetries ?? 3;
     this.thinkingBudget = config.thinkingBudget || 'off';
     this.maxOutputTokens = config.maxOutputTokens || 16384;
   }
