@@ -1,0 +1,9 @@
+.env
+.env.*
+node_modules/
+src/
+tsconfig.json
+esbuild.mjs
+*.ts
+.git/
+.gitignore

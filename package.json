@@ -1,7 +1,7 @@
 {
   "name": "aegiscode-cli",
-  "version": "3.4.4",
-  "description": "AEGIS CLI — AI-powered coding assistant (CLI-only, no GUI)",
+  "version": "4.0.0",
+  "description": "AEGIS CLI — AI-powered coding assistant (CLI-only)",
   "type": "module",
   "bin": {
     "aegis": "./bin/cli.js",
@@ -38,15 +38,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aegisinfo/aegiscode.git"
+    "url": "git+https://github.com/aegisinfo/aegiscodex-.git"
   },
-  "homepage": "https://github.com/aegisinfo/aegiscode#readme",
+  "homepage": "https://github.com/aegisinfo/aegiscodex-#readme",
   "bugs": {
-    "url": "https://github.com/aegisinfo/aegiscode/issues"
+    "url": "https://github.com/aegisinfo/aegiscodex-/issues"
   },
   "files": [
     "bin/",
-    "scripts/",
+    "dist/",
     "README.md",
     "LICENSE"
   ],
