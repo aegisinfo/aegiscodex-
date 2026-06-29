@@ -233,30 +233,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  if (!args) throw new Error(`No arguments provided for tool: ${name}`);
+  const a = args as Record<string, unknown>;
   let result: string;
 
   try {
     switch (name) {
       case 'read':
-        result = handleRead(args.file_path, args.offset, args.limit);
+        result = handleRead(a.file_path as string, a.offset as number, a.limit as number);
         break;
       case 'write':
-        result = handleWrite(args.file_path, args.contents);
+        result = handleWrite(a.file_path as string, a.contents as string);
         break;
       case 'edit':
-        result = handleEdit(args.file_path, args.old_string, args.new_string, args.replace_all);
+        result = handleEdit(a.file_path as string, a.old_string as string, a.new_string as string, a.replace_all as boolean);
         break;
       case 'glob':
-        result = handleGlob(args.pattern, args.path);
+        result = handleGlob(a.pattern as string, a.path as string);
         break;
       case 'grep':
-        result = handleGrep(args.pattern, args.path, args.include, args.case_sensitive);
+        result = handleGrep(a.pattern as string, a.path as string, a.include as string, a.case_sensitive as boolean);
         break;
       case 'bash':
-        result = handleBash(args.command, args.timeout, args.description);
+        result = handleBash(a.command as string, a.timeout as number, a.description as string);
         break;
       case 'memory_graph':
-        result = handleMemoryGraph(args.query, args.scope, args.limit);
+        result = handleMemoryGraph(a.query as string, a.scope as string, a.limit as number);
         break;
       default:
         throw new Error(`Unknown tool: ${name}`);
