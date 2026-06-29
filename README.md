@@ -42,15 +42,13 @@ cd aegiscodex-
 bash install.sh
 ```
 
-`install.sh` builds the project and creates an `aegis` wrapper in `~/.local/bin` — no sudo needed.
-
-Either way, the command is `aegis`.
+`install.sh` builds the project and creates an `aegis-cli` wrapper in `~/.local/bin` — no sudo needed.
 
 ---
 
 ## First run
 
-Run `aegis` — the first thing it does is open your browser for a one-time login to your free aegiscloud.org account (Google sign-in). This is required even for fully local/Ollama-only use; once logged in, the session is cached and you won't see it again.
+Run `aegis-cli` — the first thing it does is open your browser for a one-time login to your free aegiscloud.org account (Google sign-in). This is required even for fully local/Ollama-only use; once logged in, the session is cached and you won't see it again.
 
 After login, if no API keys are configured, an interactive setup guide launches automatically:
 
@@ -90,7 +88,7 @@ Already paying for Claude Code? Use your subscription instead of a pay-per-token
 
 ```bash
 claude setup-token        # generates a Claude Code OAuth token (sk-ant-oat...)
-aegis login --claude-pro  # paste it in
+aegis-cli login --claude-pro  # paste it in
 ```
 
 The token is saved to `~/.aegiscode/.env` as `CLAUDE_CODE_OAUTH_TOKEN` and takes priority over `ANTHROPIC_API_KEY` for any Anthropic model. Anthropic only allows OAuth subscription tokens to make API calls through the official `claude` binary, so aegiscode shells out to it instead of calling the API directly — the `claude` CLI must be installed and on `PATH`. Tool calls (file edits, shell commands) run through `claude`'s own permission system, following whichever permission mode you've set in aegiscode.
@@ -100,14 +98,14 @@ The token is saved to `~/.aegiscode/.env` as `CLAUDE_CODE_OAUTH_TOKEN` and takes
 ## Quick start
 
 ```bash
-aegis                        # interactive mode
-aegis "refactor this file"   # start with a message
-aegis --model deepseek-chat  # use a specific model
-aegis --router               # start with the auto-router on
-aegis --continue             # resume last session
-aegis --resume <session-id>  # resume specific session
-aegis --print "what does this repo do?"            # headless — print response, exit
-aegis --print --output-format json "summarize this" # headless JSON output, for scripts
+aegis-cli                        # interactive mode
+aegis-cli "refactor this file"   # start with a message
+aegis-cli --model deepseek-chat  # use a specific model
+aegis-cli --router               # start with the auto-router on
+aegis-cli --continue             # resume last session
+aegis-cli --resume <session-id>  # resume specific session
+aegis-cli --print "what does this repo do?"            # headless — print response, exit
+aegis-cli --print --output-format json "summarize this" # headless JSON output, for scripts
 ```
 
 ---
@@ -153,39 +151,73 @@ Any OpenAI-compatible API can be added as a custom model.
 
 Full reference with copy-paste examples: **[aegiscloud.org/aegiscode/commands](https://aegiscloud.org/aegiscode/commands)**
 
+### Session & Help
+
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `/help [command]` | `/?` `/h` | Show all commands, or detailed help for one |
-| `/model [id]` | `/m` | Interactive model switcher, or switch by ID |
+| `/clear` | `/cls` | Clear chat history, same session ID |
+| `/compact` | | Manually compress conversation to free up context window |
+| `/status` | `/st` | Session info — current model, permission mode, message count, context usage |
+| `/tokens` | `/tok` | Token usage graph and estimated dollar spend |
+| `/version` | `/v` | Show installed aegiscode version |
+
+### Models & Routing
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/model [id]` | `/m` | Interactive model switcher, or jump to a model by ID |
 | `/model list` | | List all configured models |
 | `/model add <id> <name> <model> <baseURL> <apiKey>` | | Add a custom model |
 | `/model remove <id>` | | Remove a model |
-| `/router [on\|off\|stats]` | | Show/toggle auto-router status and tier mapping |
+| `/router [on\|off\|stats]` | | Auto-pick the cheapest model per task based on complexity |
 | `/router set <tier> <id>` | | Pin a model to the simple/medium/complex tier |
 | `/effort [off\|low\|medium\|high\|max]` | | Set Claude's extended-thinking effort level |
-| `/confirm [on\|off] [model-id]` | `/confirmations` | Toggle tool-call confirmation prompt |
-| `/yolo [on\|off]` | | Toggle auto-approve for all tool calls |
-| `/clear` | `/cls` | Clear chat history |
-| `/compact` | | Compress context to save tokens |
-| `/status` | `/st` | Show session info and token usage |
-| `/tokens` | `/tok` | Token usage graph and estimated spend |
-| `/theme [name]` | `/t` | Show or switch UI theme |
-| `/thinking` | | Toggle thinking blocks |
-| `/copy [n\|last\|list]` | `/cp` | Copy a code block to clipboard |
-| `/multi <task>` | | Run task across multiple agents in parallel |
+| `/confirm [on\|off] [model-id\|claude\|deepseek\|all]` | `/confirmations` | Toggle tool-call confirmation prompt per model |
+| `/yolo [on\|off]` | | Toggle auto-approve for all tool calls (no prompts) |
+
+### Multi-Agent
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/multi <task>` | | Orchestrate multiple AI agents on a complex task |
 | `/multiyolo <task>` | | Same as `/multi` with auto-approved tool calls |
 | `/build <description>` | `/forge` | Build an app with multiple AI models in parallel |
-| `/clone <url> [--name <project>]` | `/fetch-site` `/websnap` | Clone a website using DeepSeek |
-| `/council <question>` | | Multi-model majority vote |
-| `/debate <topic> [--rounds N]` | `/db` | Structured multi-model debate across rounds |
-| `/research <question>` | | Multi-agent research |
-| `/memory [activate\|stats\|load\|upload\|clear]` | | Manage semantic memory |
-| `/cloud [status\|key <k>\|activate\|deactivate]` | | Manage AEGIS Cloud sync |
-| `/billing` | | Show subscription and billing info |
-| `/skills [refresh]` | `/sk` | List and manage loaded skills |
-| `/hooks [status\|list]` | | View and manage hooks |
-| `/mcp [tools\|<server>]` | | Show MCP server status and tools |
-| `/version` | `/v` | Show version info |
+| `/clone <url> [--name <project>]` | `/fetch-site` `/websnap` | Clone a website's structure and styling using DeepSeek |
+| `/council <question>` | | Send to every configured model, surface the majority answer |
+| `/debate <topic> [--models id1,id2] [--rounds N]` | `/db` | Structured multi-round debate between models |
+| `/research <question>` | | Multi-agent deliberation research |
+
+### Agent Apps (prebuilt pipelines)
+
+| Command | Description |
+|---------|-------------|
+| `/audit` | Full security audit — Scanner → Risk Analyzer → Reporter (3 agents) |
+| `/refactor` | Analyze and apply refactoring — Analyzer → Planner → Implementer (3 agents) |
+| `/test-gen` | Generate comprehensive test suite — Explorer → Designer → Writer (3 agents) |
+
+### Memory & Cloud
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/memory activate <token>` | | Activate persistent cross-session semantic memory |
+| `/memory stats` | | Show memory usage and quota |
+| `/memory clear` | | Wipe stored memory |
+| `/memory load <url\|path>` | | Load content into memory index |
+| `/memory upload` | | Upload memory to cloud |
+| `/cloud [status\|key <k>\|activate\|deactivate]` | | Manage AEGIS Cloud sync — sessions browsable at aegiscloud.org/dashboard |
+| `/billing` | | Show subscription tier, next billing date, memory quota |
+
+### Customization
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/theme [name]` | `/t` | Show or switch UI theme |
+| `/thinking` | | Toggle extended-thinking blocks expanded/collapsed |
+| `/copy [n\|last\|list\|raw]` | `/cp` | Copy a code block to clipboard |
+| `/skills [name\|refresh]` | `/sk` | List, show, or refresh discovered skills |
+| `/hooks [status\|list]` | | View configured hooks and their status |
+| `/mcp [tools\|<server-name>]` | | Show connected MCP server status and tools |
 
 ---
 
@@ -296,8 +328,8 @@ Once active, the AI remembers your stack, past decisions, and project context ac
 Sessions are stored locally as JSONL files. Resume a previous session:
 
 ```bash
-aegis --continue              # resume most recent
-aegis --resume <session-id>   # resume by ID
+aegis-cli --continue              # resume most recent
+aegis-cli --resume <session-id>   # resume by ID
 ```
 
 If cloud sync is active (`/cloud activate`, requires an aegiscloud.org API key), every session is also uploaded and browsable from **[aegiscloud.org/dashboard](https://aegiscloud.org/dashboard)** — search, folders, notes, and bulk export, from any browser. The desktop GUI's Cloud tab links straight there.
