@@ -12,7 +12,6 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "build:publish": "npm run build && node scripts/make-bin.mjs",
-    "build:standalone": "bash build-standalone.sh",
     "dev": "NODE_NO_WARNINGS=1 tsx src/main.tsx",
     "start": "node --no-deprecation dist/main.js",
     "typecheck": "tsc --noEmit",
