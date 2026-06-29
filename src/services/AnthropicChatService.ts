@@ -25,6 +25,9 @@ import type {
 import type { ChatServiceConfig } from './ChatService.js';
 import type { AnthropicStreamEvent } from './streaming/types.js';
 
+import https from 'node:https';
+import http from 'node:http';
+
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high']);
 /** 'max' maps to a fixed budget_tokens ceiling when sent via extended thinking. */
 const MAX_BUDGET_TOKENS = 128000;
@@ -184,37 +187,58 @@ export class AnthropicChatService implements IChatService {
     let usage: ChatResponse['usage'] | undefined;
 
     try {
-      const response = await fetch(`${this.baseURL}/messages`, {
-        method: 'POST',
-        signal,
-        headers: {
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
+      // Use https.request() instead of fetch() — forces HTTP/1.1 and avoids
+      // ERR_STREAM_PREMATURE_CLOSE caused by Node's undici HTTP/2 client on
+      // older Node versions (everything before v22).
+      const { status, bodyStream } = await new Promise<{ status: number; bodyStream: http.IncomingMessage }>(
+        (resolve, reject) => {
+          const url = new URL(`${this.baseURL}/messages`);
+          const opts: https.RequestOptions = {
+            hostname: url.hostname,
+            port: 443,
+            path: url.pathname,
+            method: 'POST',
+            headers: {
+              'x-api-key': this.apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            timeout: this.timeout,
+          };
+          const req = https.request(opts, res => resolve({ status: res.statusCode ?? 500, bodyStream: res }));
+          req.on('error', reject);
+          req.on('timeout', () => {
+            req.destroy();
+            reject(new Error('timeout'));
+          });
+          if (signal) {
+            signal.addEventListener('abort', () => { req.destroy(); reject(signal.reason); }, { once: true });
+          }
+          req.write(JSON.stringify(body));
+          req.end();
         },
-        body: JSON.stringify(body),
-      });
+      );
 
-      if (!response.ok || !response.body) {
-        const text = await response.text().catch(() => '');
+      if (status < 200 || status >= 300) {
+        let errText = '';
+        for await (const chunk of bodyStream) {
+          errText += chunk.toString();
+        }
         const err: Error & { status?: number } = new Error(
-          `Anthropic API error (${response.status}): ${text || response.statusText}`,
+          `Anthropic API error (${status}): ${errText || http.STATUS_CODES[status] || ''}`,
         );
-        err.status = response.status;
+        err.status = status;
         throw err;
       }
 
       const toolBlocks = new Map<number, { id: string; name: string; arguments: string }>();
       const citations: Array<{ text: string; title: string }> = [];
 
-      const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      for await (const chunk of bodyStream) {
+        buffer += decoder.decode(chunk as Buffer, { stream: true });
 
         let sepIdx: number;
         while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
