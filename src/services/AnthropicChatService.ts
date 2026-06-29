@@ -15,7 +15,6 @@
  */
 
 import https from 'node:https';
-import { Readable } from 'node:stream';
 
 import type {
   Message,
@@ -190,38 +189,48 @@ export class AnthropicChatService implements IChatService {
     let usage: ChatResponse['usage'] | undefined;
 
     try {
-      const response = await fetch(`${this.baseURL}/messages`, {
-        method: 'POST',
-        signal,
-        agent: http1Agent,
-        headers: {
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      } as RequestInit & { agent: import('node:http').Agent });
+      // Use https.request (not fetch) so http1Agent is actually applied —
+      // native fetch ignores the agent option, leaving HTTP/2 active and
+      // triggering ERR_STREAM_PREMATURE_CLOSE on long Anthropic SSE streams.
+      const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+        const url = new URL(`${this.baseURL}/messages`);
+        const req = https.request({
+          hostname: url.hostname,
+          port: url.port ? parseInt(url.port, 10) : 443,
+          path: url.pathname + url.search,
+          method: 'POST',
+          agent: http1Agent,
+          headers: {
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+        }, resolve);
+        req.on('error', reject);
+        signal?.addEventListener('abort', () => req.destroy(new Error('AbortError')));
+        req.write(JSON.stringify(body));
+        req.end();
+      });
 
-      if (!response.ok || !response.body) {
-        const text = await response.text().catch(() => '');
+      if (!response.statusCode || response.statusCode >= 400) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of response) chunks.push(chunk as Buffer);
+        const text = Buffer.concat(chunks).toString();
         const err: Error & { status?: number } = new Error(
-          `Anthropic API error (${response.status}): ${text || response.statusText}`,
+          `Anthropic API error (${response.statusCode}): ${text || response.statusMessage}`,
         );
-        err.status = response.status;
+        err.status = response.statusCode;
         throw err;
       }
 
       const toolBlocks = new Map<number, { id: string; name: string; arguments: string }>();
       const citations: Array<{ text: string; title: string }> = [];
 
-      const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      for await (const rawChunk of response) {
+        buffer += decoder.decode(rawChunk as Buffer, { stream: true });
 
         let sepIdx: number;
         while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {

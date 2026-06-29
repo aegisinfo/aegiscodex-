@@ -14,7 +14,7 @@ await esbuild.build({
   outfile: 'dist/main.js',
   bundle: true,
   platform: 'node',
-  target: 'node22',
+  target: 'node18',
   format: 'esm',
   sourcemap,
   minify,

@@ -70,7 +70,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "sql.js": "^1.14.1",
-    "string-width": "^8.1.1",
+    "string-width": "^7.2.0",
     "uuid": "^14.0.0",
     "yaml": "^2.8.2",
     "yargs": "^17.7.2",
@@ -88,8 +88,9 @@
     "typescript": "^5.7.2"
   },
   "overrides": {
-    "@xenova/transformers": {
-      "sharp": "file:../../../scripts/sharp-stub"
-    }
+    "string-width": "^7.2.0",
+    "slice-ansi": "^7.1.2",
+    "cli-truncate": "^4.0.0",
+    "cli-boxes": "^3.0.0"
   }
 }
