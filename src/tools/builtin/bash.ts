@@ -15,9 +15,9 @@ import { ToolKind, ToolErrorType } from '../types.js';
 
 function getShell(): string {
   if (os.platform() === 'win32') {
-    return process.env.COMSPEC || 'cmd.exe';
+    return process.env.COMSPEC || 'powershell.exe';
   }
-  return process.env.SHELL || '/bin/bash';
+  return process.env.SHELL || '/bin/zsh';
 }
 
 const BG_JOBS_DIR = path.join(os.homedir(), '.aegiscode', 'bg');

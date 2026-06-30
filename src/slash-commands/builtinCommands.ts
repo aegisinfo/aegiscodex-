@@ -308,14 +308,27 @@ export const versionCommand: SlashCommand = {
   usage: '/version',
 
   async handler(): Promise<SlashCommandResult> {
-    // 从 package.json 获取版
     let version = 'unknown';
     try {
       const fs = await import('fs');
       const path = await import('path');
-      const packagePath = path.join(process.cwd(), 'package.json');
-      const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-      version = packageJson.version || 'unknown';
+      const { fileURLToPath } = await import('url');
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const possiblePaths = [
+        path.resolve(__dirname, '../../package.json'),
+        path.resolve(__dirname, '../package.json'),
+        path.join(process.cwd(), 'package.json'),
+      ];
+      for (const pkgPath of possiblePaths) {
+        try {
+          const content = fs.readFileSync(pkgPath, 'utf-8');
+          const pkg = JSON.parse(content);
+          if (pkg.version) {
+            version = pkg.version;
+            break;
+          }
+        } catch { /* try next */ }
+      }
     } catch {
       // 忽略错
     }

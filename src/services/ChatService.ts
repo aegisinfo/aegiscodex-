@@ -394,7 +394,58 @@ export class OpenAIChatService implements IChatService {
             `Or run: ollama pull llama3.2`
           );
         }
-        throw new Error(`LLM API Error: ${error.message}`);
+        // ── Gemini-specific error handling ────────────────────────────────
+        const isGemini = this.model?.toLowerCase().includes('gemini') ||
+          (this.client as any).baseURL?.includes('googleapis') || false;
+
+        if (isGemini && error.status === 400) {
+          const msg = error.message || '';
+          // Key not found / invalid: Google returns "API_KEY_INVALID" or "API key not found"
+          if (msg.includes('API_KEY_INVALID') || msg.includes('API key not found') || msg.includes('API key')) {
+            throw new Error(
+              `LLM API Error: Invalid Gemini API key.\n\n` +
+              `Your GEMINI_API_KEY was rejected by Google's API.\n` +
+              `  ✓ Gemini keys start with "AIza..." — get one free at:\n` +
+              `    https://aistudio.google.com/app/apikey\n\n` +
+              `  ✓ Then set it in ~/.aegiscode/.env:\n` +
+              `    GEMINI_API_KEY=AIza...\n\n` +
+              `  ✓ Or run: aegis /model and select Gemini to set it interactively.\n`
+            );
+          }
+          // Model not found / unsupported
+          if (msg.includes('not found') || msg.includes('not supported') || msg.includes('model')) {
+            throw new Error(
+              `LLM API Error: Gemini model "${this.model}" not found or not supported.\n\n` +
+              `Available Gemini models via this endpoint:\n` +
+              `  - gemini-2.5-pro\n` +
+              `  - gemini-2.5-flash\n` +
+              `  - gemini-2.0-flash\n\n` +
+              `Check the model name in: aegis /model\n`
+            );
+          }
+          // Generic Gemini 400 — include the raw error for debugging
+          throw new Error(
+            `LLM API Error (Gemini 400): ${msg}\n\n` +
+            `Tips:\n` +
+            `  • Verify your GEMINI_API_KEY starts with "AIza"\n` +
+            `  • Some Gemini models don't support tool calls — try gemini-2.5-flash\n` +
+            `  • Check model name: aegis /model\n`
+          );
+        }
+
+        // ── General provider error ────────────────────────────────────────
+        // Detect wrong-key-format for common providers
+        const errMsg = error.message || '';
+        if (error.status === 401 || error.status === 403) {
+          throw new Error(
+            `LLM API Error (${error.status}): Authentication failed.\n\n` +
+            `  • Check your API key is correct\n` +
+            `  • Verify the key hasn't expired\n` +
+            `  • Make sure you're using the right key for this provider\n` +
+            `  • Run: aegis /model to view/change your current model\n`
+          );
+        }
+        throw new Error(`LLM API Error: ${errMsg}`);
       }
       throw error;
     }
