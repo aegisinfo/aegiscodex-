@@ -391,7 +391,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-fable-5',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
-    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
     requireConfirmation: false,
   },
   {
@@ -401,7 +401,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-sonnet-4-6',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
-    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
     requireConfirmation: false,
   },
   {
@@ -411,7 +411,7 @@ export const DEFAULT_MODELS = [
     model: 'claude-opus-4-8',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
-    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
     requireConfirmation: false,
   },
   {
@@ -421,11 +421,13 @@ export const DEFAULT_MODELS = [
     model: 'claude-haiku-4-5-20251001',
     baseURL: 'https://api.anthropic.com/v1',
     apiKey: '',
-    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
     requireConfirmation: false,
   },
   {
     id: 'deepseek-chat',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
     name: 'DeepSeek Chat',
     provider: 'openai-compatible' as const,
     model: 'deepseek-chat',
@@ -439,6 +441,8 @@ export const DEFAULT_MODELS = [
     model: 'deepseek-reasoner',
     baseURL: 'https://api.deepseek.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'groq-llama',
@@ -447,6 +451,8 @@ export const DEFAULT_MODELS = [
     model: 'llama-3.3-70b-versatile',
     baseURL: 'https://api.groq.com/openai/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'groq-deepseek',
@@ -455,6 +461,8 @@ export const DEFAULT_MODELS = [
     model: 'qwen-qwq-32b',
     baseURL: 'https://api.groq.com/openai/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'openai-gpt-5.5',
@@ -463,6 +471,8 @@ export const DEFAULT_MODELS = [
     model: 'gpt-5.5',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'chatgpt',
@@ -471,6 +481,8 @@ export const DEFAULT_MODELS = [
     model: 'chatgpt-4o-latest',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'openai-gpt-4o',
@@ -479,6 +491,8 @@ export const DEFAULT_MODELS = [
     model: 'gpt-4o',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'openai-o3',
@@ -487,6 +501,8 @@ export const DEFAULT_MODELS = [
     model: 'o3',
     baseURL: 'https://api.openai.com/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'gemini-2.5-pro',
@@ -495,6 +511,8 @@ export const DEFAULT_MODELS = [
     model: 'gemini-2.5-pro',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'gemini-2.5-flash',
@@ -503,6 +521,8 @@ export const DEFAULT_MODELS = [
     model: 'gemini-2.5-flash',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'ollama-local',
@@ -511,6 +531,8 @@ export const DEFAULT_MODELS = [
     model: 'llama3.2',
     baseURL: 'http://localhost:11434/v1',
     apiKey: 'ollama',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'sakana-fugu',
@@ -519,6 +541,8 @@ export const DEFAULT_MODELS = [
     model: 'fugu',
     baseURL: 'https://api.sakana.ai/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'sakana-fugu-ultra',
@@ -527,11 +551,15 @@ export const DEFAULT_MODELS = [
     model: 'fugu-ultra',
     baseURL: 'https://api.sakana.ai/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   // Nexus - AEGIS's pooled aegis-key. Auto-routes server-side (smart_router) to the
   // cheapest backend that fits the tier; OpenAI-wire-compatible, billed via token bank.
   {
     id: 'nexus-fast',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
     name: 'Nexus (Fast)',
     provider: 'openai-compatible' as const,
     model: 'nexus-fast',
@@ -545,9 +573,13 @@ export const DEFAULT_MODELS = [
     model: 'nexus-smart',
     baseURL: 'https://aegisintel.up.railway.app/api/v1',
     apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
   },
   {
     id: 'nexus-neo',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
     name: 'Nexus (NEO)',
     provider: 'openai-compatible' as const,
     model: 'nexus-neo',

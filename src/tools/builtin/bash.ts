@@ -13,6 +13,13 @@ import { z } from 'zod';
 import { createTool } from '../createTool.js';
 import { ToolKind, ToolErrorType } from '../types.js';
 
+function getShell(): string {
+  if (os.platform() === 'win32') {
+    return process.env.COMSPEC || 'cmd.exe';
+  }
+  return process.env.SHELL || '/bin/bash';
+}
+
 const BG_JOBS_DIR = path.join(os.homedir(), '.aegiscode', 'bg');
 
 const execAsync = promisify(exec);
@@ -135,7 +142,7 @@ export const bashTool = createTool({
         logStream.write(`[${new Date().toISOString()}] $ ${command}\n\n`);
 
         const child = spawn(command, [], {
-          shell: '/bin/bash',
+          shell: getShell(),
           cwd: working_directory || context?.cwd || process.cwd(),
           stdio: ['ignore', 'pipe', 'pipe'],
         });
@@ -160,7 +167,7 @@ export const bashTool = createTool({
         timeout,
         cwd: working_directory || context?.cwd || process.cwd(),
         maxBuffer: 10 * 1024 * 1024, // 10MB
-        shell: '/bin/bash',
+        shell: getShell(),
       };
 
       const { stdout, stderr } = await execAsync(command, options);
