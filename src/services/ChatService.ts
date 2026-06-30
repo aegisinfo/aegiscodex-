@@ -26,6 +26,18 @@ import { AnthropicChatService } from './AnthropicChatService.js';
  * Node 18/20's undici surfaces as ERR_STREAM_PREMATURE_CLOSE. The https module
  * only speaks HTTP/1.1, eliminating the premature close error.
  */
+/**
+ * Read the entire IncomingMessage into a string buffer.
+ */
+function readBody(res: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    res.on('data', (chunk: Buffer) => chunks.push(chunk));
+    res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    res.on('error', reject);
+  });
+}
+
 function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url);
   const method = init?.method || 'POST';
@@ -45,7 +57,26 @@ function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
       timeout: 60000,
     };
 
-    const req = mod.request(options, (res) => {
+    const req = mod.request(options, async (res) => {
+      const status = res.statusCode ?? 500;
+      const responseHeaders = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
+      }
+
+      // For error responses, pre-read the body so the OpenAI SDK can parse
+      // error details with .text() / .json() — avoids "400 status code (no body)".
+      if (status < 200 || status >= 300) {
+        const errBody = await readBody(res);
+        resolve(new Response(errBody, {
+          status,
+          statusText: res.statusMessage || '',
+          headers: responseHeaders,
+        }));
+        return;
+      }
+
+      // Success response: wrap the Node.js stream in a web ReadableStream.
       const stream = new ReadableStream({
         start(controller) {
           res.on('data', (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
@@ -53,12 +84,8 @@ function http1Fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
           res.on('error', (err) => controller.error(err));
         },
       });
-      const responseHeaders = new Headers();
-      for (const [k, v] of Object.entries(res.headers)) {
-        if (v) responseHeaders.set(k, Array.isArray(v) ? v.join(', ') : v);
-      }
       resolve(new Response(stream, {
-        status: res.statusCode,
+        status,
         statusText: res.statusMessage || '',
         headers: responseHeaders,
       }));
