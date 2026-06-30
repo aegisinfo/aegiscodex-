@@ -525,6 +525,16 @@ export const DEFAULT_MODELS = [
     requireConfirmation: false,
   },
   {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    provider: 'openai-compatible' as const,
+    model: 'gemini-2.0-flash',
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    apiKey: '',
+    allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
+    requireConfirmation: false,
+  },
+  {
     id: 'ollama-local',
     name: 'Ollama (local)',
     provider: 'openai-compatible' as const,

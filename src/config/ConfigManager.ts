@@ -237,6 +237,10 @@ export class ConfigManager {
         defaultConfig.apiKey  = process.env.ANTHROPIC_API_KEY;
         defaultConfig.baseURL = 'https://api.anthropic.com/v1';
         defaultConfig.model   = defaultConfig.model || 'claude-sonnet-4-6';
+      } else if (process.env.GEMINI_API_KEY) {
+        defaultConfig.apiKey  = process.env.GEMINI_API_KEY;
+        defaultConfig.baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+        defaultConfig.model   = 'gemini-2.5-flash';
       } else if (process.env.NEXUS_API_KEY) {
         defaultConfig.apiKey  = process.env.NEXUS_API_KEY;
         defaultConfig.baseURL = 'https://aegisintel.up.railway.app/api/v1';

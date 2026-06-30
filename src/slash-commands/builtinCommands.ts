@@ -862,6 +862,8 @@ export const tokensCommand: SlashCommand = {
       else if (m.includes('llama') || m.includes('groq')) return [0.06, 0.06];
       else if (m.includes('gemini-2.5-pro'))  return [1.25, 10  ];
       else if (m.includes('gemini-2.5-flash')) return [0.15, 0.6 ];
+      else if (m.includes('gemini-2.0-flash')) return [0.10, 0.4 ];
+      else if (m.includes('gemini'))           return [0.15, 0.6 ];
       else                              return [1,     3    ];
     };
 
