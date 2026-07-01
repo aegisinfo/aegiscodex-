@@ -398,16 +398,17 @@ export class OpenAIChatService implements IChatService {
         const isGemini = this.model?.toLowerCase().includes('gemini') ||
           (this.client as any).baseURL?.includes('googleapis') || false;
 
-        if (isGemini && error.status === 400) {
+        if (isGemini && (error.status === 400 || error.status === 403)) {
           const msg = error.message || '';
-          // Key not found / invalid: Google returns "API_KEY_INVALID" or "API key not found"
-          if (msg.includes('API_KEY_INVALID') || msg.includes('API key not found') || msg.includes('API key')) {
+          // 403 = API key missing, forbidden, or quota exhausted on Google's side
+          if (error.status === 403 || msg.includes('API_KEY_INVALID') || msg.includes('API key not found') || msg.includes('API key') || msg.includes('PERMISSION_DENIED') || msg.includes('forbidden')) {
             throw new Error(
-              `LLM API Error: Invalid Gemini API key.\n\n` +
-              `Your GEMINI_API_KEY was rejected by Google's API.\n` +
-              `  ✓ Gemini keys start with "AIza..." — get one free at:\n` +
-              `    https://aistudio.google.com/app/apikey\n\n` +
-              `  ✓ Then set it in ~/.aegiscode/.env:\n` +
+              `LLM API Error: Gemini API key rejected (${error.status}).\n\n` +
+              `Google returned a ${error.status} — common causes:\n` +
+              `  • The key is missing, expired, or has no quota left\n` +
+              `  • The key doesn't have "Generative Language API" enabled\n\n` +
+              `  ✓ Get a free key at: https://aistudio.google.com/app/apikey\n` +
+              `  ✓ Set it in ~/.aegiscode/.env:\n` +
               `    GEMINI_API_KEY=AIza...\n\n` +
               `  ✓ Or run: aegis /model and select Gemini to set it interactively.\n`
             );
@@ -423,9 +424,9 @@ export class OpenAIChatService implements IChatService {
               `Check the model name in: aegis /model\n`
             );
           }
-          // Generic Gemini 400 — include the raw error for debugging
+          // Generic Gemini 400/403 — include the raw error for debugging
           throw new Error(
-            `LLM API Error (Gemini 400): ${msg}\n\n` +
+            `LLM API Error (Gemini ${error.status}): ${msg}\n\n` +
             `Tips:\n` +
             `  • Verify your GEMINI_API_KEY starts with "AIza"\n` +
             `  • Some Gemini models don't support tool calls — try gemini-2.5-flash\n` +
@@ -437,11 +438,14 @@ export class OpenAIChatService implements IChatService {
         // Detect wrong-key-format for common providers
         const errMsg = error.message || '';
         if (error.status === 401 || error.status === 403) {
+          const providerHint = isGemini
+            ? `  • Gemini: set GEMINI_API_KEY=AIza... in ~/.aegiscode/.env\n`
+            : `  • Make sure you're using the right key for this provider\n`;
           throw new Error(
             `LLM API Error (${error.status}): Authentication failed.\n\n` +
             `  • Check your API key is correct\n` +
             `  • Verify the key hasn't expired\n` +
-            `  • Make sure you're using the right key for this provider\n` +
+            providerHint +
             `  • Run: aegis /model to view/change your current model\n`
           );
         }

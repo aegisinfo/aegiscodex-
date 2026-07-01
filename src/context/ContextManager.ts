@@ -110,7 +110,7 @@ export class ContextManager {
     return {
       osType: os.type(),
       osVersion: os.release(),
-      shell: process.env.SHELL || 'unknown',
+      shell: process.env.AEGIS_SHELL || process.env.SHELL || 'unknown',
       nodeVersion: process.version,
       cwd: process.cwd(),
     };

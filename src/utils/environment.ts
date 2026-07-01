@@ -34,7 +34,7 @@ export function getEnvironmentInfo(): EnvironmentInfo {
       day: 'numeric',
       weekday: 'long',
     }),
-    shell: process.env.SHELL || 'unknown',
+    shell: process.env.AEGIS_SHELL || process.env.SHELL || 'unknown',
     username: (() => { try { return os.userInfo().username; } catch { return process.env.USER || 'user'; } })(),
   };
 }

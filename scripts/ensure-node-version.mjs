@@ -4,7 +4,7 @@
  * Full auto-install: curl -fsSL https://raw.githubusercontent.com/aegisinfo/aegiscode/main/scripts/install.sh | sh
  */
 
-const MIN_MAJOR = 22;
+const MIN_MAJOR = 18;
 const currentMajor = parseInt(process.version.slice(1), 10);
 
 if (currentMajor >= MIN_MAJOR) {

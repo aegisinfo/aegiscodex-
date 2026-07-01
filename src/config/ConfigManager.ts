@@ -76,7 +76,7 @@ export class ConfigManager {
     await this.loadConfigFile(path.join(projectConfigDir, 'settings.local.json'));
 
     // 7. 应用环境变
-    this.applyEnvironmentVariables();
+    this.applyEnvironmentVariables(projectPath);
 
     return this.config;
   }
@@ -135,7 +135,7 @@ export class ConfigManager {
   /**
    * 
    */
-  private applyEnvironmentVariables(): void {
+  private applyEnvironmentVariables(projectPath?: string): void {
     // Load ~/.aegiscode/.env
     try {
       const lines = (fs.existsSync(path.join(os.homedir(), '.aegiscode', '.env')) ? fs.readFileSync(path.join(os.homedir(), '.aegiscode', '.env'), 'utf8') : '').split('\n');
@@ -147,6 +147,23 @@ export class ConfigManager {
         if (k && v && !v.startsWith('YOUR_') && !process.env[k]) process.env[k] = v;
       }
     } catch {}
+
+    // Also load ./aegiscode/.env (project-level, lower priority)
+    if (projectPath) {
+      try {
+        const projectEnv = path.join(projectPath, '.env');
+        if (fs.existsSync(projectEnv)) {
+          const lines = fs.readFileSync(projectEnv, 'utf8').split('\n');
+          for (const line of lines) {
+            const eq = line.indexOf('=');
+            if (eq < 0 || line.trim().startsWith('#')) continue;
+            const k = line.slice(0, eq).trim();
+            const v = line.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+            if (k && v && !v.startsWith('YOUR_') && !process.env[k]) process.env[k] = v;
+          }
+        }
+      } catch {}
+    }
 
     this.config.default = this.config.default || {};
     const defaultConfig = this.config.default;

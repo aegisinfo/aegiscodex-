@@ -35,7 +35,17 @@ install_node() {
 
   export PATH="$INSTALL_DIR/bin:$PATH"
   echo "  Node.js $(node -v) installed to $INSTALL_DIR"
-  echo "  ✓ Tip: add to ~/.bashrc → export PATH=\"$INSTALL_DIR/bin:\$PATH\""
+  # Persist Node 22 in shell profile so newly installed CLI uses the right Node
+  local rc_file
+  if [ -n "${ZSH_VERSION:-}" ] || [ -f "$HOME/.zshrc" ]; then
+    rc_file="$HOME/.zshrc"
+  else
+    rc_file="$HOME/.bashrc"
+  fi
+  if ! grep -q "$INSTALL_DIR/bin" "$rc_file" 2>/dev/null; then
+    echo "export PATH=\"$INSTALL_DIR/bin:\$PATH\"" >> "$rc_file"
+    echo "  ✓ Added Node 22 to PATH in $rc_file"
+  fi
 }
 
 echo "⬡ Installing aegiscode-cli..."
