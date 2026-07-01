@@ -35,16 +35,21 @@ install_node() {
 
   export PATH="$INSTALL_DIR/bin:$PATH"
   echo "  Node.js $(node -v) installed to $INSTALL_DIR"
-  # Persist Node 22 in shell profile so newly installed CLI uses the right Node
-  local rc_file
-  if [ -n "${ZSH_VERSION:-}" ] || [ -f "$HOME/.zshrc" ]; then
-    rc_file="$HOME/.zshrc"
+
+  # --- Symlink node/npm/npx to /usr/local/bin for ALL users ---
+  if [ -w /usr/local/bin ]; then
+    ln -sf "$INSTALL_DIR/bin/node" /usr/local/bin/node
+    ln -sf "$INSTALL_DIR/bin/npm"  /usr/local/bin/npm
+    ln -sf "$INSTALL_DIR/bin/npx"  /usr/local/bin/npx
+    echo "  ✓ Symlinked node/npm/npx to /usr/local/bin (system-wide)"
+  elif command -v sudo &>/dev/null; then
+    sudo ln -sf "$INSTALL_DIR/bin/node" /usr/local/bin/node
+    sudo ln -sf "$INSTALL_DIR/bin/npm"  /usr/local/bin/npm
+    sudo ln -sf "$INSTALL_DIR/bin/npx"  /usr/local/bin/npx
+    echo "  ✓ Symlinked node/npm/npx to /usr/local/bin (system-wide, via sudo)"
   else
-    rc_file="$HOME/.bashrc"
-  fi
-  if ! grep -q "$INSTALL_DIR/bin" "$rc_file" 2>/dev/null; then
-    echo "export PATH=\"$INSTALL_DIR/bin:\$PATH\"" >> "$rc_file"
-    echo "  ✓ Added Node 22 to PATH in $rc_file"
+    echo "  ⚠ Could not symlink to /usr/local/bin — add to your PATH:"
+    echo "     export PATH=\"$INSTALL_DIR/bin:\$PATH\""
   fi
 }
 
@@ -70,14 +75,9 @@ if ! command -v npm &>/dev/null; then
   export PATH="$INSTALL_DIR/bin:$PATH"
 fi
 
-# --- Install the CLI ---
-NPM_PREFIX="$(npm config get prefix 2>/dev/null || true)"
-if [ -n "$NPM_PREFIX" ] && [ -w "$NPM_PREFIX" ]; then
-  npm install -g aegiscode-cli
-else
-  echo "  Need elevated permissions for npm global install, using sudo..."
-  sudo npm install -g aegiscode-cli
-fi
+# --- Install the CLI (use Node 22's npm for global install) ---
+echo "  Installing aegiscode..."
+"$INSTALL_DIR/bin/npm" install -g aegiscode
 
 # --- Create config directory ---
 mkdir -p "$HOME/.aegiscode"
