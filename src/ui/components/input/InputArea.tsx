@@ -132,19 +132,20 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       return unsubscribe;
     }, []);
 
-    // Electric glow animation — 200ms ticks, only active while processing
+    // Electric glow animation — paused during active text streaming to avoid
+    // competing with the RAF render loop (every 150ms Ink re-render blocks RAF setTimeout).
     const [glowPhase, setGlowPhase] = useState(0);
     const glowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     useEffect(() => {
-      if (isProcessing) {
+      if (isProcessing && !hasStreamingMessage) {
         setGlowPhase(0);
         glowTimerRef.current = setInterval(() => setGlowPhase(p => p + 1), 150);
       } else {
         if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; }
-        setGlowPhase(0);
+        if (!isProcessing) setGlowPhase(0);
       }
       return () => { if (glowTimerRef.current) { clearInterval(glowTimerRef.current); glowTimerRef.current = null; } };
-    }, [isProcessing]);
+    }, [isProcessing, hasStreamingMessage]);
 
     // Cursor blink at idle (530 ms on/off), piggybacks on glowPhase during generation
     const [idleBlink, setIdleBlink] = useState(true);
