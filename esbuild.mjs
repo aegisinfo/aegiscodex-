@@ -18,7 +18,7 @@ await esbuild.build({
   format: 'esm',
   sourcemap,
   minify,
-  external: ['sql.js', '@xenova/transformers'],
+  external: ['sql.js', '@xenova/transformers', '@huggingface/transformers'],
   alias: { 'react-devtools-core': stubPath },
   banner: {
     js: `#!/usr/bin/env -S node --no-deprecation
