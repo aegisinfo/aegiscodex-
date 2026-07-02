@@ -90,6 +90,7 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
         baseURL: newModel.baseURL,
         model: newModel.model!,
         requireConfirmation: newModel.requireConfirmation,
+        maxContextTokens: newModel.maxContextTokens,
       });
 
       const { initializeCustomCommands } = await import('../../slash-commands/index.js');
@@ -159,9 +160,16 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
         const { ConfigManager } = await import('../../config/index.js');
         const cm = ConfigManager.getInstance();
         await cm.initialize();
-        const requireConfirmation = cm.getDefaultModel().requireConfirmation;
+        const defaultModel = cm.getDefaultModel();
+        const requireConfirmation = defaultModel.requireConfirmation;
 
-        agentRef.current = await Agent.create({ apiKey, baseURL, model, requireConfirmation });
+        agentRef.current = await Agent.create({
+          apiKey,
+          baseURL,
+          model,
+          requireConfirmation,
+          maxContextTokens: defaultModel.maxContextTokens,
+        });
 
         const { initializeCustomCommands } = await import('../../slash-commands/index.js');
         const customCmdResult = await initializeCustomCommands(process.cwd());
@@ -226,6 +234,7 @@ export function useAgent(options: UseAgentOptions): UseAgentResult {
           baseURL: found.baseURL || (found as ModelConfig & { baseUrl?: string }).baseUrl,
           model: displayName,
           requireConfirmation: found.requireConfirmation,
+          maxContextTokens: found.maxContextTokens,
         }).then(agent => {
           agentRef.current = agent;
         }).catch(() => {});

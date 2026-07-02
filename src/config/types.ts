@@ -433,6 +433,7 @@ export const DEFAULT_MODELS = [
     model: 'deepseek-chat',
     baseURL: 'https://api.deepseek.com/v1',
     apiKey: '',
+    maxContextTokens: 1048576,
   },
   {
     id: 'deepseek-reasoner',
@@ -443,6 +444,7 @@ export const DEFAULT_MODELS = [
     apiKey: '',
     allowedTools: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill', 'Memory', 'Task', 'Council'],
     requireConfirmation: false,
+    maxContextTokens: 1048565,
   },
   {
     id: 'groq-llama',

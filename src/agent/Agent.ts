@@ -659,6 +659,25 @@ export class Agent {
       }
       messages.push(assistantMsg);
 
+      // 3.7.5 Compact between turns: truncate messages if they exceed the context window.
+      // Tool results from Read can easily blow past the model's limit.
+      {
+        const modelName = this.config.model || 'gpt-4o';
+        const maxTokens = this.config.maxContextTokens || 200000;
+        const reserveForResponse = 10000;
+        const currentTokens = TokenCounter.countTokens(messages, modelName);
+        if (currentTokens > maxTokens - reserveForResponse) {
+          const systemMsg = messages[0];
+          const rest = messages.slice(1);
+          const budget = maxTokens - reserveForResponse - TokenCounter.countTokens([systemMsg], modelName);
+          const safeBudget = Math.max(budget, 1000);
+          const truncated = TokenCounter.truncateMessages(rest, modelName, safeBudget);
+          messages.length = 0;
+          messages.push(systemMsg, ...truncated);
+          console.log(`[Agent] Inter-turn compact: ${currentTokens.toLocaleString()} → ${TokenCounter.countTokens(messages, modelName).toLocaleString()} tokens`);
+        }
+      }
+
       // 3.8 执行每个工具调
       let turnHasFailure = false;
       for (const toolCall of turnResult.toolCalls) {

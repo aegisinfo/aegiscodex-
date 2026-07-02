@@ -18,13 +18,13 @@
  */
 
 // RAF polyfill — MUST run before any module that uses requestAnimationFrame.
-// Pass Date.now() as the timestamp so RAF callbacks that throttle by timestamp
-// (e.g. MessageList's RAF_INTERVAL_MS check) work correctly. Without this,
-// `now` is undefined and `undefined - ref < 30` is always false, causing the
-// streaming render loop to fire at the raw setTimeout rate (~16ms) instead of 30ms.
+// Uses setImmediate instead of setTimeout(16) so the callback fires on the next
+// event loop tick rather than after a 16ms delay. This avoids competing with other
+// timers under load, and lets MessageList's RAF_INTERVAL_MS throttle control the
+// actual render cadence without a double-delay (setTimeout + 30ms check).
 if (typeof globalThis.requestAnimationFrame === 'undefined') {
-  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16);
-  (globalThis as any).cancelAnimationFrame  = (id: number) => clearTimeout(id);
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => setImmediate(() => cb(Date.now()));
+  (globalThis as any).cancelAnimationFrame  = (id: ReturnType<typeof setImmediate>) => clearImmediate(id);
 }
 
 import { config as dotenvConfig } from 'dotenv';

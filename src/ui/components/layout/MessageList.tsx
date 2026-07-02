@@ -101,11 +101,11 @@ interface MessageListProps {
   extraOverheadLines?: number;
 }
 
-const RAF_INTERVAL_MS = 30;   // ~33fps redraws
+const RAF_INTERVAL_MS = 16;   // ~60fps redraws
 const CONTENT_THRESHOLD = 1;   // re-render on every content character
-const THINKING_THRESHOLD = 1; // update thinking content every 1 char for real-time visibility
+const THINKING_THRESHOLD = 8;  // batch thinking content more aggressively
 const UI_OVERHEAD = 6; // rows for input area, status bar, etc.
-const MAX_HISTORY_MESSAGES = 1000; // hard cap: only show last N completed messages
+const MAX_HISTORY_MESSAGES = 50000; // 25x larger scrollback — windowed render keeps it cheap
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({
   terminalWidth,

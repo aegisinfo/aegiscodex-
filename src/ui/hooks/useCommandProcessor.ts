@@ -201,6 +201,7 @@ export function useCommandProcessor(options: UseCommandProcessorOptions): UseCom
               baseURL: targetModel.baseURL,
               model: targetLabel!,
               requireConfirmation: targetModel.requireConfirmation,
+              maxContextTokens: targetModel.maxContextTokens,
             });
             routerAgentCacheRef.current.set(targetId, { agent, settingsSnapshot });
           }

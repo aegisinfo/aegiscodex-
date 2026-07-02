@@ -143,6 +143,40 @@ export const clearCommand: SlashCommand = {
 };
 
 /**
+ * /new - Start a brand-new session (reset all state)
+ */
+export const newCommand: SlashCommand = {
+  name: 'new',
+  aliases: ['start'],
+  description: 'Start a new session (clears history, creates fresh session)',
+  category: 'session',
+  usage: '/new',
+
+  async handler(_args: string, context: SlashCommandContext): Promise<SlashCommandResult> {
+    const { clearBuffer } = await import('../store/streaming-buffer.js');
+    clearBuffer();
+    sessionActions().resetSession();
+
+    if (context.contextManager) {
+      try {
+        const newId = await context.contextManager.createSession();
+        sessionActions().setSessionId(newId);
+        const { onSessionStart } = await import('../hooks/index.js');
+        await onSessionStart(newId, process.cwd()).catch(() => {});
+      } catch (e) {
+        // context manager session creation is non-critical
+      }
+    }
+
+    return {
+      success: true,
+      type: 'success',
+      message: 'new session started',
+    };
+  },
+};
+
+/**
  * /compact - 手动压缩上下文
  */
 export const compactCommand: SlashCommand = {
@@ -2846,6 +2880,7 @@ const appCommands: SlashCommand[] = BUILTIN_APPS.map(createAppCommand);
 export const builtinCommands: SlashCommand[] = [
   helpCommand,
   clearCommand,
+  newCommand,
   compactCommand,
   versionCommand,
   modelCommand,
