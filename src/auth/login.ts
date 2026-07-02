@@ -8,11 +8,12 @@
  * 5. Resolve (caller prints success) or reject with a readable error
  */
 
-import * as http from 'node:http';
-import * as fs   from 'node:fs';
-import * as path from 'node:path';
-import * as os   from 'node:os';
-import { spawn }  from 'node:child_process';
+import * as http   from 'node:http';
+import * as fs     from 'node:fs';
+import * as path   from 'node:path';
+import * as os     from 'node:os';
+import { spawn }    from 'node:child_process';
+import { hashPassword, hashUserId } from './hash.js';
 
 const CONFIG_FILE      = path.join(os.homedir(), '.aegiscode', 'config.json');
 const AEGISCLOUD_BASE  = 'https://aegiscloud.org';
@@ -202,13 +203,17 @@ export async function runLoginPassword(): Promise<void> {
 
   process.stdout.write(`\n  ${C.muted}Signing in…${C.reset}\n`);
 
+  // Hash the password client-side with scrypt — raw password is never transmitted
+  const passwordHash = hashPassword(password);
+  const userIdHash   = hashUserId(username);
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
     const res = await fetch(`${AEGISCLOUD_BASE}/login`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ username, password }),
+      body:    JSON.stringify({ username, passwordHash, userIdHash }),
       signal:  controller.signal,
     });
     clearTimeout(timer);
