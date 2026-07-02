@@ -2,7 +2,7 @@
  * AEGIS Cross-Session Semantic Memory — v2
  *
  * Upgrades:
- *  1. Vector/embedding-based search via @xenova/transformers
+ *  1. Vector/embedding-based search via @huggingface/transformers
  *  2. SQLite backend (sql.js WASM) for structured + vector storage
  *  3. Richer metadata: topics, entities, sentiment, token count
  */
@@ -224,9 +224,9 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
     }
   }
 
-  // 2. Fallback to Xenova transformers (local)
+  // 2. Fallback to HuggingFace transformers (local)
   try {
-    const { pipeline } = await import('@xenova/transformers');
+    const { pipeline } = await import('@huggingface/transformers');
     const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     embedPipeline = async (texts: string[]) => {
       const results = await Promise.all(
@@ -234,7 +234,7 @@ async function getEmbedder(): Promise<((texts: string[]) => Promise<number[][]>)
       );
       return results.map(r => Array.from(r.data as Float32Array));
     };
-    console.warn('[Memory] Using Xenova local embeddings (all-MiniLM-L6-v2)');
+    console.warn('[Memory] Using HuggingFace local embeddings (all-MiniLM-L6-v2)');
     return embedPipeline;
   } catch (e) {
     console.warn('[Memory] Embedding model unavailable, falling back to keyword search');
